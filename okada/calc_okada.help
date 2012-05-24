@@ -1,0 +1,118 @@
+calc_okada: Calculates surface deformation from a GNS deformation model file.
+
+The model consists of one or more rectangular fault planes on which strike slip,
+dip slip and tensile slip (opening) are defined.  The details of the format
+are defined below.  The first line in the file defines a latitude and longitude
+used as a reference point for the "projection" used to define an "infinite
+uniform elastic half space" within which the calculations are applied.
+
+The program is run using the following syntax:
+
+  calc_okada [options] fault_model_file test_point_file output_file
+
+where
+  fault_model_file   defines the fault model (details below)
+  test_point_file    defines the points at which the deformation will be 
+                     computed.  Each line can either be the deformation of 
+                     a point (lon lat), or the definition of a grid
+                     (min_lon min_lat max_lon max_lat ncell_lon ncell_lat)
+  output_file        A tab delimited file of test points and their east, 
+                     north, and up displacements
+
+Options can include:
+  -p lon lat         Defines the projection (crude projection based on 
+                     latitude and longitude) used in the fault model. 
+                     Use "none" if the coordinates defining the
+                     model are already projected.  If not specified then 
+                     the first values in the fault model file are used.
+
+  -w[l|p] wktfile    Generates a WKT file defining the fault model.  This can
+		     either be formatted as a MULTILINESTRING (-wl) or 
+                     POLYGON (-wp).
+
+  -n                 The first field in the test point file is a name field
+
+  -c                 Will compare the calculated dislocations with those in
+                     the test point file, and calculate differences
+
+  -l                 Include the horizontal length of vectors in the output
+
+  -s                 Include strain parameters in the output
+
+  -h nskip           Skip specified number of header lines in the definition 
+                     file
+
+The format of each fault in the fault_model_file contains a fault definition 
+with the following fields separated by whitespace:
+
+  [fault_num]   fault plane number - each fault plane may have multiple segments
+  [fault_type]  as per code below
+  strike_deg    strike of fault in degrees, measured from (latf, lonf) towards 
+                the right as the observer looks down dip.
+  dip_deg       dip of fault in degrees.
+  rake_deg      rake of slip vector, measured in fault plane in degrees; 
+                LL=0, thrust=90, RL=180, normal=-90.
+  length_km     length of fault along strike in km.
+  width_km      width of fault measured down dip in km.
+  slip_m        magnitude of in-plane (shear) slip in m.
+  [opening_m]   opening of fault in m.  (Used for modelling dykes, etc.)
+  depth_km      depth of fault in km (depends on fault_type)
+  lat_deg       latitude of fault (depends on fault_type - see below)
+  lon_deg       longitude of fault (depends on fault_type)
+
+The bracketed fields are assumed to be present only if there is a header 
+line containing the name of the field (after the nskip header lines).  The 
+fields are assumed to be in the order specified.
+
+The file may contain an arbitrary number of header lines up before the first
+line of data.  After that it should only contain data lines and blank lines.
+(The first line of data is a line from which valid values can be read).
+
+The fault model file has defualt extension ".model".  If it is not found
+from the current directory, it will try using a directory defined by 
+environment variable FAULT_MODEL_DIR.
+
+The test_point_file contains the points at which the dislocations are to 
+be calculated.  The format depends upon the -c and -n parameters. If the
+-n parameter is included then the first field is a name.  This is followed
+by longitude and latitude.  If the -c parameter is specified, this is then
+followed by the observed dislocation east, north, and up components.
+
+If neither the -c or -n parameter is specified, the test point file can include
+a grid definition formatted as 
+
+grid min_lon min_lat max_lon max_lat nlon nlat
+
+Note: nlon and nlat are the number of grid cells, so the number of points in
+each direction is one greater than this.
+
+-----------------------------
+Note: the orginal fault definition included an initial field fault_type which
+defined how the fault location related to the supplied latf, lonf, depth
+parameters.  This has been removed - it is treated as always being 3.
+
+The typef parameter defines how the location of the fault is 
+defined in terms of the depth, latf, lonf, and so on as follows:
+
+  typef  describes how the position and depth of the fault are parameterised.  
+         Observer is standing on surface looking down dip.
+
+typef depth               latf, lonf
+0     to bottom of fault  above bottom of fault; far RH corner as observer 
+                          looks down dip
+1     to top of fault     place where fault would outcrop looking back 
+                          over right shoulder
+2     to top of fault     above top of fault; nearest RH corner as 
+                          observer looks down dip
+3     to middle of fault  above middle of fault
+4     to top of fault     place where fault would outcrop; half-way along fault
+5     to top of fault     middle of surface projection of top of fault
+
+Example fault definition file:
+
+azif dip rake length width slip open depth latf  lonf
+84 88.8 168 24.6 6.85 5.3 0 3.43 -43.5909 172.222
+48 75 143 6 8.3 5.4 0 6 -43.5479 172.173
+125 80.6 152 14.3 7 2.9 0 3.55 -43.582 172.005
+30 60 90 6 3.5 2.8 0 2.8 -43.5603 171.892
+

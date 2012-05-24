@@ -1,0 +1,21 @@
+
+# Fault model parameters
+#
+# x, y, d, strike, dip, nhorseg, nvrtseg
+
+0 0 4 0 -90 1 1
+
+# Fault segment start and end distances along strike
+
+0 3
+
+# Fault segment start and end distances down dip
+
+0 2
+
+# Fault offset on each segment (strike slip, dip slip, tensile )
+
+0 1000 0
+
+# Test point(s)
+2 3
