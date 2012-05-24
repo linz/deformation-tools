@@ -1,0 +1,14 @@
+*.o
+*.obj
+*.exe
+*.user
+*.sdf
+*.suo
+*.ipch
+*.kdev4
+.kdev4/
+ipch/
+Debug/
+Release/
+out/
+.svn/
