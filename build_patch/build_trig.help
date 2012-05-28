@@ -1,0 +1,34 @@
+This program processes a text file of deformation data and generates a 
+triangulation model.  The triangulation is based upon an octagonal shape 
+surrounding the data points.  Data points are sequentially added until 
+the deformation predicated by the model matches that of all data points
+to a required tolerance.  The model uses a Delauney triangulation of the
+added data points and the surrounding octagon nodes, at which the deformation
+is zero.  
+
+The input file is a white space separated file of deformation data, one point
+per line.  Each point has the following information:
+
+longitude latitude east_deformation north_deformation up_deformation
+
+or in GNS format
+
+latitude longitude south_deformation east_deformation up_deformation
+
+Latitude and longitude are in decimal degrees
+Deformation values are in millimetres.
+Lines that cannot be interpreted are ignored.
+
+The output file is a triangulation file used by the maketrig.pl script.
+The triangulation file header information will need updating before the
+file is used to generate a triangulated patch.
+
+The program is compiled with, for example
+
+cl build_patch.cpp triangle.cpp
+
+The command line syntax is:
+
+build_patch [options] input_file output_file [tolerance]
+
+The tolerance is optional - the default value is 0.001
