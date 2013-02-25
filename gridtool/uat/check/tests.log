@@ -1,0 +1,120 @@
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Grid statistics
+Rows: 8
+Cols: 7
+Values per node: 2
+Column v1:
+  Minimum: 8.05
+  Maximum: 38.6515
+  Mean: 22.2235
+  Median: 21.3217
+Column v2:
+  Minimum: 0.2
+  Maximum: 6.94815
+  Mean: 3.57407
+  Median: 3.57407
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Zeroing grid at 21 points
+Writing file to out/test1_zero.grid
+Reading file from testlin1.grd
+Grid has 2 rows and 2 columns
+Each point has 2 data values
+Applying linear smoothing to grid to fill 2 selected nodes
+Writing file to out/testlin1_out.grd
+Reading file from test2.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Applying linear smoothing to grid to fill 21 selected nodes
+Writing file to out/test2_smoothl.grid
+Reading file from test2.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Applying quadratic smoothing to grid to fill 21 selected nodes
+Writing file to out/test2_smoothq.grid
+Reading file from test2.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Applying cubic smoothing to grid to fill 21 selected nodes
+Writing file to out/test2_smoothc.grid
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Zeroing grid at 20 points
+Writing file to out/test1_wkt_zero.grid
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Zeroing grid at 36 points
+Writing file to out/test1_wkt_zero2.grid
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Multiplying grid by 3
+Writing file to out/test1_mult.grid
+Reading file from test3.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Evaluating grid at points in test1.grid - results in out/test3_eval.txt
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Adding grid values from grid test3.grid
+Writing file to out/test1_add.grid
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Subtracting grid values from grid test3.grid
+Writing file to out/test1_subtract.grid
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Resizing to include rows 3 to 5 and columns 1 to 4
+Writing file to out/test1_resize1.grid
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Resizing to include rows -2 to 10 and columns -3 to 11
+Writing file to out/test1_resize2.grid
+Reading file from test4.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Trimming to leave 1 zero rows/cols around border
+Writing file to out/test4_trim1.grid
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Writing grid extents to out\gridextents.wkt
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Writing outline of cells affected by 17 select nodes to out\affectedout.wkt
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Zeroing grid at 11 points
+Writing file to out/test1_where1.grid
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Zeroing grid at 48 points
+Writing file to out/test1_where2.grid
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Writing grid to LINZ ASCII format in out/test1_linzgrid.txt
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Writing grid to LINZ ASCII format in out/test2_linzgrid.txt
+Running commands from commands.txt
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Zeroing grid at 31 points
+Multiplying grid by 2.5
+Writing file to out/test1_runcommand.grid
+Writing grid to LINZ ASCII format in out/testcommand_linzgrid.txt
