@@ -1,0 +1,12 @@
+ Reading model from solution.gns
+ Reading computation points from tmp_bvg_lat_long.dat
+ Cannot compute velocity for  15631 points out of range
+ No variances and covariances
+ Reference frame rotation.
+ Euler pole latitude  -30.243 longitude   221.785
+ Rotation rate   0.09735 radians per 10**7 years
+ Results written to tmp_bvg_velocity.out
+24311 grid points calculated - 15631 out of range
+
+Maximum grid value is 53.899
+Recommended VRES value is 0.00168434375

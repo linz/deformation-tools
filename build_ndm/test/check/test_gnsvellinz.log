@@ -1,0 +1,8 @@
+ Reading model from data\solution.gns
+ Reading computation points from data\lat_long_linz.dat
+ Cannot compute velocity for  2 points out of range
+ No variances and covariances
+ Reference frame rotation.
+ Euler pole latitude  -30.243 longitude   221.785
+ Rotation rate   0.09735 radians per 10**7 years
+ Results written to out\test_gnsvellinz.out
