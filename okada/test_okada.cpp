@@ -164,7 +164,7 @@ int main( int argc, char *argv[] )
     SegmentedFault fault;
 
     // Read the fault model
-    ifstream in = ifstream(argv[1]);
+    ifstream in(argv[1]);
 
     if( ! in.good() )
     {
@@ -194,7 +194,7 @@ int main( int argc, char *argv[] )
     }
     if( argc == 5 )
     {
-       ofstream wkt = ofstream( argv[4]);
+       ofstream wkt( argv[4]);
        if( ! wkt.good() )
        {
            cout << "Cannot open wkt file " << argv[4] << endl;
@@ -203,7 +203,7 @@ int main( int argc, char *argv[] )
        writeFaultWkt( wkt, fault );
        wkt.close();
     }
-    ofstream out = ofstream( ofile );
+    ofstream out( ofile );
     if( ! out.good() )
     {
         cout << "Cannot open output file " << ofile << endl;

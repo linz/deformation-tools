@@ -540,12 +540,22 @@ int main( int argc, char *argv[] )
     }
 
     // Open the input and output files..
-
-    ifstream in(argv[2]);
-    if( ! in.good() )
+    
+    istream *in;
+    string fname(argv[2]);
+    if( fname.substr(0,5) == "grid:")
     {
-        cout << "Cannot open input test point file " << argv[2] << endl;
-        return 0;
+      replace(fname.begin(),fname.end(),':',' ');
+      in = new istringstream(fname);
+    }
+    else
+    {
+      in = new ifstream(argv[2]);
+      if( ! in->good() )
+      {
+	  cout << "Cannot open input test point file " << argv[2] << endl;
+	  return 0;
+      }
     }
 
     if( wktfile )
@@ -571,20 +581,20 @@ int main( int argc, char *argv[] )
         return 0;
     }
     if( havenames ) out << "name\t";
-    out << "lon\tlat\tux\tuy\tuz";
-    if( showlength ) out << "\tus";
+    out << "lon\tlat\tde\tdn\tdu";
+    if( showlength ) out << "\tds";
     if( calcstrain ) out << "\tdil\trot\tshear\terr";
     if( compare )
     {
-        out << "\tobs_ux\tobs_uy\tobs_uz";
-        if( showlength) out << "\tobs_us";
-        out << "\tdif_ux\tdif_uy\tdif_uz";
-        if( showlength) out << "\tdif_us";
+        out << "\tobs_de\tobs_dn\tobs_du";
+        if( showlength) out << "\tobs_ds";
+        out << "\tdif_de\tdif_dn\tdif_du";
+        if( showlength) out << "\tdif_ds";
     }
     out << endl;
     out << setiosflags( ios::fixed );
     string buffer;
-    while( getline(in, buffer) )
+    while( getline(*in, buffer) )
     {
         // Skip comments
         int p = buffer.find('#');
@@ -695,7 +705,7 @@ int main( int argc, char *argv[] )
             }
         }
     }
-    in.close();
+    delete(in);
     out.close();
     if( compare )
     {

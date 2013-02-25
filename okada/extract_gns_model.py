@@ -1,8 +1,27 @@
+#!/usr/bin/python
 import sys
 import xlrd
 import os
 import os.path
 import re
+
+help='''
+
+extract_gns_model:  Generates a model file suitable for the calc_okada program
+from the spreadsheet format provided by GNS
+
+Syntax:
+python extract_gns_model.py gns_spreadsheet [root_filename]
+
+gns_spreadsheet is the .xsl file provided by GNS
+root_file_name is the output file base name
+
+Two files will be generated
+   root_file_name.model      Containing the model definition
+   root_file_name.test.csv   CSV file containing the test data from the 
+                             spreadsheet that can be used with calc_okada
+                             to verify the data
+'''
 
 def extract_model( xls_file, outfile=None ):
     book = xls_file
@@ -17,7 +36,7 @@ def extract_model( xls_file, outfile=None ):
     ms = None
     ds = None
     try:
-        wb = xlrd.open_workbook( book )
+        wb = xlrd.open_workbook( book, encoding_override='cp1252' )
         ms = wb.sheet_by_name('source_model')
         ds = wb.sheet_by_name('displacements')
     except:
@@ -38,7 +57,7 @@ def extract_model( xls_file, outfile=None ):
     
     for i in xrange(ms.nrows):
         r = ms.row(i)
-        rdata = [str(c.value) for c in r]
+        rdata = [unicode(c.value) for c in r]
         record = ' '.join(rdata).strip()
         if not in_data and re_data.search(record):
             in_data = True
@@ -56,7 +75,7 @@ def extract_model( xls_file, outfile=None ):
     
     for i in xrange(ds.nrows):
         r = ds.row(i)
-        rdata = [str(c.value) for c in r]
+        rdata = [unicode(c.value) for c in r]
         record = '\t'.join(rdata).strip()
         match = re.match(r'\s*(lat0|lon0)\s*\=\s*(-?\d+\.?\d*)\s*$',record)
         if match:
@@ -109,7 +128,7 @@ if __name__ == "__main__":
     import sys
     import glob
     if len(sys.argv) < 2:
-        print "Need arguments: gns_spreadsheet [root_filename]"
+        print help
         sys.exit()
 
     xls = sys.argv[1]

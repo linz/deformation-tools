@@ -4,7 +4,7 @@ surrounding the data points.  Data points are sequentially added until
 the deformation predicated by the model matches that of all data points
 to a required tolerance.  The model uses a Delauney triangulation of the
 added data points and the surrounding octagon nodes, at which the deformation
-is zero.  
+is zero.  At each iteration the worst fitted point is added to the grid.
 
 The input file is a white space separated file of deformation data, one point
 per line.  Each point has the following information:
@@ -32,3 +32,12 @@ The command line syntax is:
 build_patch [options] input_file output_file [tolerance]
 
 The tolerance is optional - the default value is 0.001
+
+Options are:
+  -h   Generate a horizontal only deformation trig file - discard the vertical
+  -u   Generate a vertical only deformation trig file
+  -g   GNS format (south, east, up components)
+  -c   CSV format output files, suitable for LINZ deformation model format
+  -v   Verbose mode - generate more output
+  -t:xxx  Define the tolerance to which the triangulation must match the 
+       input grid.

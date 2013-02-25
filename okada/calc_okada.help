@@ -13,9 +13,9 @@ The program is run using the following syntax:
 where
   fault_model_file   defines the fault model (details below)
   test_point_file    defines the points at which the deformation will be 
-                     computed.  Each line can either be the deformation of 
-                     a point (lon lat), or the definition of a grid
-                     (min_lon min_lat max_lon max_lat ncell_lon ncell_lat)
+                     computed.  The test_point_file can be replaced with
+                     a grid definition entered as 
+                      grid:min_lon:min_lat:max_lon:max_lat:nlon:nlat
   output_file        A tab delimited file of test points and their east, 
                      north, and up displacements
 
@@ -66,9 +66,11 @@ fields are assumed to be in the order specified.
 
 The file may contain an arbitrary number of header lines up before the first
 line of data.  After that it should only contain data lines and blank lines.
-(The first line of data is a line from which valid values can be read).
+(The first line of data is a line from which valid values can be read). If 
+there is a header line "Origin: lon lat" then the longitude and latitude are 
+taken as the origin of the projection.
 
-The fault model file has defualt extension ".model".  If it is not found
+The fault model file has default extension ".model".  If it is not found
 from the current directory, it will try using a directory defined by 
 environment variable FAULT_MODEL_DIR.
 

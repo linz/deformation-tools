@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <fstream>
+#include <iostream>
 #include <math.h>
 #include <time.h>
 #include <string>
 
+#include "get_image_path.h"
 #include "triangle.h"
 
 using namespace std;
@@ -137,7 +140,7 @@ void dump_triangulation( char *filename, int trglist )
 void die( char *message )
 {
     printf("%s",message);
-    if( trg ) dump_triangulation("trg_dump.xy",1);
+    // if( trg ) dump_triangulation("trg_dump.xy",1);
     exit(2);
 }
 
@@ -370,6 +373,24 @@ void print_triangles( FILE *out, int ndim, bool csv=false )
 
 }
 
+void help()
+{
+    string helpfile(get_image_path());
+    helpfile += ".help";
+    ifstream hf(helpfile.c_str());
+    if( hf)
+    {
+        string line;
+        while(hf)
+        {
+            getline(hf,line);
+            cout << line << endl;
+        }
+        hf.close();
+        exit(0);
+    }
+}
+
 int main( int argc, char *argv[] )
 {
     time_t timeval;
@@ -417,6 +438,7 @@ int main( int argc, char *argv[] )
 
     if( argc != 3 || ! valid )
     {
+        help();
         printf("\nParameters: [-h] [-g] [-t:tolerance] [-v] input_file output_file\n");
         printf("Input file should contain one deformation value per line,\n");
         printf("with longitude,latitude,de,dn,du separated by spaces\n");
@@ -424,6 +446,7 @@ int main( int argc, char *argv[] )
         printf("The triangulation will be formed to fit all values to within the tolerance\n\n");
         printf("If -h is specified height changes are ignored\n");
 	printf("If -u is specified horizontal changes are ignored\n");
+	printf("If -c is specified CSV format output files are generated\n");
         printf("If -v is specified more output is generated\n");
         return 1;
     }
@@ -481,7 +504,7 @@ int main( int argc, char *argv[] )
             printf("Cannot open output file %s\n",s.c_str());
             return 1;
         }
-        fprintf(out,"point_id,longitude,latitude");
+        fprintf(out,"id,lon,lat");
         if( ndim != 1 ) fprintf(out,",de,dn");
         if( ndim != 2 ) fprintf(out,",du");
         fprintf(out,"\n");
@@ -496,12 +519,12 @@ int main( int argc, char *argv[] )
             printf("Cannot open output file %s\n",s.c_str());
             return 1;
         }
-        fprintf(out,"point_id1,point_id2,point_id3\n");
+        fprintf(out,"id1,id2,id3\n");
         trg_process_trg( trg, out, print_triangle_nodes_csv );
         fclose(out);
     }
 
-    dump_triangulation("trg_dump.xy",0);
+    // dump_triangulation("trg_dump.xy",0);
 
     return 0;
 

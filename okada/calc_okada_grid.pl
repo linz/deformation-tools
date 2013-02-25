@@ -1,18 +1,25 @@
 #!/usr/bin/perl
-#
-#  Script to calculate a fault model on a grid of points.  
-#
-#  The extents of the grid are defined by the bounding box of points 
-#  in WKT shapes in a text WKT file, assumed to be latitude/longtiude.  
-#
-#  The resolution is defined in metres and is used to determine the grid
-#  spacing.
+my $syntax=<<EOS;
+
+Syntax: model_file wkt_boundary_file resolution output_grid_file\n";
+
+Script to calculate a fault model on a grid of points.  
+
+The extents of the grid are defined by the bounding box of points 
+in WKT shapes in a text WKT file, assumed to be latitude/longtiude.  
+
+The resolution is defined in metres and is used to determine the grid
+spacing.
+
+EOS
 
 use strict;
 use POSIX;
 
 my $prog = $0;
-$prog =~ s/[^\\\/]*$/calc_okada.exe/;
+$prog =~ s/[^\\\/]*$/calc_okada/;
+$prog .= '.exe' if $^O =~ /^mswin/i;
+-- need to add OS dependent option here - .exe if MSDOS --
 die "Cannot find Okada program\n" if ! -x $prog;
 
 my @progprm = ();
@@ -23,7 +30,7 @@ if( $ARGV[0] eq '-p')
     push(@progprm, shift(@ARGV ));
 }
 
-@ARGV==4 || die "Syntax: model_file wkt_boundary_file resolution output_grid_file\n";
+@ARGV==4 || die $syntax;
 
 my( $modelfile, $bdyfile, $resolution, $gridfile ) = @ARGV;
 
@@ -101,19 +108,15 @@ $ltmax = ceil($ltmax/$ltres)*$ltres;
 my $nlon = int(($lnmax-$lnmin)/$lnres + 0.5);
 my $nlat = int(($ltmax-$ltmin)/$ltres + 0.5);
 
-my $tempfile = $gridfile.".range";
-open(F,">$tempfile");
-print F "grid $lnmin $ltmin $lnmax $ltmax $nlon $nlat\n";
-close(F);
+my $griddef="grid:$lnmin:$ltmin:$lnmax:$ltmax:$nlon:$nlat";
 
 print "Calculating grid: $lnmin $ltmin $lnmax $ltmax $nlon $nlat\n";
 
-system($prog,@progprm, $modelfile,$tempfile,$gridfile);
+system($prog,@progprm, $modelfile,$griddef,$gridfile);
 
 print "Grid generated in $gridfile\n" if -r $gridfile;
 print "Grid not built!\n" if ! -r $gridfile;
 
-unlink($tempfile);
 
 exit(1) if ! -r $gridfile;
 exit(0)
