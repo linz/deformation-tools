@@ -25,4 +25,5 @@ del /q out\*.*
 ..\gridtool test1.grid zero where v1 gt 20 or v2 le 3.5 out/test1_where2.grid >> out\tests.log
 ..\gridtool read test1.grid write_linzgrid NZGD2000 file header.txt out/test1_linzgrid.txt >> out\tests.log
 ..\gridtool read test1.grid write_linzgrid NZGD2000 "First line of header" "Second line of header" ThirdLineOfHeader resolution 0.001 out/test2_linzgrid.txt >> out\tests.log
+..\gridtool read test1.grid write_linzgrid NZGD2000 "First line of header" "Second line of header" ThirdLineOfHeader columns v2+v1+v2 resolution 0.001 out/test2_linzgrid.txt >> out\tests.log
 ..\gridtool commands.txt >> out\tests.log

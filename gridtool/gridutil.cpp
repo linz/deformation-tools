@@ -263,11 +263,53 @@ void write_grid_extents_wkt( grid &g, const char *wkt_file )
 
 }
 
-void write_linz_grid_file( grid &g, string crdsys, string header1, string header2, string header3, string vres, const char *gridfile )
+void write_linz_grid_file( grid &g, string crdsys, string header1, string header2, string header3, string vres, string columns, const char *gridfile )
 {
     int nrow = g.nrow();
     int ncol = g.ncol();
     int nval = g.nvalue();
+
+    vector<int> useCols;
+    int noutval = 0;
+
+    if( columns == "")
+    {
+        for( int i=0; i<nval; i++ ) useCols.push_back(i);
+        noutval = nval;
+    }
+    else
+    {
+        string::size_type pos = 0;
+        string::size_type len = columns.size();
+        while( pos < len )
+        {
+            string::size_type end=columns.find('+',pos);
+            if( end == string::npos ) end=len;
+            string col = columns.substr(pos,end-pos);
+            pos=end+1;
+            bool found = false;
+            for( int i = 0; i < nval; i++ )
+            {
+                if( g.fieldName(i) == col )
+                {
+                    useCols.push_back(i);
+                    found = true;
+                    noutval++;
+                    break;
+                }
+            }
+            if( ! found )
+            {
+                throw runtime_error( string("Requested linz grid output column invalid: ").append(col));
+            }
+        }
+    }
+
+    if( ! noutval )
+    {
+        throw runtime_error("Cannot create LINZ grid as no output columns selected");
+    }
+
 
     grid::point p0,p1x,p1y;
     g.nodexy(grid::node(0,0),p0);
@@ -298,7 +340,7 @@ void write_linz_grid_file( grid &g, string crdsys, string header1, string header
     os << "YMIN: " << p0.y << endl;
     os << "YMAX: " << p1y.y << endl;
     os << "VRES: " << vres << endl;
-    os << "NDIM: " << nval << endl;
+    os << "NDIM: " << noutval << endl;
     os << "LATLON: 1" << endl;
     os << "VALUES: REAL" << endl;
 
@@ -308,9 +350,9 @@ void write_linz_grid_file( grid &g, string crdsys, string header1, string header
         {
             os << "V" << col+1 << "," << row+1 << ":";
             vector<double>::pointer v = g.values(row,col);
-            for( int i = 0; i < nval; i++ )
+            for( int i = 0; i < noutval; i++ )
             {
-                os << " " << v[i];
+                os << " " << v[useCols[i]];
             }
             os << endl;
         }

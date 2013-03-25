@@ -247,13 +247,25 @@ static void run_write_linzgrid( grid &g, commandlist &commands )
     }
     string linzgridfile=next_command(commands,"File name for write_linzgrid operation");
     string vres = "AUTO";
-    if( linzgridfile == "resolution" )
+    string columns = "";
+    while( true )
     {
-        vres = next_command(commands,"Resolution of grid data for write_linzgrid operation");
+        if( linzgridfile == "resolution" )
+        {
+            vres = next_command(commands,"Resolution of grid data for write_linzgrid operation");
+        }
+        else if( linzgridfile == "columns" )
+        {
+            columns = next_command(commands,"Columns of grid data to write to linzgrid file");
+        }
+        else 
+        {
+            break;
+        }
         linzgridfile=next_command(commands,"File name for write_linzgrid operation");
     }
     cout << "Writing grid to LINZ ASCII format in " << linzgridfile << endl;
-    write_linz_grid_file(g,crdsys.c_str(),header1.c_str(),header2.c_str(),header3.c_str(),vres,linzgridfile.c_str());
+    write_linz_grid_file(g,crdsys.c_str(),header1.c_str(),header2.c_str(),header3.c_str(),vres,columns,linzgridfile.c_str());
 }
 
 static void run_stats( grid &g )

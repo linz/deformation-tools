@@ -24,13 +24,14 @@ write grid_file
 write_csv grid_file
    Similar to write, but fields are comma delimited
    
-write_linzgrid crdsys header1 header2 header3 [resolution xxxx] filename
+write_linzgrid crdsys header1 header2 header3 [resolution xx] [columns xx] filename
    Writes the current grid to a LINZ ASCII grid format file in filename.
    Uses the crdsys code and header lines.  The header lines can be replaced
    with file header_file_name, in which case three header lines will be read
    from the named file. The resolution defines the data resolution that will
    be specified in the output file, which will be used when it is converted
-   to a binary format.
+   to a binary format. The columns select which columns to include separated 
+   by +, eg columns de+dn.  Default is all columns.
 
 extents_wkt wkt_file
    Writes a WKT definition of the polygon to the specified file
