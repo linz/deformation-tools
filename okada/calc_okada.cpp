@@ -401,6 +401,9 @@ int main( int argc, char *argv[] )
     bool showlength = false;
     bool calcstrain = false;
     int nskip = 0;
+    int llprecision = 6;
+    int dxyprecision = 4;
+    int strnprecision = 4;
     GNSProjection proj;
 
     while( argc > 1 && argv[1][0] == '-' )
@@ -474,6 +477,12 @@ int main( int argc, char *argv[] )
                 argv++;
                 argc--;
             }
+            break;
+        case 'x':
+        case'X':
+            llprecision += 4;
+            dxyprecision += 4;
+            strnprecision += 4;
             break;
         default:
             cout << "Invalid argument " << argv[1] << endl;
@@ -636,9 +645,9 @@ int main( int argc, char *argv[] )
             }
             faults.CalcOkada( lon0, lat0, uxyz, strain );
             if( havenames ) out << name << "\t";
-            out << setprecision(6)
+            out << setprecision(llprecision)
                 << lon0 <<  "\t" << lat0
-                << setprecision(4)
+                << setprecision(dxyprecision)
                 << "\t" << ux << "\t" << uy << "\t" << uz;
             if( showlength )
             {
@@ -649,12 +658,14 @@ int main( int argc, char *argv[] )
             {
                 double dil, rot, shear, err;
                 calcStrainComponents(strain,dil,rot,shear,err);
-                out << "\t" << dil << "\t" << rot
+                out << setprecision(strnprecision)
+                    << "\t" << dil << "\t" << rot
                     << "\t" << shear << "\t" << err;
             }
             if( compare )
             {
-                out << "\t" << oux << "\t" << ouy << "\t" << ouz;
+                out << setprecision(dxyprecision)
+                    << "\t" << oux << "\t" << ouy << "\t" << ouz;
                 if( showlength )
                 {
                     double us = sqrt(oux*oux+ouy*ouy);
@@ -684,9 +695,9 @@ int main( int argc, char *argv[] )
                 for( lon = lon0; nlnrow > 0; nlnrow--, lon += dlon )
                 {
                     faults.CalcOkada( lon, lat, uxyz, strain );
-                    out << setprecision(6)
+                    out << setprecision(llprecision)
                         << lon <<  "\t" << lat << "\t"
-                        << setprecision(4)
+                        << setprecision(dxyprecision)
                         << ux << "\t" << uy << "\t" << uz;
                     if( showlength )
                     {
@@ -697,7 +708,8 @@ int main( int argc, char *argv[] )
                     {
                         double dil, rot, shear, err;
                         calcStrainComponents(strain,dil,rot,shear,err);
-                        out << "\t" << dil << "\t" << rot
+                        out << setprecision(strnprecision)
+                            << "\t" << dil << "\t" << rot
                             << "\t" << shear << "\t" << err;
                     }
                     out << endl;
