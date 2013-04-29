@@ -11,7 +11,8 @@ The program is run using the following syntax:
   calc_okada [options] fault_model_file test_point_file output_file
 
 where
-  fault_model_file   defines the fault model (details below)
+  fault_model_file   defines the fault model (details below).  Several fault
+                     models can be combined using file1+file2+file3..
   test_point_file    defines the points at which the deformation will be 
                      computed.  The test_point_file can be replaced with
                      a grid definition entered as 

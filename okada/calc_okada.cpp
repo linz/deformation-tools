@@ -87,8 +87,8 @@ public:
     FaultSet(GNSProjection proj) : proj(proj) {};
     ~FaultSet();
     bool ReadGNSDefinition( istream &str, int nskip = 0 );
-    bool CalcOkada( double lon, double lat, double *dislocation, double *strain );
-    ostream & write( ostream &os, int style=0 );
+    bool CalcOkada( double lon, double lat, double *dislocation, double *strain, bool reset=true );
+    ostream & write( ostream &os, int style=0, bool header=true );
 private:
     GNSProjection proj;
     list<SegmentedFault *>faults;
@@ -260,10 +260,13 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
     return ok;
 }
 
-bool FaultSet::CalcOkada( double lon, double lat, double *dislocation, double *strain )
+bool FaultSet::CalcOkada( double lon, double lat, double *dislocation, double *strain, bool reset )
 {
-    dislocation[0] = dislocation[1] = dislocation[2] = 0.0;
-    if( strain ) { strain[0] = strain[1] = strain[2] = strain[3] = 0.0; }
+    if( reset )
+    {
+        dislocation[0] = dislocation[1] = dislocation[2] = 0.0;
+        if( strain ) { strain[0] = strain[1] = strain[2] = strain[3] = 0.0; }
+    }
     double x, y;
     bool ok = true;
     proj.XY(lon,lat,x,y);
@@ -274,7 +277,7 @@ bool FaultSet::CalcOkada( double lon, double lat, double *dislocation, double *s
     return ok;
 }
 
-ostream &FaultSet::write( ostream &os, int style )
+ostream &FaultSet::write( ostream &os, int style, bool header )
 {
     bool havez = (style & 1) ? true : false;
     bool linestring = (style & 2) ? true : false;
@@ -284,7 +287,8 @@ ostream &FaultSet::write( ostream &os, int style )
     if( linestring ) { prefix="MULTILINESTRING"+zstring+"(("; suffix="))"; }
     else { prefix="POLYGON"+zstring+"(("; suffix="))"; }
 
-    os << "id\tstrike\tdip\tUss\tUds\tUts\tmin_depth\tmax_depth\tname\tshape" << endl;
+    if( header )
+        os << "id\tstrike\tdip\tUss\tUds\tUts\tmin_depth\tmax_depth\tname\tshape" << endl;
 
     int nflt = 0;
 
@@ -371,6 +375,19 @@ static void calcStrainComponents( double *strain, double &dil, double &rot, doub
     double ec = uxx*uxy+uyx*uyy;
 
     err = sqrt(fabs(ea+eb) + sqrt((ea-eb)*(ea-eb)+ec*ec));
+}
+
+void split_string( const string &source, const string &delim, list<string> &parts )
+{
+    string::size_type pos = 0;
+    while( 1 )
+    {
+        string::size_type end= source.find(delim,pos);
+        if( end == string::npos ) break;
+        if( end > pos ) parts.push_back( source.substr(pos,end-pos) );
+        pos = end+1;
+    }
+    parts.push_back( source.substr(pos) );
 }
 
 void help()
@@ -509,11 +526,18 @@ int main( int argc, char *argv[] )
         return 0;
     }
 
+    list<FaultSet *> faultlist;
+    list<string> filenames;
+    split_string(argv[1],"+",filenames);
+    
     FaultSet faults(proj);
 
     // Read the fault model
+
+    for( list<string>::iterator i = filenames.begin(); i != filenames.end(); i++ )
     {
-        string filename(argv[1]);
+        string filename(*i);
+        if( filename.length() == 0 ) continue;
         ifstream f(filename.c_str());
 
         if( ! f.good() )
@@ -545,7 +569,9 @@ int main( int argc, char *argv[] )
             return 0;
         }
 
-        if( ! faults.ReadGNSDefinition(f, nskip) ) { return 0; }
+        FaultSet *faults = new FaultSet( proj );
+        if( ! faults->ReadGNSDefinition(f, nskip) ) { return 0; }
+        faultlist.push_back(faults);
     }
 
     // Open the input and output files..
@@ -575,7 +601,12 @@ int main( int argc, char *argv[] )
             cout << "Cannot open wkt output file " << argv[4] << endl;
             return 0;
         }
-        faults.write(wkt,wkttype);
+        bool header = true;
+        for( list<FaultSet *>::iterator f = faultlist.begin(); f != faultlist.end(); f++ )
+        {
+            (*f)->write(wkt,wkttype,header);
+            header=false;
+        }
         wkt.close();
     }
 
@@ -643,7 +674,12 @@ int main( int argc, char *argv[] )
                 cout << "Invalid test point: " << buffer << endl;
                 continue;
             }
-            faults.CalcOkada( lon0, lat0, uxyz, strain );
+            bool reset = true;
+            for( list<FaultSet *>::iterator f = faultlist.begin(); f != faultlist.end(); f++ )
+            {
+                (*f)->CalcOkada( lon0, lat0, uxyz, strain, reset );
+                reset = false;
+            }
             if( havenames ) out << name << "\t";
             out << setprecision(llprecision)
                 << lon0 <<  "\t" << lat0
@@ -694,7 +730,12 @@ int main( int argc, char *argv[] )
                 int nlnrow = nln;
                 for( lon = lon0; nlnrow > 0; nlnrow--, lon += dlon )
                 {
-                    faults.CalcOkada( lon, lat, uxyz, strain );
+                    bool reset = true;
+                    for( list<FaultSet *>::iterator f = faultlist.begin(); f != faultlist.end(); f++ )
+                    {
+                        (*f)->CalcOkada( lon, lat, uxyz, strain, reset );
+                        reset=false;
+                    }
                     out << setprecision(llprecision)
                         << lon <<  "\t" << lat << "\t"
                         << setprecision(dxyprecision)
