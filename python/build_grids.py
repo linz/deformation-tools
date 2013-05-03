@@ -11,6 +11,7 @@ from shapely.geometry import MultiPolygon,MultiLineString,Polygon,Point
 from shapely.prepared import prep
 import accuracy_standards
 from collections import namedtuple
+import re
 
 PatchGridDef=namedtuple('PatchGridDef','level file parent extentfile')
 
@@ -320,6 +321,18 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
 
         # Now process the subcell
         create_grids( gridlist, modeldef, patchpath, subcellname, level+1, grid_def, subcellsize, parent=patchdef, extentfile=subset_extentfile )
+
+def create_patch_csv( buildpath, patchlist, additive=False ):
+    # Note: Assumes patchlist is sorted such that parents are before children
+    for patch in patchlist:
+        gridfile = patch.file
+        csvfile = os.path.basename(gridfile)
+        csvfile = re.replace(r'(\.grid)?$','.csv',re.I)
+        csvfile = re.replace(csvfile,
+
+
+
+
 
 
 def write_log( message, level=0 ):

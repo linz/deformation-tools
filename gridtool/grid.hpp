@@ -61,7 +61,7 @@ public:
 
     grid( const char * filename = 0, char delim=' ' );
     ~grid();
-    bool readfile( const char * filename, char delim=' ' );
+    bool readfile( const char * filename, char delim=' ', int maxcols=99 );
     bool writefile( const char * filename, const char *delim = 0 );
     void setprecision( int dataprec ){ m_dataprec = dataprec; }
     int nrow()
@@ -87,8 +87,9 @@ public:
     void clearMarked( markaction action = off );
     void mark( const node &n, markaction action=on );
     bool markNearest( const point &p, markaction action=on );
-    void markWithin( std::vector<point> polygon, markaction action=on );
-    void markWhere( std::string field, std::string op, double value, bool andc=false, markaction action=on );
+    void markEdge( int width, bool inside, markaction action=on);
+    void toggleWithin( std::vector<point> &polygon, vector2<bool> &markBuffer );
+    void markWhere( std::string field, std::string op, double value, markaction action=on );
     bool marked( node n ){ return marked(n.row, n.col ); }
     bool marked( int row, int col ){ return m_marked[row][col]; }
     int markCount();

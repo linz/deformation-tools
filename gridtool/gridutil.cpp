@@ -15,7 +15,7 @@ using namespace std;
 #include "grid.hpp"
 #include "gridutil.hpp"
 
-static void mark_xy_file( grid &g, const char *xyfile )
+void mark_xy_file( grid &g, const char *xyfile, grid::markaction action )
 {
     ifstream f(xyfile);
     if( ! f )
@@ -30,7 +30,7 @@ static void mark_xy_file( grid &g, const char *xyfile )
         double x, y;
         if( s >> x >> y )
         {
-            if( ! g.markNearest(grid::point(x,y)) )
+            if( ! g.markNearest(grid::point(x,y), action) )
             {
                 cout << "Invalid point in " << xyfile << ": " << x << " " << y << endl;
             }
@@ -39,9 +39,16 @@ static void mark_xy_file( grid &g, const char *xyfile )
     f.close();
 }
 
-static void mark_wkt_file( grid &g, const char *wkt_file )
+void mark_wkt_file( grid &g, bool outside, const char *wkt_file, grid::markaction action  )
 {
+    grid::vector2<bool> inside;
     vector<grid::point> points;
+
+    inside.resize(g.nrow());
+    for( int row=0; row < g.nrow(); row++ )
+    {
+        inside[row].assign(g.ncol(),outside);
+    }
 
     ifstream f(wkt_file);
     if( ! f )
@@ -67,47 +74,16 @@ static void mark_wkt_file( grid &g, const char *wkt_file )
             while( f.get(c)) { if( c == ')' || c == ',' ) break; }
             points.push_back(pt);
         }
-        if( points.size() > 2 ) g.markWithin(points,grid::toggle);
+        if( points.size() > 2 ) g.toggleWithin(points,inside);
     }
-}
-
-void mark_file( grid &g, const char *markfile )
-{
-    string filelist(markfile);
-    int p0 = 0;
-    list<string> files;
-
-    while( true )
+    for( int row=0; row < g.nrow(); row++ )
     {
-        int p = filelist.find('+',p0);
-        if( p == string::npos )
+        for( int col=0; col < g.ncol(); col++ )
         {
-            files.push_back(filelist.substr(p0));
-            break;
-        }
-        else
-        {
-            files.push_back(filelist.substr(p0,p-p0));
-            p0 = p+1;
-        }
-    }
-
-    g.clearMarked();
-    
-    for( list<string>::iterator f = files.begin(); f != files.end(); f++ )
-    {
-        const char * filename = (*f).c_str();
-        if( strncasecmp(filename,"wkt:",4) == 0 )
-        {
-            mark_wkt_file(g,filename+4);
-        }
-        else
-        {
-            mark_xy_file(g, filename );
+            if( inside[row][col] ) g.mark(grid::node(row,col),action);
         }
     }
 }
-
 
 // Messy function to generate WKT polygon(s) outlining cells affected by marked nodes
 // Not sorting out internal polygons - each ring is output as a separate wkt polygon.

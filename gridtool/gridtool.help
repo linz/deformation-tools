@@ -12,10 +12,11 @@ the grids points are on a regular orthogonal grid.
 The following commands can be included on the command line, or included on the 
 command line
 
-read grid_file
-   Loads a new grid file
+read [maxcols n] grid_file
+   Loads a new grid file.  Maximum number of columns can limit the number
+   of data columns read (ie count of data columns after lon/lat)
 
-read_csv grid_file
+read_csv [maxcols n] grid_file
    Similar to read, but fields are comma delimited
 
 write grid_file
@@ -72,18 +73,20 @@ affected_area selection wkt_output_file
    a selection file.  A cell is affected if one of its nodes lies within the 
    selection set.
 
-A selection of grid points is defined either by a file defining a set of
-points (x,y values, one per line), or a WKT linestring or polygon 
-definition, or by a condition on the values at the point.
+A selection of grid points is defined by a series of commands joined by "and".
+or "not".  Selections preceded with "and" are added, those preceded with "not" 
+are removed.  Selection commands are one of:
 
-A points file is specified just by one or more file names entered as 
-filename[+filename+filename...].  
+inside|outside wkt_file: File consists of one or more WKT linestring or polygon 
+   definitions. Inside/outside of each ring is used.
 
-A WKT file is entered as wkt:filename. Each ring within the file toggles
-the state of the grid points (using an "exclusive or" logic).
+nearest_to xy_file: xy_file is a list of x,y coordinates one per line.  Nearest 
+   grid point to each point in file is selected.
 
-A condition is entered as "where field (<|<=|==|!=|>=|>) value", where field
-is a field name (either defined on a space separated header line, or field_1,
-field_2, ...).
+edge|inside_edge n:  All values in the with n rows/columns of the edge are affected
+   (or all other values if inside_edge)
 
-The entire selection can be preceded by "outside" to reverse the selection.
+where condition: A condition is entered as "where field (<|<=|==|!=|>=|>) value", 
+   where field is a field name (either defined on a space separated header line, 
+   or field_1, field_2, ...).
+

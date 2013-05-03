@@ -1,7 +1,7 @@
 # Test command file
 read test1.grid 
 # Set selected elements to 0
-zero wkt:test.wkt+test1_3rows.xy
+zero inside test.wkt and nearest_to test1_3rows.xy
 # Scale by 2.5
 multiply by 2.5
 # Write out the result

@@ -133,54 +133,75 @@ template<class T> bool next_command_value( commandlist &commands, T &value, cons
 
 static void mark_grid( grid &g, commandlist &commands, string markcommand )
 {
+    grid::markaction action = grid::on;
     g.clearMarked();
-    string filename = next_command( commands, string("Selection file for ") + markcommand);
-    bool outside = false;
-    if( filename == "outside" )
+
+
+    while( true )
     {
-        outside = true;
-        filename = next_command( commands, string("Selection file for ") + markcommand);
-    }
-    if( filename != "where" )
-    {
-        mark_file(g,filename.c_str());
-    }
-    else
-    {
-        bool more = true;
-        bool andc = false;
-        while( more )
+        string command = next_command( commands, string("Selection action for ") + markcommand);
+        if( command == "nearest_to" )
         {
-            string field = next_command( commands, string("Field name for ")+markcommand);
-            string op = next_command( commands, string("Operation type for ")+markcommand);
-            double value;
-            next_command_value(commands,value,string("Field value for ")+markcommand);
-            g.markWhere(field,op,value,andc,grid::on);
-            if( next_command_is(commands,"and"))
-            {
-                andc = true;
-            }
-            else if( next_command_is( commands,"or"))
-            {
-                andc = false;
-            }
-            else
-            {
-                more = false;
-            }
+            string filename = next_command( commands, string("Points file for ") + markcommand);
+            mark_xy_file( g, filename.c_str(), action );
         }
-    }
-    if( outside )
-    {
-        g.clearMarked( grid::toggle );
+        else if( command == "inside" )
+        {
+            string filename = next_command( commands, string("Inside wkt_file file for ") + markcommand);
+            mark_wkt_file( g, false, filename.c_str(), action );
+        }
+        else if( command == "outside" )
+        {
+            string filename = next_command( commands, string("Outside wkt_file file for ") + markcommand);
+            mark_wkt_file( g, true, filename.c_str(), action );
+        }
+        else if( command == "edge" )
+        {
+            int nedge = 1;
+            next_command_value(commands,nedge,string("Width of edge for ")+markcommand);
+            g.markEdge(nedge,false,action);
+        }
+        else if( command == "inside_edge" )
+        {
+            int nedge = 1;
+            next_command_value(commands,nedge,string("Width of inside_edge for ")+markcommand);
+            g.markEdge(nedge,true,action);
+        }
+        else 
+        {
+           string field = command;
+           if( field == "where" ) field = next_command( commands, string("Field name for ")+markcommand);
+           string op = next_command( commands, string("Operation type for ")+markcommand);
+           double value;
+           next_command_value(commands,value,string("Field value for ")+markcommand);
+           g.markWhere(field,op,value,action);
+        }
+        if( next_command_is(commands, "not") )
+        {
+            action = grid::off;
+        }
+        else if( next_command_is(commands,"and"))
+        {
+            action = grid::on;
+        }
+        else
+        {
+            break;
+        }
     }
 }
 
 static void run_read_grid( grid &g, commandlist &commands )
 {
     string filename = next_command(commands,"Filename for read operation");
+    int maxcols = 99;
+    if( filename == "maxcols" )
+    {
+       next_command_value(commands,maxcols,"Maximum number of columns for read");
+       filename = next_command(commands,"Filename for read operation");
+    }
     cout << "Reading file from " << filename << endl;
-    g.readfile(filename.c_str());
+    g.readfile(filename.c_str(),' ',maxcols);
     cout << "Grid has " << g.nrow() << " rows and " << g.ncol() << " columns" << endl;
     cout << "Each point has " << g.nvalue() << " data values" << endl;
 }
@@ -195,8 +216,14 @@ static void run_write_grid( grid &g, commandlist &commands )
 static void run_read_csv_grid( grid &g, commandlist &commands )
 {
     string filename = next_command(commands,"Filename for read operation");
+    int maxcols = 99;
+    if( filename == "maxcols" )
+    {
+       next_command_value(commands,maxcols,"Maximum number of columns for read");
+       filename = next_command(commands,"Filename for read operation");
+    }
     cout << "Reading csv file from " << filename << endl;
-    g.readfile(filename.c_str(),',');
+    g.readfile(filename.c_str(),',',maxcols);
     cout << "Grid has " << g.nrow() << " rows and " << g.ncol() << " columns" << endl;
     cout << "Each point has " << g.nvalue() << " data values" << endl;
 }

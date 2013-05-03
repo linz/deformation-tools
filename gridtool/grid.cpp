@@ -61,7 +61,7 @@ void grid::create( int nrow, int ncol, int nvalue )
     clearMarked();
 }
 
-bool grid::readfile( const char * filename, char delim )
+bool grid::readfile( const char * filename, char delim, int maxcols )
 {
     initiallize();
     ifstream f(filename);
@@ -110,6 +110,7 @@ bool grid::readfile( const char * filename, char delim )
             m_x0 = x;
             m_y0 = y;
             while( s >> v1 ) nvalue++;
+            if( nvalue > maxcols ) nvalue=maxcols;
         }
         else if( npt == 2 )
         {
@@ -449,14 +450,46 @@ bool grid::markNearest( const point &p, markaction action )
     return result;
 }
 
-void grid::markWithin( vector<point> polygon, markaction action )
+void grid::markEdge( int width, bool inside, markaction action )
 {
-    if( action != toggle )
+    if( width < 0 ) return;
+    if( width*2 >= m_nrow/2 || width*2 >= m_ncol  && inside ) return;
+    if( width*2 >= m_nrow/2 || width*2 >= m_ncol )
     {
-        // Only support toggle, as simplifies algorithm below...
-        throw runtime_error("grid::markWithin currently only supports toggle action");
+        for( int row = 0; row < m_nrow; row++ ) for( int col = 0; col < m_ncol; col++ )
+        {
+            mark(node(row,col),action);
+            return;
+        }
+    }
+    if( inside )
+    {
+        for( int row=width; row<m_nrow-width; row++)
+            for( int col=width; col<m_ncol-width; col++)
+                mark(node(row,col),action);
+        return;
     }
 
+    for( int row=0; row < width; row++ )
+    {
+        for( int col=0; col < m_ncol; col++ )
+        {
+            mark(node(row,col),action);
+            mark(node(m_nrow-row-1,col),action);
+        }
+    } 
+    for( int row=width; row < m_nrow-width; row++ )
+    {
+        for( int col=0; col < width; col++ )
+        {
+            mark(node(row,col),action);
+            mark(node(row,m_ncol-col-1),action);
+        }
+    }
+}
+
+void grid::toggleWithin( vector<point> &polygon, vector2<bool> &markBuffer )
+{
     int npt = polygon.size();
     if( npt < 3 ) return;
 
@@ -490,7 +523,7 @@ void grid::markWithin( vector<point> polygon, markaction action )
                 if( c < 0 ) c = 0;
                 while( c < m_ncol )
                 {
-                    mark(node(r,c),toggle);
+                    markBuffer[r][c] = ! markBuffer[r][c];
                     c++;
                 }
             }
@@ -502,7 +535,7 @@ void grid::markWithin( vector<point> polygon, markaction action )
 }
 
 
-void grid::markWhere( std::string field, std::string op, double value, bool andc, markaction action )
+void grid::markWhere( std::string field, std::string op, double value, markaction action )
 {
     int iv;
     for( iv = 0; iv < m_nvalue; iv++ ) { if( field == m_fields[iv] ) break; }
@@ -534,12 +567,7 @@ void grid::markWhere( std::string field, std::string op, double value, bool andc
         case GT: match = v > value; break;
         case NE: match = v != value; break;
         }
-        if( andc )
-        {
-            match = match && marked(row,col);
-            mark(node(row,col), match ? on : off);
-        }
-        else if( match )
+        if( match )
         {
             mark(node(row,col),action);
         }
