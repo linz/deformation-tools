@@ -193,12 +193,25 @@ static void mark_grid( grid &g, commandlist &commands, string markcommand )
 
 static void run_read_grid( grid &g, commandlist &commands )
 {
-    string filename = next_command(commands,"Filename for read operation");
     int maxcols = 99;
-    if( filename == "maxcols" )
+    char delimiter=' ';
+    string filename;
+
+    while( true )
     {
-       next_command_value(commands,maxcols,"Maximum number of columns for read");
-       filename = next_command(commands,"Filename for read operation");
+        filename = next_command(commands,"Filename for read operation");
+        if( filename == "maxcols" )
+        {
+           next_command_value(commands,maxcols,"Maximum number of columns for read");
+        }
+        else if( filename == "csv" )
+        {
+            delimiter=',';
+        }
+        else
+        {
+            break;
+        }
     }
     cout << "Reading file from " << filename << endl;
     g.readfile(filename.c_str(),' ',maxcols);
@@ -208,31 +221,15 @@ static void run_read_grid( grid &g, commandlist &commands )
 
 static void run_write_grid( grid &g, commandlist &commands )
 {
+    bool csv = false;
     string filename = next_command(commands,"Filename for write operation");
-    cout << "Writing file to " << filename << endl;
-    g.writefile(filename.c_str(),"\t");
-}
-
-static void run_read_csv_grid( grid &g, commandlist &commands )
-{
-    string filename = next_command(commands,"Filename for read operation");
-    int maxcols = 99;
-    if( filename == "maxcols" )
+    if( filename == "csv" ) 
     {
-       next_command_value(commands,maxcols,"Maximum number of columns for read");
-       filename = next_command(commands,"Filename for read operation");
+        csv=true;
+        filename = next_command(commands,"Filename for write operation");
     }
-    cout << "Reading csv file from " << filename << endl;
-    g.readfile(filename.c_str(),',',maxcols);
-    cout << "Grid has " << g.nrow() << " rows and " << g.ncol() << " columns" << endl;
-    cout << "Each point has " << g.nvalue() << " data values" << endl;
-}
-
-static void run_write_csv_grid( grid &g, commandlist &commands )
-{
-    string filename = next_command(commands,"Filename for write operation");
-    cout << "Writing csv file to " << filename << endl;
-    g.writefile(filename.c_str(),",");
+    cout << "Writing file to " << filename << endl;
+    g.writefile(filename.c_str(),csv ? "," : "\t");
 }
 
 static void run_precision( grid &g, commandlist &commands )
@@ -501,10 +498,8 @@ static void run_commands( commandlist &commands )
             else if( op == "smooth" ) run_smoothgrid(g,commands);
             else if( op == "precision" ) run_precision(g, commands );
             else if( op == "write" ) run_write_grid(g,commands);
-            else if( op == "write_csv" ) run_write_csv_grid(g,commands);
             else if( op == "write_linzgrid" ) run_write_linzgrid(g,commands);
             else if( op == "read" ) run_read_grid(g,commands);
-            else if( op == "read_csv" ) run_read_csv_grid(g,commands);
             else if( op == "run" ) run_command_file(g,commands);
             else if( op == "add" ) run_addgrid( g, commands, false );
             else if( op == "subtract" ) run_addgrid(g, commands, true );
