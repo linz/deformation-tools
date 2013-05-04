@@ -9,12 +9,20 @@ import defgrid
 from subprocess import call
 from shapely.geometry import MultiPolygon,MultiLineString,Polygon,Point
 from shapely.prepared import prep
+import affinity
 import accuracy_standards
 from collections import namedtuple
 import re
 
-PatchGridDef=namedtuple('PatchGridDef','level file parent extentfile')
+class PatchGridDef:
 
+    def __init__( self, level, file, parent=None, extentfile=None ):
+        self.level=level
+        self.file=file
+        self.parent=parent
+        self.extentfile=extentfile
+        self.csv=None
+    
 # Grids will be calculated using integer representation based origin.
 # Subgrids will be obtained by dividing basesize by 4
 
@@ -183,6 +191,17 @@ def grid_def_list_merge( deflist, griddef ):
             break
     deflist.append(griddef)
 
+def buffered_polygon( polygon, buffer ):
+    '''
+    Buffer a polygon by an extents in metres.  Approximately scales to metres, applies buffer,
+    and scales back.
+    '''
+    if buffer > 0:
+        polygon=affinity.scale(polygon,xfact=1.0/scale_factor[0],yfact=1.0/scale_factor[1],origin=origin)
+        polygon=polygon.buffer(buffer)
+        polygon=affinity.scale(polygon,xfact=scale_factor[0],yfact=scale_factor[1],origin=origin)
+    return polygon
+
 def expanded_bounds( polygon, buffer=0, cellbuffer=(0,0), trim=base_extents ):
     '''
     Generate bounded extents around a polygon.
@@ -190,15 +209,15 @@ def expanded_bounds( polygon, buffer=0, cellbuffer=(0,0), trim=base_extents ):
     cellbuffer is (lon,lat) buffer size 
     trim is region to which buffered extents are trimmed
     '''
-    bounds=polygon.bounds
+    bounds=buffered_polygon(polygon,buffer).bounds
     return (
         (
-            max(bounds[0]-buffer*scale_factor[0]-cellbuffer[0],trim[0][0]),
-            max(bounds[1]-buffer*scale_factor[1]-cellbuffer[1],trim[0][1])
+            max(bounds[0]-cellbuffer[0],trim[0][0]),
+            max(bounds[1]-cellbuffer[1],trim[0][1])
         ),
         (
-            min(bounds[2]+buffer*scale_factor[0]+cellbuffer[0],trim[1][0]),
-            min(bounds[3]+buffer*scale_factor[1]+cellbuffer[1],trim[1][1])
+            min(bounds[2]+cellbuffer[0],trim[1][0]),
+            min(bounds[3]+cellbuffer[1],trim[1][1])
         )
     )
 
@@ -257,17 +276,18 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
 
     subcell_grid_defs=[]
     total_area = 0.0
+    areabuffersize=max(x/scale_factor(i)*2 for i,x in enumerate(subcellsize))
 
     if subcell_areas:
         write_log("{0} areas identified requiring subcells".format(len(subcell_areas)),level)
 
         # Expand the areas up to grid sizes that will contain them
-        # Find the maximum shift in the area contained by the grid
 
-        cellbuffer=list(x*2 for x in subcellsize)
+        write_log("Buffering areas by {0}".format(areabuffersize))
+        
         for i, area in enumerate(subcell_areas):
             write_wkt("{0} subcell area {1}".format(name,i+1),level+1,area.to_wkt()) 
-            area_bounds = expanded_bounds( area, cellbuffer=cellbuffer, trim=def1 )
+            area_bounds = expanded_bounds( area, buffer=areabuffersize, trim=def1 )
             area_grid_def = bounds_grid_def( area_bounds, subcellsize, cell_split_factor )
             write_wkt("{0} subcell grid area {1}".format(name,i+1),level+1,bounds_wkt(area_grid_def)) 
             grid_def_list_merge( subcell_grid_defs, area_grid_def )
@@ -311,28 +331,79 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
         # Need to keep a record of the extents over which the subcell 
         # supercedes the bounds, as outside this the subcell is merged into the 
         # parent 
-        subset_extentfile = os.path.join(patchpath,"{0}_L{1}.extent.wkt".format(subcellname,level+1))
+        extentfileroot=os.path.join(patchpath,"{0}_L{1}".format(subcellname,level+1))
+        subset_extentfile = extentfileroot+".extent.wkt"
+        subset_bufferfile = extentfileroot+".buffer.wkt"
         extentpoly=bounds_poly(grid_def)
+        areas=[]
         with open(subset_extentfile,"w") as f:
             for area in subcell_areas:
                 if extentpoly.contains(area):
+                    areas.append(area)
                     f.write(area.to_wkt())
                     f.write("\n")
+        areas = buffered_polylgon(MultiPolygon(areas),areabuffersize)
+        with open(subset_bufferfile,"w") as f:
+            f.write(areas.to_wkt())
+            f.write("\n")
 
         # Now process the subcell
-        create_grids( gridlist, modeldef, patchpath, subcellname, level+1, grid_def, subcellsize, parent=patchdef, extentfile=subset_extentfile )
+        create_grids( gridlist, modeldef, patchpath, subcellname, level+1, grid_def, subcellsize, parent=patchdef, extentfile=extentfileroot )
 
-def create_patch_csv( buildpath, patchlist, additive=False ):
+def create_patch_csv( buildpath, patchlist, additive=True ):
     # Note: Assumes patchlist is sorted such that parents are before children
+    write_log("Creating patch CSV files")
     for patch in patchlist:
+        # Get the files used for this component of the patch
+
         gridfile = patch.file
         csvfile = os.path.basename(gridfile)
-        csvfile = re.replace(r'(\.grid)?$','.csv',re.I)
-        csvfile = re.replace(csvfile,
+        csvfile = re.replace(r'(\.grid)?$','.csv',gridfile,re.I)
+        write_log("Creating patch file file {0}".format(csvfile))
+        parent = patch.parent
+        extfile = patch.extentsfile+'.extent.wkt'
+        buffile = patch.extentsfile+'.buffer.wkt'
 
+        # Build a grid tool command to process the file
+        
+        # Read in the existing file (only need de, dn, du components)
+        merge_commands='gridtool read maxcols 3 gridfile '
 
+        # If have a parent, then subtract it as want to merge into it
+        if parent: merge_commands = merge_commands + ' subtract csv parentcsv'
 
+        # Set to zero outside area extents for which patch subcell resolution is required
+        merge_commands=merge_commands + ' zero outside extents'
 
+        # Smooth out to buffer to avoid sharp transition
+        merge_commands=merge_commands + ' smooth linea outside extents not outside buffer'
+
+        # If we have a parent and are not making addative patches then add the parent back
+        # on.
+        if parent and not addative: merge_commands = merge_commands + ' add csv parentcsv'
+
+        # Trim redundant zeros around the edge of the patch
+        merge_commands=merge_commands + ' trim 1'
+
+        # Finally write out as a CSV file
+        merge_commands=merge_commands + ' write csv csvfile'
+
+        # Run the commands
+        gridtoolcmd=[ 
+            gridfile if x == 'gridfile' else
+            csvfile if x == 'csvfile' else
+            parent.csv if x == 'parentcsv' else
+            extfile if x == 'extents' else
+            buffile if x == 'buffer' else
+            x
+            for x in merge_commands.split()
+            ]
+
+        call(gridtoolcmd)
+
+        if not os.path.exists( csvfile ):
+            raise RuntimeError("Could not create CSV file "+csvfile)
+        patch.csv=csvfile
 
 
 def write_log( message, level=0 ):
@@ -413,6 +484,9 @@ if __name__ == "__main__":
     write_log("Maximum shift outside patch extents {0}".format(dsmax))
     write_log("Buffering patches by {0}".format(buffersize))
 
+    # Properly should apply same merging of grid definitions here as in create_grid (or
+    # refactor so that they all come together...)
+
     name = patchname
     gridlist=[]
     for i,extent in enumerate(real_extents):
@@ -420,10 +494,18 @@ if __name__ == "__main__":
             name='{0}_P{1}'.format(patchname,i)
         write_log("Building patch {0}".format(name))
         write_wkt("Patch base extents {0}".format(name),0,extent.to_wkt())
-        bounds = expanded_bounds( extent, buffer=buffersize )
+        buffered_extent=buffered_polygon( extent, buffersize )
+        bounds = expanded_bounds( buffered_extent )
         write_wkt("Expanded extents {0}".format(name),0,bounds_wkt(bounds))
         griddef = bounds_grid_def( bounds, base_size )
-        create_grids(gridlist, modeldef,patchpath,name,1,griddef,base_size)
+        extfile=os.path.join(patchpath,name)
+        with open(extfile+".extent.wkt") as f:
+            f.write(extent.to_wkt())
+            f.write("\n")
+        with open(extfile+".buffer.wkt") as f:
+            f.write(buffered_extent.to_wkt())
+            f.write("\n")
+        create_grids(gridlist, modeldef,patchpath,name,1,griddef,base_size,extentsfile=extfile)
 
     print gridlist
 
