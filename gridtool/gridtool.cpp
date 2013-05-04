@@ -191,15 +191,16 @@ static void mark_grid( grid &g, commandlist &commands, string markcommand )
     }
 }
 
-static void run_read_grid( grid &g, commandlist &commands )
+static string run_read_grid( grid &g, commandlist &commands, const string &operation="read" )
 {
     int maxcols = 99;
     char delimiter=' ';
     string filename;
+    bool output=operation == "read";
 
     while( true )
     {
-        filename = next_command(commands,"Filename for read operation");
+        filename = next_command(commands,string("Filename for ")+operation+" operation");
         if( filename == "maxcols" )
         {
            next_command_value(commands,maxcols,"Maximum number of columns for read");
@@ -213,10 +214,11 @@ static void run_read_grid( grid &g, commandlist &commands )
             break;
         }
     }
-    cout << "Reading file from " << filename << endl;
+    if( output ) cout << "Reading file from " << filename << endl;
     g.readfile(filename.c_str(),' ',maxcols);
-    cout << "Grid has " << g.nrow() << " rows and " << g.ncol() << " columns" << endl;
-    cout << "Each point has " << g.nvalue() << " data values" << endl;
+    if( output ) cout << "Grid has " << g.nrow() << " rows and " << g.ncol() << " columns" << endl;
+    if( output ) cout << "Each point has " << g.nvalue() << " data values" << endl;
+    return filename;
 }
 
 static void run_write_grid( grid &g, commandlist &commands )
@@ -338,11 +340,11 @@ static void run_smoothgrid( grid &g, commandlist &commands )
 
 static void run_addgrid( grid &g, commandlist &commands, bool subtract )
 {
-    string filename = next_command( commands, subtract ?
-        "Grid filename in subtract command" : "Grid filename in add command");
+    grid gadd;
+    string filename = run_read_grid( gadd, commands, subtract ? "subtract" : "add" );
+    
     cout << (subtract ? "Subtracting" : "Adding") 
         << " grid values from grid " << filename << endl;
-    grid gadd(filename.c_str());
     double factor = subtract ? -1 : 1;
     g.add(gadd,factor);
 }
