@@ -1,4 +1,4 @@
-#!/bin/python
+#!/usr/bin/python
 # Script to build a set of nested grids to meet tolerances etc.
 
 import argparse
@@ -276,14 +276,14 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
 
     subcell_grid_defs=[]
     total_area = 0.0
-    areabuffersize=max(x/scale_factor(i)*2 for i,x in enumerate(subcellsize))
+    areabuffersize=max(x/scale_factor[i]*2 for i,x in enumerate(subcellsize))
 
     if subcell_areas:
         write_log("{0} areas identified requiring subcells".format(len(subcell_areas)),level)
 
         # Expand the areas up to grid sizes that will contain them
 
-        write_log("Buffering areas by {0}".format(areabuffersize))
+        write_log("Buffering areas by {0}".format(areabuffersize),level)
         
         for i, area in enumerate(subcell_areas):
             write_wkt("{0} subcell area {1}".format(name,i+1),level+1,area.to_wkt()) 
@@ -342,7 +342,7 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
                     areas.append(area)
                     f.write(area.to_wkt())
                     f.write("\n")
-        areas = buffered_polylgon(MultiPolygon(areas),areabuffersize)
+        areas = buffered_polygon(MultiPolygon(areas),areabuffersize)
         with open(subset_bufferfile,"w") as f:
             f.write(areas.to_wkt())
             f.write("\n")
@@ -350,7 +350,7 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
         # Now process the subcell
         create_grids( gridlist, modeldef, patchpath, subcellname, level+1, grid_def, subcellsize, parent=patchdef, extentfile=extentfileroot )
 
-def create_patch_csv( buildpath, patchlist, additive=True ):
+def create_patch_csv( patchlist, additive=True ):
     # Note: Assumes patchlist is sorted such that parents are before children
     write_log("Creating patch CSV files")
     for patch in patchlist:
@@ -358,11 +358,11 @@ def create_patch_csv( buildpath, patchlist, additive=True ):
 
         gridfile = patch.file
         csvfile = os.path.basename(gridfile)
-        csvfile = re.replace(r'(\.grid)?$','.csv',gridfile,re.I)
+        csvfile = re.sub(r'(\.grid)?$','.csv',gridfile,re.I)
         write_log("Creating patch file file {0}".format(csvfile))
         parent = patch.parent
-        extfile = patch.extentsfile+'.extent.wkt'
-        buffile = patch.extentsfile+'.buffer.wkt'
+        extfile = patch.extentfile+'.extent.wkt'
+        buffile = patch.extentfile+'.buffer.wkt'
 
         # Build a grid tool command to process the file
         
@@ -376,11 +376,11 @@ def create_patch_csv( buildpath, patchlist, additive=True ):
         merge_commands=merge_commands + ' zero outside extents'
 
         # Smooth out to buffer to avoid sharp transition
-        merge_commands=merge_commands + ' smooth linea outside extents not outside buffer'
+        merge_commands=merge_commands + ' smooth linear outside extents not outside buffer'
 
-        # If we have a parent and are not making addative patches then add the parent back
+        # If we have a parent and are not making additive patches then add the parent back
         # on.
-        if parent and not addative: merge_commands = merge_commands + ' add csv parentcsv'
+        if parent and not additive: merge_commands = merge_commands + ' add csv parentcsv'
 
         # Trim redundant zeros around the edge of the patch
         merge_commands=merge_commands + ' trim 1'
@@ -499,14 +499,15 @@ if __name__ == "__main__":
         write_wkt("Expanded extents {0}".format(name),0,bounds_wkt(bounds))
         griddef = bounds_grid_def( bounds, base_size )
         extfile=os.path.join(patchpath,name)
-        with open(extfile+".extent.wkt") as f:
+        with open(extfile+".extent.wkt","w") as f:
             f.write(extent.to_wkt())
             f.write("\n")
-        with open(extfile+".buffer.wkt") as f:
+        with open(extfile+".buffer.wkt","w") as f:
             f.write(buffered_extent.to_wkt())
             f.write("\n")
-        create_grids(gridlist, modeldef,patchpath,name,1,griddef,base_size,extentsfile=extfile)
+        create_grids(gridlist, modeldef,patchpath,name,1,griddef,base_size,extentfile=extfile)
 
+    create_patch_csv( gridlist )
     print gridlist
 
 
