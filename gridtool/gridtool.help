@@ -12,18 +12,12 @@ the grids points are on a regular orthogonal grid.
 The following commands can be included on the command line, or included on the 
 command line
 
-read [maxcols n] grid_file
+read [csv] [maxcols n] grid_file
    Loads a new grid file.  Maximum number of columns can limit the number
    of data columns read (ie count of data columns after lon/lat)
 
-read_csv [maxcols n] grid_file
-   Similar to read, but fields are comma delimited
-
-write grid_file
+write [csv] grid_file
    Writes the current grid to a file
-
-write_csv grid_file
-   Similar to write, but fields are comma delimited
    
 write_linzgrid crdsys header1 header2 header3 [resolution xx] [columns xx] filename
    Writes the current grid to a LINZ ASCII grid format file in filename.
@@ -45,8 +39,8 @@ smooth (linear|quadratic|cubic) selection
    with other values (minimizing single, double, or triple differences on
    rows or columns)
 
-add grid_file
-subtract grid_file
+add [csv] [maxcols n] grid_file
+subtract [csv] [maxcols n] grid_file
    Add and subtract the values extrapolated from grid_file to the values
    at each node of the loaded grid
 

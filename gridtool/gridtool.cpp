@@ -215,7 +215,15 @@ static string run_read_grid( grid &g, commandlist &commands, const string &opera
         }
     }
     if( output ) cout << "Reading file from " << filename << endl;
-    g.readfile(filename.c_str(),' ',maxcols);
+    try
+    {
+        g.readfile(filename.c_str(),' ',maxcols);
+    }
+    catch( runtime_error e )
+    {
+        string message = filename + " " + e.what();
+        throw(runtime_error( message ));
+    }
     if( output ) cout << "Grid has " << g.nrow() << " rows and " << g.ncol() << " columns" << endl;
     if( output ) cout << "Each point has " << g.nvalue() << " data values" << endl;
     return filename;
