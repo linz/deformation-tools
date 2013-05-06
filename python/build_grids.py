@@ -13,12 +13,14 @@ import affinity
 import accuracy_standards
 from collections import namedtuple
 import re
+import datetime
 
 class PatchGridDef:
 
     def __init__( self, level, file, parent=None, extentfile=None ):
         self.level=level
         self.file=file
+        self.name=re.sub(r'\.grid$','',os.path.basename(file),re.I)
         self.parent=parent
         self.extentfile=extentfile
         self.csv=None
@@ -39,7 +41,7 @@ base_size=(0.15,0.125)
 base_extents=((166,-47.5),(176,-39.5))
 
 # Conversion degrees to metres
-scale_factor=(1.0e-5*math.cos(math.radians(40)),1.0e-5)
+scale_factor=(1.0e-5/math.cos(math.radians(40)),1.0e-5)
 
 # Factor by which accuracy specs are multiplied to provide grid tolerances
 tolerance_factor=0.4
@@ -70,10 +72,34 @@ max_subcell_ratio=0.5
 
 # Maximum split level
 
-max_split_level=4
+max_split_level=5
+
+# Outputs required ...
+build_shift_model=True
+
+shift_model_header='''
+SHIFT_MODEL_MODEL Shift model {name}
+FORMAT LINZSHIFT1B
+VERSION_NUMBER 1.0
+COORDSYS NZGD2000
+DESCRIPTION
+Model built on {runtime}
+Source files: {modelname}
+END_DESCRIPTION
+'''
+
+shift_model_component='''
+SHIFT_MODEL_COMPONENT {gridfile}
+MODEL_TYPE grid
+NEGATIVE yes
+DESCRIPTION
+{component}
+END_DESCRIPTION
+'''
 
 # Log file ...
 
+runtime=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 logfile=None
 wktfile=None
 
@@ -276,18 +302,19 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
 
     subcell_grid_defs=[]
     total_area = 0.0
-    areabuffersize=max(x/scale_factor[i]*2 for i,x in enumerate(subcellsize))
 
     if subcell_areas:
         write_log("{0} areas identified requiring subcells".format(len(subcell_areas)),level)
 
         # Expand the areas up to grid sizes that will contain them
 
+        areabuffersize=max(x/scale_factor[i]*2 for i,x in enumerate(subcellsize))
         write_log("Buffering areas by {0}".format(areabuffersize),level)
         
         for i, area in enumerate(subcell_areas):
             write_wkt("{0} subcell area {1}".format(name,i+1),level+1,area.to_wkt()) 
             area_bounds = expanded_bounds( area, buffer=areabuffersize, trim=def1 )
+            write_wkt("{0} subcell expanded_bounds {1}".format(name,i+1),level+1,bounds_wkt(area_bounds)) 
             area_grid_def = bounds_grid_def( area_bounds, subcellsize, cell_split_factor )
             write_wkt("{0} subcell grid area {1}".format(name,i+1),level+1,bounds_wkt(area_grid_def)) 
             grid_def_list_merge( subcell_grid_defs, area_grid_def )
@@ -343,6 +370,7 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
                     f.write(area.to_wkt())
                     f.write("\n")
         areas = buffered_polygon(MultiPolygon(areas),areabuffersize)
+        write_wkt("{0} buffered subcell area {1}".format(name,i+1),level+1,areas.to_wkt()) 
         with open(subset_bufferfile,"w") as f:
             f.write(areas.to_wkt())
             f.write("\n")
@@ -350,19 +378,25 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
         # Now process the subcell
         create_grids( gridlist, modeldef, patchpath, subcellname, level+1, grid_def, subcellsize, parent=patchdef, extentfile=extentfileroot )
 
-def create_patch_csv( patchlist, additive=True ):
+def create_patch_csv( patchlist, modelname, additive=True, reverse=False, linzgrid=False ):
     # Note: Assumes patchlist is sorted such that parents are before children
     write_log("Creating patch CSV files")
     for patch in patchlist:
         # Get the files used for this component of the patch
 
         gridfile = patch.file
-        csvfile = os.path.basename(gridfile)
+        component = patch.name
         csvfile = re.sub(r'(\.grid)?$','.csv',gridfile,re.I)
+        gdffile = re.sub(r'(\.grid)?$','.gdf',gridfile,re.I)
         write_log("Creating patch file file {0}".format(csvfile))
         parent = patch.parent
         extfile = patch.extentfile+'.extent.wkt'
         buffile = patch.extentfile+'.buffer.wkt'
+        headers = dict(
+            header1="Patch component "+component,
+            header2="Model source "+modelname,
+            header3=runtime
+        )
 
         # Build a grid tool command to process the file
         
@@ -375,8 +409,11 @@ def create_patch_csv( patchlist, additive=True ):
         # Set to zero outside area extents for which patch subcell resolution is required
         merge_commands=merge_commands + ' zero outside extents'
 
+        # Ensure zero at edge
+        merge_commands=merge_commands + ' zero edge 1'
+
         # Smooth out to buffer to avoid sharp transition
-        merge_commands=merge_commands + ' smooth linear outside extents not outside buffer'
+        merge_commands=merge_commands + ' smooth linear outside extents not outside buffer not edge 1'
 
         # If we have a parent and are not making additive patches then add the parent back
         # on.
@@ -388,13 +425,21 @@ def create_patch_csv( patchlist, additive=True ):
         # Finally write out as a CSV file
         merge_commands=merge_commands + ' write csv csvfile'
 
+        # If LINZ grid required then write it out
+        if linzgrid:
+            merge_commands=merge_commands + ' write_linzgrid NZGD2000 header1 header2 header3 gdffile'
+
+
+
         # Run the commands
         gridtoolcmd=[ 
             gridfile if x == 'gridfile' else
             csvfile if x == 'csvfile' else
+            gdffile if x == 'gdffile' else
             parent.csv if x == 'parentcsv' else
             extfile if x == 'extents' else
             buffile if x == 'buffer' else
+            headers[x] if x in headers else
             x
             for x in merge_commands.split()
             ]
@@ -404,6 +449,10 @@ def create_patch_csv( patchlist, additive=True ):
         if not os.path.exists( csvfile ):
             raise RuntimeError("Could not create CSV file "+csvfile)
         patch.csv=csvfile
+        if linzgrid:
+            if not os.path.exists( gdffile ):
+                raise RuntimeError("Could not create CSV file "+gdffile)
+            patch.gdf=gdffile
 
 
 def write_log( message, level=0 ):
@@ -450,6 +499,7 @@ if __name__ == "__main__":
 
     # Model definition for calc okada
     modeldef='+'.join(models)
+    modelname=' '.join([os.path.basename(x) for x in models])
 
     logfile=open(patchfile+".build.log","w")
     wktfile=open(patchfile+".build.wkt","w")
@@ -489,15 +539,19 @@ if __name__ == "__main__":
 
     name = patchname
     gridlist=[]
+    baselist=[]
     for i,extent in enumerate(real_extents):
         if len(real_extents) > 1:
             name='{0}_P{1}'.format(patchname,i)
+        baselist.append(name)
         write_log("Building patch {0}".format(name))
         write_wkt("Patch base extents {0}".format(name),0,extent.to_wkt())
         buffered_extent=buffered_polygon( extent, buffersize )
-        bounds = expanded_bounds( buffered_extent )
+        write_wkt("Buffered base extents {0}".format(name),0,buffered_extent.to_wkt())
+        bounds = expanded_bounds( buffered_extent, cellbuffer=base_size )
         write_wkt("Expanded extents {0}".format(name),0,bounds_wkt(bounds))
         griddef = bounds_grid_def( bounds, base_size )
+        write_wkt("Grid extents {0}".format(name),0,bounds_wkt(griddef))
         extfile=os.path.join(patchpath,name)
         with open(extfile+".extent.wkt","w") as f:
             f.write(extent.to_wkt())
@@ -505,11 +559,35 @@ if __name__ == "__main__":
         with open(extfile+".buffer.wkt","w") as f:
             f.write(buffered_extent.to_wkt())
             f.write("\n")
-        create_grids(gridlist, modeldef,patchpath,name,1,griddef,base_size,extentfile=extfile)
+        patchgrids=[]
+        create_grids(patchgrids, modeldef,patchpath,name,1,griddef,base_size,extentfile=extfile)
+        for p in patchgrids:
+            p.base=name
+            gridlist.append(p)
 
-    create_patch_csv( gridlist )
-    print gridlist
+    create_patch_csv( gridlist, modelname, linzgrid=build_shift_model )
 
-
-
+    if build_shift_model:
+        for base in baselist:
+            shiftfile=os.path.join(patchpath,base+'_shift.def')
+            write_log("Creating shift definition file {0}".format(shiftfile))
+            with open(shiftfile,'w') as f:
+                replace=dict(
+                    name=base,
+                    runtime=runtime,
+                    modelname=modelname
+                )
+                f.write(re.sub(
+                    r'\{(\w+)\}',
+                    lambda m: replace[m.group(1)],
+                    shift_model_header
+                ))
+                for patch in gridlist:
+                    replace['component']=patch.name
+                    replace['gridfile']=patch.gdf
+                    f.write(re.sub(
+                        r'\{(\w+)\}',
+                        lambda m: replace[m.group(1)],
+                        shift_model_component
+                    ))
 
