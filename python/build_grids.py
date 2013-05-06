@@ -129,7 +129,7 @@ def calc_grid( modeldef, griddef, gridfile ):
     #     print "Grid spec {0}".format(gridspec)
 
     params=['calc_okada','-x','-l','-s',modeldef,gridspec,gridfile]
-    meta='|'.join(params)
+    meta='\n'.join(params)
     metafile=gridfile+'.metadata'
     built = False
     # Check if grid file is already built - mainly convenience for
@@ -137,7 +137,7 @@ def calc_grid( modeldef, griddef, gridfile ):
     if os.path.exists(gridfile) and os.path.exists(metafile):
         with open(metafile) as f:
             oldmeta=f.read()
-            if oldmeta == meta:
+            if oldmeta.strip() == meta.strip():
                 built=True
         if os.path.getmtime(gridfile) > os.path.getmtime(metafile):
             built=False
@@ -583,8 +583,10 @@ if __name__ == "__main__":
                     shift_model_header
                 ))
                 for patch in gridlist:
+                    if patch.base != base:
+                        continue
                     replace['component']=patch.name
-                    replace['gridfile']=patch.gdf
+                    replace['gridfile']=os.path.basename(patch.gdf)
                     f.write(re.sub(
                         r'\{(\w+)\}',
                         lambda m: replace[m.group(1)],
