@@ -47,3 +47,5 @@ echo "test 22" >> out/tests.log
 ../gridtool read test1.grid write_linzgrid NZGD2000 "First line of header" "Second line of header" ThirdLineOfHeader columns v2+v1+v2 resolution 0.001 out/test3_linzgrid.txt >> out/tests.log
 echo "test 23" >> out/tests.log
 ../gridtool commands.txt >> out/tests.log
+echo "test 24" >> out/tests.log
+../gridtool read csv test1.csv  stats >> out/tests.log

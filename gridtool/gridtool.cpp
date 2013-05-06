@@ -217,7 +217,7 @@ static string run_read_grid( grid &g, commandlist &commands, const string &opera
     if( output ) cout << "Reading file from " << filename << endl;
     try
     {
-        g.readfile(filename.c_str(),' ',maxcols);
+        g.readfile(filename.c_str(),delimiter,maxcols);
     }
     catch( runtime_error e )
     {
