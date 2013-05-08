@@ -197,12 +197,15 @@ class defgrid( grid ):
         '''
         Load the grid from a specified file
         '''
+        delimiter=None
         with open(filename,'r') as f:
             line=f.readline()
-            columns=line.split()
+            if "," in line:
+                delimiter=","
+            columns=line.strip().split(delimiter)
         if columns[:2] != ['lon','lat']:
             raise RuntimeError('defgrid: input file '+filename+' must have first two columns lon, lat')
-        g = np.loadtxt(filename,skiprows=1,dtype=float)
+        g = np.loadtxt(filename,skiprows=1,dtype=float,delimiter=delimiter)
         rows = ml.find(g[:,0]==g[0,0])
         cols = g.shape[1]
         g.shape=(rows.shape[0],rows[1],cols)
