@@ -136,6 +136,7 @@ published_component_columns='''
     npoints1
     npoints2
     displacement_type
+    error_type
     max_displacement
     spatial_model
     temporal_model
@@ -144,8 +145,6 @@ published_component_columns='''
     time1
     factor1
     decay
-    horizontal_error
-    vertical_error
     file1
     file2
     description
@@ -154,6 +153,7 @@ published_component_columns='''
 # Log file ...
 
 runtime=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+runtime_version=datetime.datetime.now().strftime("%Y%m%d")
 logfile=None
 wktfile=None
 wktgridfile=None
@@ -659,9 +659,13 @@ def build_linzshift_model( gridlist, shiftpath=None ):
         call(['makelinzshiftmodel.pl',shiftdef,shiftbin],cwd=shiftpath)
 
 def get_model_spec( modeldef ):
+    name=''
     date=None
     descriptions=''
     for modelfile in modeldef.split('+'):
+        modelname=os.path.basename(modelfile)
+        modelname=re.sub(r'\..*','',modelname)
+        name = name+modelname
         with open(modelfile) as f:
             event = f.readline()
             model = f.readline()
@@ -682,23 +686,26 @@ def get_model_spec( modeldef ):
                 date = modeldate
             if modeldate != date:
                 raise RuntimeError("Events forming model don't have a common date")
-    return descriptions.strip(), date
+    return name, descriptions.strip(), date
 
 def build_published_component( gridlist, modeldef, additive, comppath=None ):
     '''
     Creates the component.csv file and grid components used as a published
     component of a LINZ published deformation model
     '''
+
+    modelname,modeldesc,modeldate = get_model_spec( modeldef )
+    patchdir='patch_'+modelname+'_'+modeldate.replace('-','')
+
     if not gridlist or not gridlist[0].csv:
         raise RuntimeError("Cannot build shift model - haven't built grid CSV files")
     if not comppath:
         comppath = os.path.dirname(gridlist[0].gdf)
+    comppath = os.path.join( comppath, 'model', patchdir )
     if not os.path.isdir(comppath):
         os.makedirs(comppath)
 
     write_log("Writing published model component {0}".format(comppath))
-
-    modeldesc,modeldate = get_model_spec( modeldef )
 
     compcsv=os.path.join(comppath,'component.csv')
     with open(compcsv,"w") as ccsvf:
@@ -708,8 +715,8 @@ def build_published_component( gridlist, modeldef, additive, comppath=None ):
             version_added=published_version,
             version_revoked=0,
             reverse_patch='Y' if publish_reverse_patch else 'N',
-            subcomponent=0,
-            priority=0,
+            subcomponent=1,
+            priority=1,
             min_lon=0,
             max_lon=0,
             min_lat=0,
@@ -721,6 +728,7 @@ def build_published_component( gridlist, modeldef, additive, comppath=None ):
             npoints1=0,
             npoints2=0,
             displacement_type='3d',
+            error_type='none',
             max_displacement=0,
             spatial_model='llgrid',
             temporal_model='step',
@@ -729,8 +737,6 @@ def build_published_component( gridlist, modeldef, additive, comppath=None ):
             time1=modeldate,
             factor1=0 if publish_reverse_patch else 1,
             decay=0,
-            horizontal_error='none',
-            vertical_error='none',
             file1='',
             file2='',
             description=modeldesc
@@ -738,6 +744,7 @@ def build_published_component( gridlist, modeldef, additive, comppath=None ):
         for priority, grid in enumerate(gridlist):
             gd=defgrid.defgrid(grid.csv)
             (gridpath,csvname)=os.path.split(grid.csv)
+            csvname = re.sub(r'^(grid_)?','grid_',csvname)
             compcsv=os.path.join(comppath,csvname)
             if compcsv != grid.csv:
                 shutil.copyfile(grid.csv,compcsv)
@@ -768,7 +775,7 @@ if __name__ == "__main__":
     parser.add_argument('model_file',help='Model file(s) used to calculate deformation, passed to calc_okada',nargs='+')
     parser.add_argument('--shift-model-path',help="Create a linzshiftmodel in the specified directory")
     parser.add_argument('--component-path',help="Create publishable component in the specified directory")
-    parser.add_argument('--component-model-version',default='1',help="Deformation model version to include in published component")
+    parser.add_argument('--component-model-version',default=runtime_version,help="Deformation model version to include in published component")
     parser.add_argument('--subgrids-override',action='store_false',help="Grid CSV files calculated to replace each other rather than total to deformation")
     parser.add_argument('--parcel-shift',action='store_true',help="Configure for calculating parcel_shift rather than rigorous deformation patch")
     parser.add_argument('--max-level',type=int,default=max_split_level,help="Maximum number of split levels to generate (each level increases resolution by 4)")
