@@ -67,6 +67,9 @@ affected_area selection wkt_output_file
    a selection file.  A cell is affected if one of its nodes lies within the 
    selection set.
 
+colstats
+   Print out the mean, minimum, and maximum value for each column
+
 A selection of grid points is defined by a series of commands joined by "and".
 or "not".  Selections preceded with "and" are added, those preceded with "not" 
 are removed.  Selection commands are one of:

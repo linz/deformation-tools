@@ -438,6 +438,17 @@ static void run_extents_wkt( grid &g, commandlist &commands )
     write_grid_extents_wkt(g, filename.c_str() );
 }
 
+static void run_colstats( grid &g )
+{
+    double mean, max, min;
+    for( int i = 0; i < g.nvalue(); i++ )
+    {
+        g.colstats(i,&mean,&min,&max);
+        cout << "Column " << g.fieldName(i) 
+            << " Mean: " << mean << "  Min: " << min << "  Max: " << max <<endl;
+    }
+}
+
 static void run_command_file( grid &g, commandlist &commands )
 {
     string filename = next_command(commands,"File name for run command");
@@ -520,6 +531,7 @@ static void run_commands( commandlist &commands )
             else if( op == "trim" ) run_trim( g, commands );
             else if( op == "affected_area" ) run_affected_area( g, commands );
             else if( op == "extents_wkt" ) run_extents_wkt( g, commands );
+            else if( op == "colstats" ) run_colstats( g );
             else
             {
                 throw runtime_error("Invalid grid operation " + op );

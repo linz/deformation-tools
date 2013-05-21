@@ -295,6 +295,28 @@ bool grid::writefile( const char *filename, const char *delim )
     return true;
 }
 
+void grid::colstats( int icol, double *mean, double *min, double *max )
+{
+    *mean = 0;
+    *min = 0;
+    *max = 0;
+    int npt = 0;
+    for( int ir = 0; ir < m_nrow; ir++ )
+    {
+        int ipt = icol;
+        for( int ic = 0; ic < m_ncol; ic++ )
+        {
+            double v = m_values[ir][ipt];
+            *mean += v;
+            if( npt == 0 ) *min = v; else if( v < *min ) *min = v;
+            if( npt == 0 ) *max = v; else if( v > *max ) *max = v;
+            npt++;
+            ipt += m_nvalue;
+        }
+    }
+    if( npt > 0 ) *mean /= npt;
+}
+
 void grid::gridcoords( const point &wxy, point &gxy )
 {
     double x = wxy.x - m_x0;

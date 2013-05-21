@@ -79,6 +79,7 @@ public:
     std::vector<double>::pointer values( int row, int col )
         { return values(node(row,col));}
     std::vector<double>::pointer values( const node &n );
+    void colstats( int icol, double *mean, double *min, double *max );
     bool nearest( double x, double y, int &row, int &col );
     bool nearest( const point &p, node &n );
     bool nodexy( int row, int col, double &x, double &y );
