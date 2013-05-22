@@ -57,6 +57,7 @@ scale_factor=(1.0e-5/math.cos(math.radians(40)),1.0e-5)
 tolerance_factor=0.4
 
 # Values for deformation patch generation
+
 # Test column for determining extents of patch
 base_limit_test_column='err'
 
@@ -65,13 +66,6 @@ base_limit_tolerance=accuracy_standards.NRF.lap*tolerance_factor*1.0e6
 
 # Precision for scaling down from edge of patch
 base_ramp_tolerance=accuracy_standards.NRF.lap*tolerance_factor
-
-def configure_for_parcel_shift():
-    # Alternative values for creating a Landonline parcel shifting patch
-    global base_limit_test_column, base_limit_tolerance, base_ramp_tolerance
-    base_limit_test_column='ds'
-    base_limit_tolerance= 0.05   
-    base_ramp_tolerance=accuracy_standards.BGN.lap*tolerance_factor
 
 # Values controlling splitting cells into subgrids
 
@@ -87,6 +81,22 @@ max_subcell_ratio=0.5
 # Maximum split level
 
 max_split_level=5
+
+# Alternative values for creating a Landonline parcel shifting patch
+def configure_for_parcel_shift():
+    global base_limit_test_column, base_limit_tolerance, base_ramp_tolerance
+    base_limit_test_column='ds'
+    base_limit_tolerance= 0.05   
+    base_ramp_tolerance=accuracy_standards.BGN.lap*tolerance_factor
+
+# Reduce the accuracies to produce smaller data sets for testing...
+def configure_for_testing():
+    global base_limit_test_column, base_limit_tolerance, base_ramp_tolerance
+    global subcell_resolution_tolerance, subcell_ramp_tolerance
+    global max_split_level
+    subcell_resolution_tolerance *= 100
+    subcell_ramp_tolerance *= 100
+    max_split_level -= 2
 
 # Outputs required ...
 
@@ -353,7 +363,12 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
         parentsize=cellsize[1]/scale_factor[1]
         subcell_areas=grid2r.regionsExceedingLevel('reqsize',-parentsize,multiple=-1)
         grid2r=None
-
+        # Expand subcell areas by parent grid size to avoid rounding issues
+        expanded_area=buffered_polygon(MultiPolygon(subcell_areas),parentsize)
+        if expanded_area.type=='Polygon':
+            subcell_areas = [expanded_area]
+        else:
+            subcell_areas = list(expanded_area.geoms)
 
     subcell_grid_defs=[]
     total_area = 0.0
@@ -533,56 +548,64 @@ def create_patch_csv( patchlist, modelname, additive=True, trimgrid=True, linzgr
         parent = patch.parent
         extfile = patch.extentfile+'.extent.wkt'
         buffile = patch.extentfile+'.buffer.wkt'
-        headers = dict(
-            header1="Patch component "+component,
-            header2="Model source "+modelname,
+        gridparams = dict(
+            gridfile=gridfile,
+            csvfile=csvfile,
+            gdffile=gdffile,
+            parentgrid=parent.file if parent else 'undefined',
+            parentcsv=parent.csv if parent else 'undefined',
+            extents=extfile,
+            buffer=buffile,
+            header1='Patch component '+component.replace('"',"'"),
+            header2='Model source '+modelname.replace('"',"'"),
             header3=runtime
         )
 
         # Build a grid tool command to process the file
         
         # Read in the existing file (only need de, dn, du components)
-        merge_commands='gridtool read maxcols 3 gridfile '
-
+        merge_commands='gridtool\nread maxcols 3 gridfile '
+ 
         # If have a parent, then subtract it as want to merge into it
-        if parent: merge_commands = merge_commands + ' subtract csv parentcsv'
+        if parent: merge_commands = merge_commands + '\nsubtract maxcols 3 parentgrid'
 
         # Set to zero outside area extents for which patch subcell resolution is required
-        merge_commands=merge_commands + ' zero outside extents'
+        merge_commands=merge_commands + '\nzero outside extents'
 
         # Ensure zero at edge
-        merge_commands=merge_commands + ' zero edge 1'
+        merge_commands=merge_commands + '\nzero edge 1'
 
         # Smooth out to buffer to avoid sharp transition
-        merge_commands=merge_commands + ' smooth linear outside extents not outside buffer not edge 1'
+        merge_commands=merge_commands + '\nsmooth linear outside extents not outside buffer not edge 1'
 
         # Trim redundant zeros around the edge of the patch
-        merge_commands=merge_commands + ' trim 1'
+        merge_commands=merge_commands + '\ntrim 1'
 
         # If LINZ grid required then write it out.  LINZ grid is always additive
-        # so this comes before adding the parent command back on
+        # so this comes before adding the parent grid back on
         if linzgrid:
-            merge_commands=merge_commands + ' write_linzgrid NZGD2000 header1 header2 header3 gdffile'
+            merge_commands=merge_commands + '\nwrite_linzgrid NZGD2000 header1 header2 header3 gdffile'
 
         # If we have a parent and are not making additive patches then add the parent back
         # on.
-        if parent and not additive: merge_commands = merge_commands + ' add csv parentcsv'
+        if parent and not additive: merge_commands = merge_commands + '\nadd csv parentcsv'
 
         # Finally write out as a CSV file
-        merge_commands=merge_commands + ' write csv csvfile'
+        merge_commands=merge_commands + '\nwrite csv csvfile'
 
         # Run the commands
-        gridtoolcmd=[ 
-            gridfile if x == 'gridfile' else
-            csvfile if x == 'csvfile' else
-            gdffile if x == 'gdffile' else
-            parent.csv if x == 'parentcsv' else
-            extfile if x == 'extents' else
-            buffile if x == 'buffer' else
-            headers[x] if x in headers else
-            x
-            for x in merge_commands.split()
-            ]
+        gridtoolcmd=[gridparams.get(x,x) for x in merge_commands.split() ]
+
+        def expand_param(m):
+            x=m.group(1)
+            x=gridparams.get(x,x)
+            x='"'+x+'"' if re.search(r'\s',x) else x
+            return x
+    
+        write_log("Running "+
+                  re.sub(r'(\w+)',expand_param,merge_commands)
+                  .replace("\n","\n    ")
+                   )
 
         call(gridtoolcmd)
 
@@ -601,8 +624,10 @@ def write_log( message, level=0 ):
         logfile.write(prefix)
         logfile.write(message)
         logfile.write("\n")
+        logfile.flush()
     if verbose:
         print prefix+message
+        sys.stdout.flush()
 
 def write_grid_wkt( name, level, griddef ):
     lines = grid_def_lines( griddef )
@@ -715,8 +740,8 @@ def build_published_component( gridlist, modeldef, additive, comppath=None ):
             version_added=published_version,
             version_revoked=0,
             reverse_patch='Y' if publish_reverse_patch else 'N',
-            subcomponent=1,
-            priority=1,
+            subcomponent=0,
+            priority=0,
             min_lon=0,
             max_lon=0,
             min_lat=0,
@@ -753,15 +778,16 @@ def build_published_component( gridlist, modeldef, additive, comppath=None ):
                 max_lon=np.max(gd.column('lon')),
                 min_lat=np.min(gd.column('lat')),
                 max_lat=np.max(gd.column('lat')),
-                npoints1=gd.array.shape[0],
-                npoints2=gd.array.shape[1],
-                max_displacement=np.max(
+                npoints1=gd.array.shape[1],
+                npoints2=gd.array.shape[0],
+                max_displacement=math.sqrt(np.max(
                     gd.column('de')*gd.column('de') +
                     gd.column('dn')*gd.column('dn') +
-                    gd.column('du')*gd.column('du')),
+                    gd.column('du')*gd.column('du'))),
                 file1=csvname,
                 )
             if not additive:
+                compdata['subcomponent']=1
                 compdata['priority']=priority
             csvdata.update(compdata)
             ccsv.writerow([csvdata[c] for c in published_component_columns])
@@ -776,25 +802,29 @@ if __name__ == "__main__":
     parser.add_argument('--shift-model-path',help="Create a linzshiftmodel in the specified directory")
     parser.add_argument('--component-path',help="Create publishable component in the specified directory")
     parser.add_argument('--component-model-version',default=runtime_version,help="Deformation model version to include in published component")
-    parser.add_argument('--subgrids-override',action='store_false',help="Grid CSV files calculated to replace each other rather than total to deformation")
+    parser.add_argument('--subgrids-nest',action='store_false',help="Grid CSV files calculated to replace each other rather than total to deformation")
     parser.add_argument('--parcel-shift',action='store_true',help="Configure for calculating parcel_shift rather than rigorous deformation patch")
-    parser.add_argument('--max-level',type=int,default=max_split_level,help="Maximum number of split levels to generate (each level increases resolution by 4)")
+    parser.add_argument('--test-settings',action='store_true',help="Configure for testing - generate lower accuracy grids")
+    parser.add_argument('--max-level',type=int,help="Maximum number of split levels to generate (each level increases resolution by 4)")
     parser.add_argument('--split-base',action='store_true',help="Base deformation will be split into separate patches if possible")
     parser.add_argument('--no-trim-subgrids',action='store_false',help="Subgrids will not have redundant rows/columns trimmed")
 
     args=parser.parse_args()
         
     patchfile = args.patch_file
-    max_split_level=args.max_level
     split_base=args.split_base
     shift_path=args.shift_model_path
     comp_path=args.component_path
     published_version=args.component_model_version
-    additive=args.subgrids_override
+    additive=args.subgrids_nest
     trimgrid=args.no_trim_subgrids
     if args.parcel_shift: 
         write_log("Configuring model to use parcel shift parameters")
         configure_for_parcel_shift()
+    if args.test_settings: 
+        write_log("Configuring model with low accuracy testing settings")
+        configure_for_testing()
+    max_split_level=args.max_level if args.max_level else max_split_level
 
     patchpath,patchname=os.path.split(args.patch_file)
     if not os.path.isdir(patchpath):
