@@ -364,11 +364,12 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
         subcell_areas=grid2r.regionsExceedingLevel('reqsize',-parentsize,multiple=-1)
         grid2r=None
         # Expand subcell areas by parent grid size to avoid rounding issues
-        expanded_area=buffered_polygon(MultiPolygon(subcell_areas),parentsize)
-        if expanded_area.type=='Polygon':
-            subcell_areas = [expanded_area]
-        else:
-            subcell_areas = list(expanded_area.geoms)
+        if subcell_areas:
+            expanded_area=buffered_polygon(MultiPolygon(subcell_areas),parentsize)
+            if expanded_area.type=='Polygon':
+                subcell_areas = [expanded_area]
+            else:
+                subcell_areas = list(expanded_area.geoms)
 
     subcell_grid_defs=[]
     total_area = 0.0
@@ -435,7 +436,7 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
         areas=[]
         with open(subset_extentfile,"w") as f:
             for area in subcell_areas:
-                if extentpoly.contains(area):
+                if extentpoly.contains(area) or extentpoly.intersects(area):
                     areas.append(area)
                     f.write(area.to_wkt())
                     f.write("\n")
