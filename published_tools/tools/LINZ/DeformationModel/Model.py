@@ -68,15 +68,15 @@ class TimeComponent( object ):
                 else:
                     factor = self._model.calcFactor(d)
                     logging.info("Time factor %s calculated at %s for %s",factor,d,self._model)
-                
                 self.calc_value = factor - self.calc_value
-                if self._model.squareVarianceFactor: factor *= abs(factor)
-                self.calc_error_value = factor - self.calc_error_value
+
             if not ok:
                 self.calc_value = None
                 self.calc_error_value = None
             else:
-                self.calc_error_value = abs(self.calc_error_value)
+                self.calc_error_value = abs(self.calc_value)
+                if self._model.squareVarianceFactor: 
+                    self.calc_error_value *= self.calc_error_value
 
         if self.calc_value == None:
             raise OutOfRangeError('Date outside valid range')
