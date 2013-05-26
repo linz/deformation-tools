@@ -3,6 +3,8 @@ import sys
 import logging
 import datetime
 
+__version__='1.0b'
+
 if sys.version_info.major != 2:
     print "This program requires python 2"
     sys.exit()
