@@ -1,7 +1,7 @@
 from __future__ import with_statement
 
+from CsvFile import CsvFile
 import numpy as np
-import csv
 import math
 import os.path
 
@@ -21,7 +21,8 @@ class Grid( object ):
         self._name = name
         self._columns = list(columns)
         self._dimension=len(columns)
-        self._columns[0:0]=['lon','lat']
+        self._fields=['lon float','lat float']
+        self._fields.extend('data[]='+c+' ?float' for c in columns)
 
         self._nlon = int(nlon)
         self._nlat = int(nlat)
@@ -50,24 +51,21 @@ class Grid( object ):
         if self._loaded:
             return
         try:
-            gridmetadata = [self._nlon,self._nlat].extend(self._columns)
+            gridmetadata = [self._nlon,self._nlat]
+            gridmetadata.extend(self._columns)
             data = self._model.cacheData( self._gridfile, gridmetadata )
             if data:
                 self._data.setData(data)
                 self._valid = True
             else:
-                with open(self._model.getFileName(self._gridfile),"rb") as f:
-                    c = csv.reader(f)
-                    header = c.next()
-                    if header != self._columns:
-                        raise ModelDefinitionError("Invalid grid model header "+','.join(header)+' in '+self._name + ' (expected '+','.join(self._columns)+')')
+                with CsvFile('grid',self._model.getFileName(self._gridfile),self._fields) as f:
                     nc = -1
                     nr = 0
                     lontol = self._dlon/10000.0
                     lattol = self._dlat/10000.0
                     xc = self._minlon-self._dlon
                     yc = self._minlat
-                    for line in c:
+                    for gpt in f:
                         nc += 1
                         xc += self._dlon
                         if nc >= self._nlon:
@@ -76,16 +74,11 @@ class Grid( object ):
                             nr += 1
                             yc += self._dlat
                             if nr > self._nlat:
-                                raise ModelDefinitionError("Too many grid points: "+','.join(line)+' in '+self._name)
-                        parts = [float(x) if x != '' else None for x in line]
-                        x, y = parts[0:2]
-                        if (math.fabs(x-xc) > lontol or math.fabs(y-yc) > lattol):
-                            raise ModelDefinitionError("Grid latitude/longitude out of sequence: "+','.join(line)+' should be ('+str(xc)+','+str(yc)+') in '+self._name)
+                                raise ModelDefinitionError("Too many grid points in "+self._name)
+                        if (math.fabs(gpt.lon-xc) > lontol or math.fabs(gpt.lat-yc) > lattol):
+                            raise ModelDefinitionError("Grid latitude/longitude out of sequence: ("+str(gpt.lon)+','+str(gpt.lat)+') should be ('+str(xc)+','+str(yc)+') in '+self._name)
 
-                        dvec = parts[2:]
-                        if len(dvec) != self._dimension:
-                            raise ModelDefinitionError("Missing grid displacement components in record: "+','.join(line)+' in '+self._name)
-                        self._data.addPoint(dvec)
+                        self._data.addPoint(gpt.data)
                     self._data.checkValid()
                     self._valid = True
                     self._model.setCacheData( self._data.data(), self._gridfile, gridmetadata )
@@ -108,8 +101,8 @@ class Grid( object ):
         wy = (y-self._minlat)/self._dlat
         nx = int(wx)
         ny = int(wy)
-        if nx >= self._nlon: nx = self._nlon-1
-        if ny >= self._nlat: ny = self._nlat-1
+        if nx >= self._nlon-1: nx = self._nlon-2
+        if ny >= self._nlat-1: ny = self._nlat-2
         wx -= nx
         wy -= ny
         ny *= self._nlon

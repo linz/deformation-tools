@@ -71,28 +71,60 @@ class CsvFile( object ):
     class FieldSpec( object ):
         '''
         Defines a csv file specification, a set of fields required in the file
+        Creates a class which can parse and load a record
         '''
         def __init__( self, filetype, fields ):
             fieldlist = []
-            classdict = {}
+            arrays={}
+            init=[]
+            nfield = 0
             for f in fields:
-                name, typestr = f.split(' ')
-                fieldlist.append(CsvFile.Field(name,typestr))
-                classdict[name] = None
+                try:
+                    name, typestr = f.split(' ')
+                    fieldname=''
+                    if '=' in name:
+                        fieldname, name = name.split('=')
+                    fieldname = fieldname or name
+                    array=''
+                    if fieldname.endswith('[]'):
+                        fieldname=fieldname[:-2]
+                        if fieldname not in arrays:
+                            array=True
+                            arrays[fieldname]=0
+                            init.insert(0,'  self.'+fieldname+'=[]\n')
+                        else:
+                            arrays[fieldname]+=1
+                        array='['+str(arrays[fieldname])+']'
+
+                    fieldlist.append(CsvFile.Field(name,typestr))
+                    valuestr='fieldlist['+str(nfield)+'].parse(record['+str(nfield)+'])'
+                    nfield += 1
+
+                    if array:
+                        init.append('  self.'+fieldname+'.append('+valuestr+')\n')
+                    else:
+                        init.append('  self.'+fieldname+'='+valuestr+'\n')
+
+                except InvalidValueError:
+                    raise
+                except:
+                    raise InvalidValueError('Invalid field definition "'+f+'" in '+filetype+' file specification')
+
+            cdef = ('class '+filetype+'(object):\n'+
+                    ' def __init__(self,record):\n'+
+                    ''.join(init)+
+                    'container._class='+filetype+'\n')
+            exec cdef in dict(fieldlist=fieldlist,container=self)
             self._fieldlist = fieldlist
-            self._class = type(filetype,(object,),classdict)
+            self._nfield = nfield
 
         def fieldnames( self ):
             return [f.name() for f in self._fieldlist]
 
         def parse( self, record  ):
-            value = self._class()
-            for i in range(len(self._fieldlist)):
-                fvalue = record[i] if i < len(record) else ''
-                fd = self._fieldlist[i]
-                value.__setattr__(fd.name(),fd.parse(fvalue))
-            return value
-
+            while len(record) < self._nfield:
+                record.append('')
+            return self._class(record)
 
     def __init__( self, filetype, filename, fields ):
         '''
@@ -121,22 +153,37 @@ class CsvFile( object ):
 
         headers = self._csv.next()
         if headers != self._fields.fieldnames():
-            raise ModelDefinitionError("File " + filename + " does not have the correct columns for a "+filetype+" file")
+            message=''
+            reqhead=self._fields.fieldnames()
+            for (fn,rfn) in zip(headers,reqhead):
+                if fn != rfn:
+                    message="Field "+fn+" does not match expected "+rfn
+                    break
+            if not message:
+                if len(reqhead) > len(headers):
+                    message="Missing fields: "+", ".join(reqhead[len(headers):])
+                if len(headers) > len(reqhead):
+                    message="Extra fields: "+", ".join(headers[len(reqhead):])
+            raise ModelDefinitionError("File " + filename + " does not have the correct columns for a "+filetype+" file\n"+message)
 
 
     def __iter__(self):
         return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self,etype,eval,tbk):
+        return False
 
     def next(self):
         havedata = False
         # Skip blank lines
         while not havedata:
             data = self._csv.next()
-            self._nrec += 1
-            for r in data:
-                havedata = r != ''
-                if havedata: 
-                    break
+            self._nrec+=1
+            if len(data) > 1 or (len(data)==1 and data[0] != ''):
+                break
         try: 
             return self._fields.parse( data )
         except:

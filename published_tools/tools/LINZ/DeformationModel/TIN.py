@@ -1,7 +1,7 @@
 from __future__ import with_statement
 
+from CsvFile import CsvFile
 import numpy as np
-import csv
 import math
 import os.path
 
@@ -12,27 +12,28 @@ class TIN( object ):
     '''
     Calculates a triangulated irregular network (TIN) deformation model.
     '''
-    pts_header= ['id','lon','lat']
-    trg_header= ['id1','id2','id3']
+    pts_fields= ['id int','lon float','lat float']
+    trg_fields= ['ids[]=id1 int','ids[]=id2 int','ids[]=id3 int']
     
-    def __init__( self, model, trgptfile,trgmshfile, minlon, maxlon, minlat, maxlat, npt, ntrg, columns, name=None ):
+    def __init__( self, model, trigptsfile,trigtrgfile, minlon, maxlon, minlat, maxlat, npt, ntrg, columns, name=None ):
         '''
         Load the definition of a TIN model.  The model is not loaded until either it is required to
         calculate a value or it is explicitly loaded using the load function.
         '''
-        if not os.path.exists(model.getFileName(trgptfile)):
-            raise ModelDefinitionError("Invalid trig point filename "+str(trgptfile))
-        if not os.path.exists(model.getFileName(trgmshfile)):
-            raise ModelDefinitionError("Invalid trig triangulation filename "+str(trgmshfile))
+        if not os.path.exists(model.getFileName(trigptsfile)):
+            raise ModelDefinitionError("Invalid trig point filename "+str(trigptsfile))
+        if not os.path.exists(model.getFileName(trigtrgfile)):
+            raise ModelDefinitionError("Invalid trig triangulation filename "+str(trigtrgfile))
         self._model = model
-        self._trgptfile = trgptfile
-        self._trgmshfile = trgmshfile
-        name = name if name else trgptfile
+        self._trigptsfile = trigptsfile
+        self._trigtrgfile = trigtrgfile
+        name = name if name else trigptsfile
         self._name = name
 
         self._columns = columns
         self._dimension = len(columns)
-        self._columns[0:0]=pts_header
+        self._fields=list(TIN.pts_fields)
+        self._fields.extend('data[]='+x+' float' for x in columns)
 
         self._npt = int(npt)
         self._ntrg = int(ntrg)
@@ -49,7 +50,6 @@ class TIN( object ):
         if self._minlat >= self._maxlat:
             raise ModelDefinitionError("Invalid latitude range "+str(minlat)+" - "+str(maxlat)+" in deformation model definition for "+name)
 
-        self._dimension = dimension
         self._loaded = False
         self._valid = False
         self._data = None
@@ -68,68 +68,54 @@ class TIN( object ):
             return
         self._points = np.empty([self._npt+1,2], float)
         self._trg = np.empty([self._ntrg,3],int)
-        self._data = DeformationList( self._dimension, self._npt+1 )
+        self._data = DeformationList( self._columns, self._npt+1 )
         self._data.addPoint([0]*self._dimension)
         npt = 0
         ntrg = 0
         name = self._name
+        model=self._model
         try:
-            trgptmetadata = [npt]
-            data = self._model.cacheData( self._trgptfile, trigptmetadata )
+            trigptsmetadata = [npt]
+            data = self._model.cacheData( self._trigptsfile, trigptsmetadata )
             if data:
                 self._data.setData(data)
             else:
-                with open(model.getFileName(self._trgptfile),"rb") as f:
-                    c = csv.reader(f)
-                    header = c.next()
-                    if header != self._columns:
-                        raise ModelDefinitionError("Invalid triangulation model point file header "+','.join(header)+' for '+name)
-                    for line in c:
+                with CsvFile('trig_pts',model.getFileName(self._trigptsfile),self._fields) as f:
+                    npt = 0
+                    for tpt in f:
                         npt += 1
                         if npt > self._npt:
                             raise ModelDefinitionError("Too many points in triangulation model"+','.join(line)+' for '+name)
-                        id = int(line[0])
-                        if id != npt:
+                        if tpt.id != npt:
                             raise ModelDefinitionError("TIN point id out of sequence: "+','.join(line)+' for '+name)
-                        parts = [float(x) if x != '' else None for x in line[1:]]
-                        x, y = parts[0:2]
-                        if (x < self._minlon or x > self._maxlon or
-                            y < self._minlat or y > self._maxlat):
+                        if (tpt.lon < self._minlon or tpt.lon > self._maxlon or
+                            tpt.lat < self._minlat or tpt.lat > self._maxlat):
                             raise ModelDefinitionError("TIN latitude/longitude out of range: "+','.join(line)+' for '+name)
-
-                        dvec = parts[2:]
-                        if len(dvec) != self._dimension:
-                            raise ModelDefinitionError("Missing grid displacement components in record: "+','.join(line)+' for '+name)
-                        self._data.addPoint(dvec)
-                        self._points[npt:] = [x,y]
+                        self._data.addPoint(tpt.data)
+                        self._points[npt:] = [tpt.lon,tpt.lat]
                 self._data.checkValid()
-                self._model.setCacheData(self._data.data(), self._trgptfile, trigptmetadata )
+                self._model.setCacheData(self._data.data(), self._trigptsfile, trigptsmetadata )
 
-            trgmshmetadata = [npt]
-            data = self._model.cacheData( self._trgmshfile, trigmshmetadata )
+            trigtrgmetadata = [npt]
+            data = self._model.cacheData( self._trigtrgfile, trigtrgmetadata )
             if data:
-                self._data.setData(data)
+                if data.shape != (self._ntrg,3):
+                    raise ModelDefinitionError("Cached triangulation has wrong shape")
+                self._trg = data
             else:
-                with open(model.getFileName(self._trgmshfile),"rb") as f:
-                    c = csv.reader(f)
-                    header = c.next()
-                    if header != self.trg_header:
-                        raise ModelDefinitionError("Invalid triangulation model trig file header: "+','.join(header)+' for '+name)
+                with CsvFile('trig_trg',model.getFileName(self._trigtrgfile),TIN.trg_fields) as f:
                     ntrg = 0
-                    for line in c:
+                    for trg in f:
                         if ntrg >= self._ntrg:
                             raise ModelDefinitionError("Too many triangles in triangulation model: "+','.join(line)+' for '+name)
-                        ids = [int(i) for i in line]
-                        if len(ids) != 3:
-                            raise ModelDefinitionError("Invalid triangle definition in - need 3 ids: "+','.join(line)+' for '+name)
-                        for id in ids:
+                        for id in trg.ids:
                             if id < 1 or id > self._npt:
                                 raise ModelDefinitionError("Invalid triangle point id "+str(id)+': '+','.join(line))
-                        self._trg[ntrg:]=ids
+                        self._trg[ntrg:]=trg.ids
                         ntrg += 1
                 if ntrg != self._ntrg:
                     raise ModelDefinitionError("Not enough triangle definitions in trig file - expected "+str(self._ntrg)+' found '+ str(ntrg) + ' for '+name)
-                self._model.setCacheData( self._trg, self._trgmshfile, trigmshmetadata )
+                self._model.setCacheData( self._trg, self._trigtrgfile, trigtrgmetadata )
 
             self._setupTriangulation()
             self._valid = True
@@ -155,10 +141,11 @@ class TIN( object ):
         # Have we cached this?
 
         metadata = [len(self._points),len(self._trg)]
-        files = [self._trgptfile, self._trgmshfile]
-        self._centroids = self._model.cacheData(self._trgptfile+'.centroids',metadata,files=files)
-        self._edgevec = self._model.cacheData(self._trgmshtfile+'.edgevec',metadata,files=files)
-        if self._centroids and self._edgevec:
+        files = [self._trigptsfile, self._trigtrgfile]
+        self._centroids = self._model.cacheData(self._trigptsfile+'.centroids',metadata,files=files)
+        self._edgevec = self._model.cacheData(self._trigtrgfile+'.edgevec',metadata,files=files)
+        self._adjacent = self._model.cacheData(self._trigtrgfile+'.adjacent',metadata,files=files)
+        if self._centroids and self._edgevec and self._adjacent:
             return
 
         # First check that triangles are all anticlockwise
@@ -167,13 +154,16 @@ class TIN( object ):
         trg = self._trg
         name = self._name
         areas = np.cross(pts[trg[:,1]]-pts[trg[:,0]], pts[trg[:,2]]-pts[trg[:,0]])
-        badtrg =  trg[np.less_equal(areas,0),:]
+
+        badtrg = np.flatnonzero(areas < 0)
         if len(badtrg):
-            raise ModelDefinitionError(str(len(badtrg))+' triangles are clockwise eg '+str(badtrg[0,:])+' for '+name)
+            raise ModelDefinitionError(str(len(badtrg))+' of '+str(len(areas))+
+                  ' triangles are clockwise eg '+str(trg[badtrg[0],:])+' with area '+str(areas[badtrg[0]])+
+                  ' in '+name)
 
 
         # Now check edges
-        # Also construct adjacent triangle list - identifying adjacent triange
+        # Also construct adjacent triangle list - identifying adjacent triangle
         # across each edge of triangle opposite the corresponding node
         # or -1 if there is none.
 
@@ -226,8 +216,9 @@ class TIN( object ):
 
         self._centroids = (pts[trg[:,0]]+pts[trg[:,1]]+pts[trg[:,2]])/3
         self._edgevec = (pts[trg[:,[2,0,1]]] - pts[trg[:,[1,2,0]]])/np.reshape(areas,(-1,1,1))
-        self._model.setCacheData(self._centroids, self._trgptfile+'.centroids',metadata=metadata,files=files)
-        self._model.setCacheData(self._edgevec, self._trgmshtfile+'.edgevec',metadata=metadata,files=files)
+        self._model.setCacheData(self._centroids, self._trigptsfile+'.centroids',metadata=metadata,files=files)
+        self._model.setCacheData(self._edgevec, self._trigtrgfile+'.edgevec',metadata=metadata,files=files)
+        self._model.setCacheData(self._adjacent, self._trigtrgfile+'.adjacent',metadata=metadata,files=files)
 
     def findTriangle( self, x, y ):
         self.load()

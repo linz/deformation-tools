@@ -126,7 +126,7 @@ class SpatialComponent( object ):
         if hash not in models:
             models[hash] = SpatialComponent( model, component, compdef, load )
         else:
-            if not compatibleDefintion(models[hash],compdef):
+            if not SpatialComponent.compatibleDefinition(models[hash],compdef):
                 raise ModelDefinitionError('Inconsistent usage of grid/TIN file '+compdef.file1+' in '+component+' component.csv')
         return models[hash]
 
@@ -289,8 +289,6 @@ class SpatialComponentSet( object ):
         self._baseModel = self._sortedModels[-1]
 
     def __str__(self):
-        for i in range(len(self._models)):
-            print i,self._priorities[i],self._models[i],self._sortedModels[i]
         if len(self._models) == 1:
             return self._baseModel._description
         description="Nested models:"
@@ -699,12 +697,16 @@ class Model( object ):
         return ':'.join(metadataparts)
 
     def cacheData( self, file, metadata=None, files=None ):
+        if not self._cache:
+            return None
         files = files or [file]
         metadata=self._cacheMetadata(metadata,files)
         file = file.replace('\\','/')
         return self._cache.get(file,metadata)
 
     def setCacheData( self, data, file, metadata=None, files=None ):
+        if not self._cache:
+            return
         files = files or [file]
         metadata=self._cacheMetadata(metadata,files)
         file = file.replace('\\','/')

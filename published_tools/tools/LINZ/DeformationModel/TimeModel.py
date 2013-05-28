@@ -54,7 +54,6 @@ class TimeModel(object):
                 raise ModelDefinitionError("Initial or final scale factor missing for step time model")
             def calc(t):
                 t = Time.Parse(t)
-                print 'Step',f0,f1,t0,t
                 return f0 if t < t0 else f1
             self.calcFactor = calc
 
