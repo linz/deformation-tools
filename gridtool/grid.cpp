@@ -246,7 +246,7 @@ string grid::fieldName( int iv )
     return name;
 }
 
-bool grid::writefile( const char *filename, const char *delim )
+bool grid::writefile( const char *filename, const char *delim, std::vector<int> *colids , bool markedonly )
 {
     if( ! delim ) delim = "\t";
 
@@ -255,6 +255,23 @@ bool grid::writefile( const char *filename, const char *delim )
     int dataprec = m_dataprec > 0 ? m_dataprec : crdprec;
     double mult=0.5;
     for( int i=0; i<dataprec; i++ ) mult *= 10.0;
+
+
+    std::vector<int> columns;
+    int nvalues=0;
+    if( colids )
+    {
+        nvalues=colids->size();
+    }
+    else
+    {
+        colids = &columns;
+        nvalues=m_nvalue;
+        for( int i = 0; i < m_nvalue; i++ )
+        {
+            columns.push_back(i);
+        }
+    }
 
     //f << setiosflags(ios::fixed);
     if( ! f )
@@ -265,26 +282,27 @@ bool grid::writefile( const char *filename, const char *delim )
     if( m_header != "" ) 
     {
         f << m_lon << delim << m_lat;
-        for( int iv = 0; iv < m_nvalue; iv++ )
+        for( int iv = 0; iv < nvalues; iv++ )
         {
-            f << delim << m_fields[iv];
+            f << delim << m_fields[colids->at(iv)];
         }
         f << endl;
     }
 
     for( int ir = 0; ir < m_nrow; ir++ )
     {
-        int ipt = 0;
-        for( int ic = 0; ic < m_ncol; ic++ )
+        int ipt0 = 0;
+        for( int ic = 0; ic < m_ncol; ic++, ipt0+= m_nvalue )
         {
+            if( markedonly && ! marked(ir,ic) ) continue;
             double x, y;
             nodexy(ir, ic, x, y );
             f << std::setprecision(crdprec);
             f << x << delim << y;
             f << std::setprecision(dataprec);
-            for( int iv = 0; iv < m_nvalue; iv++ )
+            for( int iv = 0; iv < nvalues; iv++ )
             {
-                double value = m_values[ir][ipt++];
+                double value = m_values[ir][ipt0+colids->at(iv)];
                 value = floor(value*mult+0.5)/mult;
                 f << delim << value;
             }
@@ -293,6 +311,13 @@ bool grid::writefile( const char *filename, const char *delim )
     }
     f.close();
     return true;
+}
+
+int grid::columnid( const std::string &name )
+{
+    int iv;
+    for( iv = m_nvalue; iv--; ) { if( name == m_fields[iv] ) break; }
+    return iv;
 }
 
 void grid::colstats( int icol, double *mean, double *min, double *max )
@@ -559,9 +584,8 @@ void grid::toggleWithin( vector<point> &polygon, vector2<bool> &markBuffer )
 
 void grid::markWhere( std::string field, std::string op, double value, markaction action )
 {
-    int iv;
-    for( iv = 0; iv < m_nvalue; iv++ ) { if( field == m_fields[iv] ) break; }
-    if( iv >= m_nvalue )
+    int iv = columnid( field );
+    if( iv < 0 )
     {
         throw runtime_error(string("Invalid field ") + field + " referenced in grid::markWhere" );
     }
@@ -620,7 +644,7 @@ void grid::multiplyBy( double factor )
         }
 }
 
-void grid::add( grid &g, double factor )
+void grid::add( grid &g, double factor, bool markedonly )
 {
     // For the moment choose to add as many values as are available.
     // May be better to throw 
@@ -635,6 +659,7 @@ void grid::add( grid &g, double factor )
     for( int row = 0; row < m_nrow; row++ ) 
         for( int col = 0; col < m_ncol; col++ )
         {
+            if( markedonly && ! marked(row,col) ) continue;
             nodexy(row,col,xy.x,xy.y);
             if( g.valueAt(xy,gv) )
             {

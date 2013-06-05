@@ -49,3 +49,11 @@ echo "test 23" >> out/tests.log
 ../gridtool commands.txt >> out/tests.log
 echo "test 24" >> out/tests.log
 ../gridtool read csv test1.csv  stats >> out/tests.log
+echo "test 25" >> out/tests.log
+../gridtool read csv test1.csv  write csv columns none out/test25.out >> out/tests.log
+echo "test 26" >> out/tests.log
+../gridtool read csv test1.csv  write csv columns v2 out/test26.out >> out/tests.log
+echo "test 27" >> out/tests.log
+../gridtool read csv test1.csv  write out/test27.out where v1 gt 20 >> out/tests.log
+echo "test 28" >> out/tests.log
+../gridtool test1.grid add test3.grid where v1 ">" 30 out/test28_add.grid >> out/tests.log

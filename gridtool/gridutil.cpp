@@ -39,6 +39,59 @@ void mark_xy_file( grid &g, const char *xyfile, grid::markaction action )
     f.close();
 }
 
+void expand_marked( grid &g, double distance, bool expand )
+{
+    // Save the current state 
+    grid::vector2<bool> copy(g.nrow(),g.ncol());
+
+    for( int row=0; row < g.nrow(); row++ )
+    {
+        for( int col=0; col < g.ncol(); col++ )
+        {
+            copy(row,col) = g.marked(row,col) ^ expand;
+        }
+    }
+
+    // Work out how far to expand
+    if( distance < 0 ){ distance=-distance; expand=!expand; }
+    distance += 0.0001;
+    int maxdist = (int) distance;
+    if( maxdist < 1 ) return;
+
+    vector<int> offsets;
+    offsets.assign(maxdist+1,0);
+    for( int i=0; i <=maxdist; i++ )
+    {
+        double offset=sqrt(distance*distance-i*i);
+        offsets[i] = (int) offset;
+    }
+
+    // Now apply to affected cells
+    for( int row = 0; row < g.nrow(); row++ )
+    {
+        for( int col = 0; col < g.ncol(); col++ )
+        {
+            if( ! copy(row,col) ) continue;
+            bool set = false;
+            for( int i=0; i <= maxdist; i++ )
+            {
+                int row0 = max(row-i,0);
+                int row1 = min(row+i,g.nrow()-1);
+                for( int j=0; j <= offsets[i]; j++ )
+                {
+                    int col0 = max(col-j,0);
+                    int col1 = min(col+j,g.ncol()-1);
+                    if( copy(row0,col0) && copy(row0,col1) && copy(row1,col0) && copy(row1,col1)) continue;
+                    set = true;
+                    break;
+                }
+                if( set ) break;
+            }
+            if( set ) g.setMarked(row,col,expand);
+        }
+    }
+}
+
 void mark_wkt_file( grid &g, bool outside, const char *wkt_file, grid::markaction action  )
 {
     grid::vector2<bool> inside;
@@ -239,19 +292,13 @@ void write_grid_extents_wkt( grid &g, const char *wkt_file )
 
 }
 
-void write_linz_grid_file( grid &g, string crdsys, string header1, string header2, string header3, string vres, string columns, const char *gridfile )
+void grid_columns( grid &g, string columns, vector<int> &colids )
 {
-    int nrow = g.nrow();
-    int ncol = g.ncol();
-    int nval = g.nvalue();
+    colids.clear();
 
-    vector<int> useCols;
-    int noutval = 0;
-
-    if( columns == "")
+    if( columns == "*")
     {
-        for( int i=0; i<nval; i++ ) useCols.push_back(i);
-        noutval = nval;
+        for( int i=0; i<g.nvalue(); i++ ) colids.push_back(i);
     }
     else
     {
@@ -263,29 +310,34 @@ void write_linz_grid_file( grid &g, string crdsys, string header1, string header
             if( end == string::npos ) end=len;
             string col = columns.substr(pos,end-pos);
             pos=end+1;
-            bool found = false;
-            for( int i = 0; i < nval; i++ )
+            int id=g.columnid(col);
+            if( id >= 0 )
             {
-                if( g.fieldName(i) == col )
-                {
-                    useCols.push_back(i);
-                    found = true;
-                    noutval++;
-                    break;
-                }
+                colids.push_back(id);
             }
-            if( ! found )
+            else
             {
-                throw runtime_error( string("Requested linz grid output column invalid: ").append(col));
+                throw runtime_error( string("Requested column invalid: ").append(col));
             }
         }
     }
+}
+
+void write_linz_grid_file( grid &g, string crdsys, string header1, string header2, string header3, string vres, string columns, const char *gridfile )
+{
+    int nrow = g.nrow();
+    int ncol = g.ncol();
+
+    int nval = g.nvalue();
+
+    vector<int> useCols;
+    grid_columns( g, columns, useCols );
+    int noutval = useCols.size();
 
     if( ! noutval )
     {
         throw runtime_error("Cannot create LINZ grid as no output columns selected");
     }
-
 
     grid::point p0,p1x,p1y;
     g.nodexy(grid::node(0,0),p0);

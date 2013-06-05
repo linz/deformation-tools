@@ -16,8 +16,10 @@ read [csv] [maxcols n] grid_file
    Loads a new grid file.  Maximum number of columns can limit the number
    of data columns read (ie count of data columns after lon/lat)
 
-write [csv] grid_file
-   Writes the current grid to a file
+write [csv] [columns xx] _names grid_file [where selection]
+   Writes the current grid to a file.  The columns value can be a list of
+   column names separated by '+', or none to output only the grid coordinates,
+   or '*' to output all columns.
    
 write_linzgrid crdsys header1 header2 header3 [resolution xx] [columns xx] filename
    Writes the current grid to a LINZ ASCII grid format file in filename.
@@ -39,8 +41,8 @@ smooth (linear|quadratic|cubic) selection
    with other values (minimizing single, double, or triple differences on
    rows or columns)
 
-add [csv] [maxcols n] grid_file
-subtract [csv] [maxcols n] grid_file
+add [csv] [maxcols n] grid_file [where selection]
+subtract [csv] [maxcols n] grid_file [where selection]
    Add and subtract the values extrapolated from grid_file to the values
    at each node of the loaded grid
 
@@ -87,3 +89,5 @@ where condition: A condition is entered as "where field (<|<=|==|!=|>=|>) value"
    where field is a field name (either defined on a space separated header line, 
    or field_1, field_2, ...).
 
+expand distance: Expands (or contracts) the currently marked area by the specified
+   number of grid cells

@@ -167,6 +167,12 @@ static void mark_grid( grid &g, commandlist &commands, string markcommand )
             next_command_value(commands,nedge,string("Width of inside_edge for ")+markcommand);
             g.markEdge(nedge,true,action);
         }
+        else if( command == "expand" && action == grid::on )
+        {
+            double distance = 0.0;
+            next_command_value(commands,distance,string("Distance for expand for ")+markcommand);
+            expand_marked(g,distance,true);
+        }
         else 
         {
            string field = command;
@@ -232,14 +238,35 @@ static string run_read_grid( grid &g, commandlist &commands, const string &opera
 static void run_write_grid( grid &g, commandlist &commands )
 {
     bool csv = false;
-    string filename = next_command(commands,"Filename for write operation");
-    if( filename == "csv" ) 
+    string filename;
+    string columns = "*";
+    while( 1 )
     {
-        csv=true;
         filename = next_command(commands,"Filename for write operation");
+        if( filename == "csv" ) 
+        {
+            csv=true;
+        }
+        else if( filename == "columns" )
+        {
+            columns=next_command(commands,"Grid columns to write");
+            if( columns == "none" ) columns = "";
+        }
+        else
+        {
+            break;
+        }
     }
-    cout << "Writing file to " << filename << endl;
-    g.writefile(filename.c_str(),csv ? "," : "\t");
+    bool marked=false;
+    if( next_command_is(commands,"where") )
+    {
+        mark_grid( g, commands, "write" );
+        marked=true;
+    }
+    vector<int> colids;
+    grid_columns( g, columns, colids );
+    cout << "Writing grid" << (marked ? " data" : "") << " to file " << filename << endl;
+    g.writefile(filename.c_str(),csv ? "," : "\t",&colids,marked);
 }
 
 static void run_precision( grid &g, commandlist &commands )
@@ -281,7 +308,7 @@ static void run_write_linzgrid( grid &g, commandlist &commands )
     }
     string linzgridfile=next_command(commands,"File name for write_linzgrid operation");
     string vres = "AUTO";
-    string columns = "";
+    string columns = "*";
     while( true )
     {
         if( linzgridfile == "resolution" )
@@ -350,11 +377,17 @@ static void run_addgrid( grid &g, commandlist &commands, bool subtract )
 {
     grid gadd;
     string filename = run_read_grid( gadd, commands, subtract ? "subtract" : "add" );
+    bool marked = false;
+    if( next_command_is(commands,"where"))
+    {
+        mark_grid(g,commands,subtract ? "subtract" : "add" );
+        marked = true;
+    }
     
     cout << (subtract ? "Subtracting" : "Adding") 
         << " grid values from grid " << filename << endl;
     double factor = subtract ? -1 : 1;
-    g.add(gadd,factor);
+    g.add(gadd,factor,marked);
 }
 
 static void run_multiply( grid &g, commandlist &commands )

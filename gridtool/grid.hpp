@@ -62,7 +62,7 @@ public:
     grid( const char * filename = 0, char delim=' ' );
     ~grid();
     bool readfile( const char * filename, char delim=' ', int maxcols=99 );
-    bool writefile( const char * filename, const char *delim = 0 );
+    bool writefile( const char * filename, const char *delim = 0, std::vector<int> *colids=0, bool markedonly=false );
     void setprecision( int dataprec ){ m_dataprec = dataprec; }
     int nrow()
     {
@@ -79,6 +79,7 @@ public:
     std::vector<double>::pointer values( int row, int col )
         { return values(node(row,col));}
     std::vector<double>::pointer values( const node &n );
+    int columnid( const std::string &colname );
     void colstats( int icol, double *mean, double *min, double *max );
     bool nearest( double x, double y, int &row, int &col );
     bool nearest( const point &p, node &n );
@@ -93,10 +94,11 @@ public:
     void markWhere( std::string field, std::string op, double value, markaction action=on );
     bool marked( node n ){ return marked(n.row, n.col ); }
     bool marked( int row, int col ){ return m_marked[row][col]; }
+    void setMarked( int row, int col, bool value ){ m_marked[row][col] = value; }
     int markCount();
     void processMarked( void(*func)(grid &g, node &n, void *data), void *data = 0);
     bool valueAt( point &xy, std::vector<double> &values );
-    void add( grid &g, double factor=1.0 );
+    void add( grid &g, double factor=1.0, bool markedonly=false );
     void multiplyBy( double factor );
     void resize( int rowmin, int colmin, int rowmax, int colmax );
     void trim( int borderSize = 0 );
