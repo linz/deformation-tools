@@ -18,7 +18,7 @@ c       5) Adding option to specify input by grid:xxxx parameters
 c       6) Adding option for LINZ csv output
 c
        implicit real*8 (a-h,o-z)
-       parameter (nlong_max=140,nlat_max=60,nout_max=99999)
+       parameter (nlong_max=200,nlat_max=200,nout_max=110000)
 c
        dimension ival(0:nlong_max,0:nlat_max),idel(0:nlong_max,0:nlat_max),
      1  rlong(0:nlong_max,0:nlat_max),dxlong(0:nlong_max,0:nlat_max),
@@ -59,10 +59,10 @@ c
             if(i .lt. 5 .or. infile(i:i) .eq. ':' ) infile(i:i)=' '
          end do
          read(infile,*) glonmin,glatmin,glonmax,glatmax,gnlon,gnlat
-         gdlon=(glonmax-glonmin)/gnlon
-         gdlat=(glatmax-glatmin)/gnlat
-         gnlon = gnlon+1
-         gnlat = gnlat+1
+         gdlon=(glonmax-glonmin)/(gnlon-1)
+         gdlat=(glatmax-glatmin)/(gnlat-1)
+         gnlon = gnlon
+         gnlat = gnlat
        end if
 
        call CONVERT_LAT_LONG
@@ -148,8 +148,8 @@ c
 c
 c
        implicit real*8 (a-h,o-z)
-       parameter (nlong_max=140,nlat_max=60,nval_max=5000,
-     1  nx_max=3*nval_max,nout_max=99999)
+       parameter (nlong_max=200,nlat_max=200,nval_max=110000,
+     1  nx_max=3*nval_max,nout_max=110000)
 c
        dimension vely(3,ny),vary(3,3,ny)
        dimension ival(0:nlong_max,0:nlat_max),idel(0:nlong_max,0:nlat_max),
@@ -165,7 +165,9 @@ c
      1  a2(3,0:1,0:1,0:1,0:1),a3(3,0:1,0:1,0:1,0:1),
      2  val(3,nval_max),w0(3),
      3  a(3,nx_max),x(nx_max),
-     7  sd(nx_max,nx_max),asd(3,nx_max)
+     7  asd(3,nx_max)
+c      dimension sd(nx_max,nx_max)
+       dimension sd(1,1)
        character*1 ans,yes,no
        equivalence (val,x)
        character*20 pvalstr
@@ -191,7 +193,9 @@ c    if (ans.ne.yes) goto 10
 c20    print *,'Do you want the variance-covariance matrices (Y/N)?'
 c    read(*,501) ans
 c    if ((ans.ne.yes).and.(ans.ne.no)) goto 20
-         ans=yes
+c
+c Set answer to no as have shrunk sd matrix to avoid huge allocation...
+         ans=no
        end if
        nx=3*nval
        if (ans.eq.yes) then
@@ -241,6 +245,7 @@ c  read(*,*) plat,plong,prot
          j0=min0(idint(ycoord),nlat-1)
          i1=i0+1
          j1=j0+1
+c         print *,'DEBUG: xcoord, ycoord, i0, j0',xcoord,ycoord,i0,j0
          xcoord=xcoord-i0
          ycoord=ycoord-j0
          call V_COEFFS(xcoord,ycoord,a1,a2,a3,
@@ -862,8 +867,8 @@ c
        SUBROUTINE CONVERT_LAT_LONG
 c
        implicit real*8 (a-h,o-z)
-       parameter (nlong_max=140,nlat_max=60,ny_max=99999,
-     1  nout_max=99999,ntest_max=5)
+	parameter (nlong_max=200,nlat_max=200,ny_max=110000,
+	1	nout_max=110000,ntest_max=5)
 c
        dimension ival(0:nlong_max,0:nlat_max),idel(0:nlong_max,0:nlat_max),
      1  rlong(0:nlong_max,0:nlat_max),dxlong(0:nlong_max,0:nlat_max),
@@ -1041,7 +1046,7 @@ c  type *,'Starting lat,long=',ylat/conv,xlong/conv
          dxylat=dxyl0(iymin)
          dyylat=dyyl0(iymin)
 
-c  type *,'x,y,lat,long=',xcoord,ycoord,alat/conv,along/conv
+c        print *,'DEBUG: x,y,lat,long=',xcoord,ycoord,alat/conv,along/conv
 
          dlong=along-xlong
          dlat=alat-ylat
@@ -1218,7 +1223,7 @@ c------------------------------------------------------------------------------
          dxxlong=dxxlong/coslat
          dyxlong=dyxlong/coslat
 c------------------------------------------------------------------------------
-c  type *,'x,y,lat,long=',xcoord,ycoord,alat/conv,along/conv
+c         print *,'DEBUG: x,y,lat,long=',xcoord,ycoord,alat/conv,along/conv
 
          dlong=along-xlong
          dlat=alat-ylat
@@ -1237,6 +1242,7 @@ c  type *,'x,y,lat,long=',xcoord,ycoord,alat/conv,along/conv
          nout=nout+1
 
          if (nout.le.nout_max) then
+c                print *,'DEBUG nout,xcoord,ycoord',nout,xcoord,ycoord
            xout(nout)=xcoord
            yout(nout)=ycoord
            iout(nout)=ia
@@ -1358,7 +1364,7 @@ c
        SUBROUTINE MAKE_X_FOR_OUTPUT
 c
        implicit real*8 (a-h,o-z)
-       parameter (nlong_max=140,nlat_max=60,nout_max=99999)
+       parameter (nlong_max=200,nlat_max=200,nout_max=110000)
 c
        dimension ival(0:nlong_max,0:nlat_max),idel(0:nlong_max,0:nlat_max),
      1  rlong(0:nlong_max,0:nlat_max),dxlong(0:nlong_max,0:nlat_max),

@@ -1,7 +1,7 @@
 	PROGRAM GNS_VELOCITY
 c
 	implicit real*8 (a-h,o-z)
-	parameter (nlong_max=140,nlat_max=60,nout_max=99999)
+	parameter (nlong_max=200,nlat_max=200,nout_max=110000)
 c
 	dimension ival(0:nlong_max,0:nlat_max),idel(0:nlong_max,0:nlat_max),
 	1	rlong(0:nlong_max,0:nlat_max),dxlong(0:nlong_max,0:nlat_max),
@@ -63,8 +63,8 @@ c
 c
 c
 	implicit real*8 (a-h,o-z)
-	parameter (nlong_max=140,nlat_max=60,nval_max=4000,
-	1	nx_max=3*nval_max,nout_max=99999)
+	parameter (nlong_max=200,nlat_max=200,nval_max=110000,
+	1	nx_max=3*nval_max,nout_max=110000)
 c
 	dimension vely(3,ny),vary(3,3,ny)
 	dimension ival(0:nlong_max,0:nlat_max),idel(0:nlong_max,0:nlat_max),
@@ -80,7 +80,10 @@ c
 	1	a2(3,0:1,0:1,0:1,0:1),a3(3,0:1,0:1,0:1,0:1),
 	2	val(3,nval_max),w0(3),
 	3	a(3,nx_max),x(nx_max),
-	7	sd(nx_max,nx_max),asd(3,nx_max)
+	7	asd(3,nx_max)
+crjb This is too large, so I'm making its size 1 - not needed for sparsefit
+crjb	dimension sd(nx_max,nx_max)
+	dimension sd(1,1)
 	character*1 ans,yes,no
 	data yes,no/'Y','N'/
 	equivalence (val,x)
@@ -101,6 +104,7 @@ c	print *,'  Number of rectangles =',nrect
 		ans=no
 	else
 20		print *,'Do you want the variance-covariance matrices (Y/N)?'
+		print *,'YOU MUST ANSWER NO FOR THIS VERSION OF PROGRAM'
 		read(*,501) ans
 		if ((ans.ne.yes).and.(ans.ne.no)) goto 20
 	end if
@@ -134,6 +138,7 @@ c	print *,'  Number of rectangles =',nrect
 		j0=min0(idint(ycoord),nlat-1)
 		i1=i0+1
 		j1=j0+1
+         print *,'DEBUG: xcoord, ycoord, i0, j0',xcoord,ycoord,i0,j0
 		xcoord=xcoord-i0
 		ycoord=ycoord-j0
 		call V_COEFFS(xcoord,ycoord,a1,a2,a3,
@@ -755,8 +760,8 @@ c
 	SUBROUTINE CONVERT_LAT_LONG
 c
 	implicit real*8 (a-h,o-z)
-	parameter (nlong_max=140,nlat_max=60,ny_max=99999,
-	1	nout_max=99999,ntest_max=5)
+	parameter (nlong_max=200,nlat_max=200,ny_max=110000,
+	1	nout_max=110000,ntest_max=5)
 c
 	dimension ival(0:nlong_max,0:nlat_max),idel(0:nlong_max,0:nlat_max),
 	1	rlong(0:nlong_max,0:nlat_max),dxlong(0:nlong_max,0:nlat_max),
@@ -1218,7 +1223,7 @@ c
 	SUBROUTINE MAKE_X_FOR_OUTPUT
 c
 	implicit real*8 (a-h,o-z)
-	parameter (nlong_max=140,nlat_max=60,nout_max=99999)
+	parameter (nlong_max=200,nlat_max=200,nout_max=110000)
 c
 	dimension ival(0:nlong_max,0:nlat_max),idel(0:nlong_max,0:nlat_max),
 	1	rlong(0:nlong_max,0:nlat_max),dxlong(0:nlong_max,0:nlat_max),
