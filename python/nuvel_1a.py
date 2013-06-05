@@ -43,8 +43,10 @@ if __name__ == '__main__':
     import argparse
     import pointsource
 
+    platelist = ', '.join(sorted(nuvel_1a.keys()))
+
     parser = argparse.ArgumentParser(description='Calculate displacement on NNR-Nuvel-1A')
-    parser.add_argument('plate',help='Tectonic plate')
+    parser.add_argument('plate',help='Tectonic plate (' + platelist + ')')
     parser.add_argument('point_source',help='Input points, csv file with lon, lat columns, or grid:min_lon:min_lat:max_lon:max_lat:nlon:nalat')
     parser.add_argument('output_file',help='Output file')
 
@@ -52,7 +54,7 @@ if __name__ == '__main__':
 
     plate = args.plate.upper()
     if not plate in nuvel_1a:
-        print 'Plate '+plate+' not valid - must be one of '+', '.join(sorted(nuvel_1a.keys()))
+        print 'Plate '+plate+' not valid - must be one of '+platelist
         sys.exit()
 
     rotation = euler.euler_rotation( ellipsoid.grs80, *euler_rate(plate) )
