@@ -32,6 +32,7 @@ c
        dimension vary(3,3,nout_max),vely(3,nout_max)
        common/filenames/ solnfile,infile,outfile
        character*256 solnfile, infile, outfile
+       character*20 missing
        logical isgrid
        real*8 glonmin,glonmax,glatmin,glatmax,gdlon,gdlat
        integer gnlon,gnlat
@@ -41,8 +42,9 @@ c
 
        if (iargc().lt.3) then
            print *, 'Require parameters: gns_model_file input_point_file output_file'
-           print *, 'Optional additional params: euler_pole_lat euler_pole_lon  euler_rotation_rate'
-           print *, 'Rotation rate in radians / 10**7 years'
+           print *, 'Optional additional params: euler_pole_lat euler_pole_lon  euler_rate missing'
+           print *, 'Rotation rate in radians / 10**7 years.'
+           print *, 'missing is the value to use for de,dn for invalid points'
            print *, 'The input file can be instead a grid definition entered as:'
            print *, '  grid:min_lon:min_lat:max_lon:max_lat:ngrid_lon:ngrid_lat'
            print *, 'The output file can be prefixed with csv: to generate a LINZ csv file'
@@ -71,6 +73,10 @@ c
        call VELOCITY(ny,vely,vary)
 
        if( outfile(1:4).eq.'csv:') then
+           missing=''
+           if( iargc().gt.6) then
+             call getarg(7,missing)
+           end if
            outfile=outfile(5:len(outfile))
            open(3,file=outfile)
            write(3,41)
@@ -86,7 +92,7 @@ c
                        write(3,42) glon,glat,vely(1,iiout)*0.6371,vely(2,iiout)*0.6371
                        if( iiout .lt. ny ) iiout=iiout+1
                     else
-                       write(3,43) glon,glat
+                       write(3,43) glon,glat,missing,missing
                     end if
                  end do
               end do
@@ -125,7 +131,7 @@ c
      3  'Correlation')     
 41     format(' lon,lat,de,dn')
 42     format(' ',f9.4,',',f8.4,',',f11.6,',',f11.6)
-43     format(' ',f9.4,',',f8.4,',,')
+43     format(' ',f9.4,',',f8.4,',',a,',',a)
        end
 c
 c
