@@ -1,4 +1,4 @@
-test 1
+test 1 - read, stats
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
@@ -16,127 +16,127 @@ Column v2:
   Maximum: 6.94815
   Mean: 3.57407
   Median: 3.57407
-test 2
+test 2 - zero
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Zeroing grid at 21 points
 Writing grid to file out/test1_zero.grid
-test 3
+test 3 - smooth linear 1
 Reading file from testlin1.grd
 Grid has 2 rows and 2 columns
 Each point has 2 data values
 Applying linear smoothing to grid to fill 2 selected nodes
 Writing grid to file out/testlin1_out.grd
-test 4
+test 4 - smooth linear 2
 Reading file from test2.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Applying linear smoothing to grid to fill 21 selected nodes
 Writing grid to file out/test2_smoothl.grid
-test 5
+test 5 - smooth quadratic
 Reading file from test2.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Applying quadratic smoothing to grid to fill 21 selected nodes
 Writing grid to file out/test2_smoothq.grid
-test 6
+test 6 - smooth cubic
 Reading file from test2.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Applying cubic smoothing to grid to fill 21 selected nodes
 Writing grid to file out/test2_smoothc.grid
-test 7
+test 7 - selection on wkt polygon 1
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Zeroing grid at 20 points
 Writing grid to file out/test1_wkt_zero.grid
-test 8
+test 8 - selection on wkt polygon 2
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Zeroing grid at 36 points
 Writing grid to file out/test1_wkt_zero2.grid
-test 9
+test 9 - multiply
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Multiplying grid by 3
 Writing grid to file out/test1_mult.grid
-test 10
+test 10 - evaluate
 Reading file from test3.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Evaluating grid at points in test1.grid - results in out/test3_eval.txt
-test 11
+test 11 - add
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Adding grid values from grid test3.grid
 Writing grid to file out/test1_add.grid
-test 12
+test 12 - subtract
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Subtracting grid values from grid test3.grid
 Writing grid to file out/test1_subtract.grid
-test 13
+test 13 - resize 1
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Resizing to include rows 3 to 5 and columns 1 to 4
 Writing grid to file out/test1_resize1.grid
-test 14
+test 14 - resize 2
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Resizing to include rows -2 to 10 and columns -3 to 11
 Writing grid to file out/test1_resize2.grid
-test 15
+test 15 - trim
 Reading file from test4.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Trimming to leave 1 zero rows/cols around border
 Writing grid to file out/test4_trim1.grid
-test 16
+test 16 - extents_wkt
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Writing grid extents to out/gridextents.wkt
-test 17
+test 17 - affected area
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Writing outline of cells affected by 17 select nodes to out/affectedout.wkt
-test 18
+test 18 - selection with multiple where criteria 1
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Zeroing grid at 11 points
 Writing grid to file out/test1_where1.grid
-test 19
+test 19 - selection with multiple where criteria 2
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Zeroing grid at 48 points
 Writing grid to file out/test1_where2.grid
-test 20
+test 20 - linzgrid with file based headers
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Writing grid to LINZ ASCII format in out/test1_linzgrid.txt
-test 21
+test 21 - linzgrid with inline headers
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Writing grid to LINZ ASCII format in out/test2_linzgrid.txt
-test 22
+test 22 - linzgrid with columns
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Writing grid to LINZ ASCII format in out/test3_linzgrid.txt
-test 23
+test 23 - commands from file
 Running commands from commands.txt
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
@@ -145,7 +145,7 @@ Zeroing grid at 31 points
 Multiplying grid by 2.5
 Writing grid to file out/test1_runcommand.grid
 Writing grid to LINZ ASCII format in out/testcommand_linzgrid.txt
-test 24
+test 24 - stats
 Reading file from test1.csv
 Grid has 8 rows and 7 columns
 Each point has 2 data values
@@ -163,24 +163,36 @@ Column v2:
   Maximum: 6.94815
   Mean: 3.57407
   Median: 3.57407
-test 25
+test 25 - write no columns
 Reading file from test1.csv
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Writing grid to file out/test25.out
-test 26
+test 26 - write selected columns
 Reading file from test1.csv
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Writing grid to file out/test26.out
-test 27
+test 27 - write with selection
 Reading file from test1.csv
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Writing grid data to file out/test27.out
-test 28
+test 28 - add with selection
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
-Adding grid values from grid test3.grid
+Adding selected grid values from grid test3.grid
 Writing grid to file out/test28_add.grid
+test 29 - replace
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Replacing grid values from grid test3.grid
+Writing grid to file out/test29_replace.grid
+test 30 - expand
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Writing grid data to file out/test30a.txt
+Writing grid data to file out/test30b.txt

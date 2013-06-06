@@ -43,8 +43,10 @@ smooth (linear|quadratic|cubic) selection
 
 add [csv] [maxcols n] grid_file [where selection]
 subtract [csv] [maxcols n] grid_file [where selection]
-   Add and subtract the values extrapolated from grid_file to the values
-   at each node of the loaded grid
+replace [csv] [maxcols n] grid_file [where selection]
+   Add, subtract, or replace with the values extrapolated from grid_file 
+   to the values at each node of the loaded grid.  Has no effect outside the
+   extents of the second grid file.
 
 multiply factor
    Multiply all values in the grid by the factor

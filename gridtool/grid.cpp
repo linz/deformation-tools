@@ -644,7 +644,7 @@ void grid::multiplyBy( double factor )
         }
 }
 
-void grid::add( grid &g, double factor, bool markedonly )
+void grid::add( grid &g, double factor0, double factor1, bool markedonly )
 {
     // For the moment choose to add as many values as are available.
     // May be better to throw 
@@ -666,7 +666,7 @@ void grid::add( grid &g, double factor, bool markedonly )
                 vector<double>::pointer tv = values(row,col);
                 for( int iv = 0; iv < nv; iv++ )
                 {
-                    tv[iv] += factor * gv[iv];
+                    tv[iv] = factor0 * tv[iv] + factor1 * gv[iv];
                 }
             }
         }

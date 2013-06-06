@@ -98,7 +98,7 @@ public:
     int markCount();
     void processMarked( void(*func)(grid &g, node &n, void *data), void *data = 0);
     bool valueAt( point &xy, std::vector<double> &values );
-    void add( grid &g, double factor=1.0, bool markedonly=false );
+    void add( grid &g, double factor0=1.0, double factor1=1.0, bool markedonly=false );
     void multiplyBy( double factor );
     void resize( int rowmin, int colmin, int rowmax, int colmax );
     void trim( int borderSize = 0 );

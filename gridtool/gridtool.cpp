@@ -373,21 +373,25 @@ static void run_smoothgrid( grid &g, commandlist &commands )
     else smoothgrid(g,3);
 }
 
-static void run_addgrid( grid &g, commandlist &commands, bool subtract )
+static void run_addgrid( grid &g, commandlist &commands, string &command )
 {
     grid gadd;
-    string filename = run_read_grid( gadd, commands, subtract ? "subtract" : "add" );
+    string filename = run_read_grid( gadd, commands, command );
     bool marked = false;
     if( next_command_is(commands,"where"))
     {
-        mark_grid(g,commands,subtract ? "subtract" : "add" );
+        mark_grid(g,commands,command);
         marked = true;
     }
     
-    cout << (subtract ? "Subtracting" : "Adding") 
+    string action = 
+        command == "add" ? "Adding" : 
+        command == "subtract" ? "Subtracting" : "Replacing";
+    cout << action << (marked ? " selected" : "")
         << " grid values from grid " << filename << endl;
-    double factor = subtract ? -1 : 1;
-    g.add(gadd,factor,marked);
+    double factor0 = command == "replace" ? 0 : 1;
+    double factor1 = command == "subtract" ? -1 : 1;
+    g.add(gadd,factor0,factor1,marked);
 }
 
 static void run_multiply( grid &g, commandlist &commands )
@@ -555,8 +559,9 @@ static void run_commands( commandlist &commands )
             else if( op == "write_linzgrid" ) run_write_linzgrid(g,commands);
             else if( op == "read" ) run_read_grid(g,commands);
             else if( op == "run" ) run_command_file(g,commands);
-            else if( op == "add" ) run_addgrid( g, commands, false );
-            else if( op == "subtract" ) run_addgrid(g, commands, true );
+            else if( op == "add" ) run_addgrid( g, commands, op );
+            else if( op == "subtract" ) run_addgrid(g, commands, op );
+            else if( op == "replace" ) run_addgrid(g, commands, op );
             else if( op == "multiply" ) run_multiply( g, commands );
             else if( op == "evaluate" ) run_evaluate( g, commands );
             else if( op == "resize" ) run_resize( g, commands );
