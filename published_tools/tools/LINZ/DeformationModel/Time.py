@@ -1,11 +1,15 @@
 
 import re
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 from Error import InvalidValueError
 
 class Time( object ):
 
     def __init__( self, dt ):
+        if not isinstance(dt,datetime):
+            dt=Time.Parse(dt)
+            if dt:
+                dt=dt._dt
         self._dt = dt
 
     def __str__( self ):
@@ -30,16 +34,25 @@ class Time( object ):
 
     @staticmethod
     def Parse( t ):
-        if type(t) == Time:
+        if isinstance(t,Time):
             return t
-        if type(t) == datetime:
+        if isinstance(t,datetime):
             return Time(t)
-        if type(t) == date:
+        if isinstance(t,float):
+            year=int(t)
+            frac=t-year
+            d0=datetime(year,1,1)
+            d1=datetime(year+1,1,1)
+            td=d1-d0
+            secs=td.days*24*3600+td.seconds
+            d0 = d0+timedelta(0,secs*frac)
+            return Time(d0)
+        if isinstance(t,date):
             return Time(datetime.combine(t,time(0,0,0)))
         if t == None or t == '' or t == '0':
             return None
         if type(t) not in (str,unicode):
-            return InvalidValueError("Invalid date/time "+str(t))
+            raise InvalidValueError("Invalid date/time "+str(t))
         m = re.match(r'^(\d\d\d\d)\-(\d\d)\-(\d\d)$',t)
         if m:
             return Time(datetime(int(m.group(1)),int(m.group(2)),int(m.group(3)),0,0,0))
