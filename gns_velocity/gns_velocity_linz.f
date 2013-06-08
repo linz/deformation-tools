@@ -92,7 +92,7 @@ c
                        write(3,42) glon,glat,vely(1,iiout)*0.6371,vely(2,iiout)*0.6371
                        if( iiout .lt. ny ) iiout=iiout+1
                     else
-                       write(3,43) glon,glat,missing,missing
+                       write(3,43) glon,glat,trim(missing),trim(missing)
                     end if
                  end do
               end do
