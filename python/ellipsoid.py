@@ -3,6 +3,8 @@ import math
 
 class ellipsoid( object ):
 
+    convergence=1.0e-10
+
     @staticmethod
     def _cossin( angle ):
         angle=np.radians(angle)
@@ -28,12 +30,28 @@ class ellipsoid( object ):
         self.b2=self.b*self.b
         self.a2b2=self.a2-self.b2
 
-    def xyz( self, lon, lat ):
+    def xyz( self, lon, lat, hgt=0 ):
         cln,sln = ellipsoid._cossin(lon)
         clt,slt = ellipsoid._cossin(lat)
         bsac=np.hypot(self.b*slt,self.a*clt)
-        p = self.a2*clt/bsac
-        xyz=[p*cln,p*sln,self.b2*slt/bsac]
+        p = self.a2*clt/bsac + hgt*clt
+        xyz=[p*cln,p*sln,self.b2*slt/bsac+hgt*slt]
         return xyz
+
+    def geodetic( self, xyz ):
+        x,y,z = xyz[0:3]
+        ln=np.arctan2(y,x)
+        p=np.hypot(x,y)
+        lt=np.arctan2(self.a2*z,self.b2*p)
+        for i in range(10):
+            lt0=lt
+            slt=np.sin(lt)
+            clt=np.cos(lt)
+            bsac=np.hypot(self.b*slt,self.a*clt)
+            lt=np.arctan2(z+slt*self.a2b2/bsac,p)
+            if abs(lt-lt0) < self.convergence:
+                break
+        h=p*clt+z*slt-bsac
+        return np.degrees(ln),np.degrees(lt),h
 
 grs80 = ellipsoid(6378160.0,298.25)
