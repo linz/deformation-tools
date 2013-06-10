@@ -197,8 +197,8 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
 
         if( ! proj.IsValid() )
         {
-            cout << setiosflags( ios::fixed ) << setprecision(5);
-            cout << "Setting projection origin to " << lon << " " << lat << endl;
+            cerr << setiosflags( ios::fixed ) << setprecision(5);
+            cerr << "Setting projection origin to " << lon << " " << lat << endl;
             proj.SetOrigin(lon,lat);
         }
 
@@ -423,7 +423,7 @@ int main( int argc, char *argv[] )
     int strnprecision = 4;
     GNSProjection proj;
 
-    while( argc > 1 && argv[1][0] == '-' )
+    while( argc > 1 && argv[1][0] == '-' && argv[1][1] )
     {
         double lon, lat;
         switch( argv[1][1] )
@@ -439,7 +439,7 @@ int main( int argc, char *argv[] )
             }
             else
             {
-                cout << "-w requires wkt_file argument" << endl;
+                cerr << "-w requires wkt_file argument" << endl;
                 isvalid = false;
             }
             break;
@@ -461,7 +461,7 @@ int main( int argc, char *argv[] )
             }
             else
             {
-                cout << "-p requires lon and lat arguments or \"none\"" << endl;
+                cerr << "-p requires lon and lat arguments or \"none\"" << endl;
                 isvalid = false;
                 break;
             }
@@ -486,7 +486,7 @@ int main( int argc, char *argv[] )
         case 'H':
             if( argc < 2 || sscanf(argv[2],"%d",&nskip) != 1 )
             {
-                cout << "-h requires number of lines to skip" << endl;
+                cerr << "-h requires number of lines to skip" << endl;
                 isvalid = false;
             }
             else
@@ -502,7 +502,7 @@ int main( int argc, char *argv[] )
             strnprecision += 4;
             break;
         default:
-            cout << "Invalid argument " << argv[1] << endl;
+            cerr << "Invalid argument " << argv[1] << endl;
             isvalid = false;
         }
         argv++;
@@ -511,7 +511,7 @@ int main( int argc, char *argv[] )
 
     if( ! isvalid )
     {
-        cout << "Failed to run - invalid arguments" << endl;
+        cerr << "Failed to run - invalid arguments" << endl;
         return 0;
     }
 
@@ -522,7 +522,7 @@ int main( int argc, char *argv[] )
 
     if( argc != 4)
     {
-        cout << "Require parameters: [-w[l|p] wktfile] fault_model_file test_point_file output_file\n";
+        cerr << "Require parameters: [-w[l|p] wktfile] fault_model_file test_point_file output_file\n";
         return 0;
     }
 
@@ -565,7 +565,7 @@ int main( int argc, char *argv[] )
 
         if( ! f.good() )
         {
-            cout << "Cannot read fault model file " << argv[1] << endl;
+            cerr << "Cannot read fault model file " << argv[1] << endl;
             return 0;
         }
 
@@ -583,12 +583,16 @@ int main( int argc, char *argv[] )
       replace(fname.begin(),fname.end(),':',' ');
       in = new istringstream(fname);
     }
+    else if( fname == "-" )
+    {
+      in = &cin;
+    }
     else
     {
       in = new ifstream(argv[2]);
       if( ! in->good() )
       {
-	  cout << "Cannot open input test point file " << argv[2] << endl;
+	  cerr << "Cannot open input test point file " << argv[2] << endl;
 	  return 0;
       }
     }
@@ -598,7 +602,7 @@ int main( int argc, char *argv[] )
         ofstream wkt(wktfile);
         if( ! wkt.good())
         {
-            cout << "Cannot open wkt output file " << argv[4] << endl;
+            cerr << "Cannot open wkt output file " << argv[4] << endl;
             return 0;
         }
         bool header = true;
@@ -614,12 +618,19 @@ int main( int argc, char *argv[] )
     double dnmax = 0.0;
     double dumax = 0.0;
 
-    ofstream out( argv[3]);
-    if( ! out.good() )
+    ofstream *outs = 0;
+    string fnameout(argv[3]);
+    if( fnameout != "-" )
     {
-        cout << "Cannot open output file " << argv[3] << endl;
-        return 0;
+        outs = new ofstream(argv[3]);
+        if( ! outs->good() )
+        {
+            cerr << "Cannot open output file " << argv[3] << endl;
+            return 0;
+        }
     }
+    ostream &out =  outs ? *outs : cout;
+
     if( havenames ) out << "name\t";
     out << "lon\tlat\tde\tdn\tdu";
     if( showlength ) out << "\tds";
@@ -671,7 +682,7 @@ int main( int argc, char *argv[] )
             }
             if( s.fail() )
             {
-                cout << "Invalid test point: " << buffer << endl;
+                cerr << "Invalid test point: " << buffer << endl;
                 continue;
             }
             bool reset = true;
@@ -758,8 +769,8 @@ int main( int argc, char *argv[] )
             }
         }
     }
-    delete(in);
-    out.close();
+    if( in != &cin ) delete(in);
+    if( outs ) outs->close();
     if( compare )
     {
         cout << "Max displacement differences (" << demax << ", " << dnmax << ", " << dumax << ")" << endl;
