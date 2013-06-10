@@ -26,6 +26,7 @@ void mark_xy_file( grid &g, const char *xyfile, grid::markaction action )
     string buffer;
     while( getline(f,buffer) )
     {
+	std::replace(buffer.begin(), buffer.end(),',',' ');
         stringstream s(buffer);
         double x, y;
         if( s >> x >> y )
