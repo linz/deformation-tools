@@ -296,7 +296,7 @@ for loop in [1]:
             print "Cannot open input file "+inputfile
         # Whitespace
         if format == 'w':
-            headers=readline().strip().split()
+            headers=instream.readline().strip().split()
             def readf():
                 for line in instream:
                     yield line.strip().split()
@@ -356,8 +356,8 @@ for loop in [1]:
     writefunc = None
     if format=='w':
         def writef(cols):
-            outstream.writeline(' '.join(cols))
-            outstream.writeline("\r\n")
+            outstream.write(' '.join(cols))
+            outstream.write("\n")
         writefunc = writef
     else:
         csvwrt = csv.writer(outstream,dialect=dialect)
