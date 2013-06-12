@@ -149,7 +149,7 @@ for o,v in optlist:
             print "Invalid columns specified - must be 2 or 3 colon separated column names"
             sys.exit()
     elif o in ('-f','--format'):
-        v = lower(v)
+        v = v.lower()
         if v in ('csv','tab','whitespace','c','t','w'):
             format=v[:1]
         else:
