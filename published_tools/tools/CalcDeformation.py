@@ -296,23 +296,29 @@ for loop in [1]:
             print "Cannot open input file "+inputfile
         # Whitespace
         if format == 'w':
+            headers=readline().strip().split()
             def readf():
                 for line in instream:
-                    yield line.split()
+                    yield line.strip().split()
             reader = readf
         # CSV format
         else:
             csvrdr = csv.reader(instream,dialect=dialect)
-            reader = csvrdr
-        headers = reader.next()
+            headers=csvrdr.next()
+            def readf():
+                for r in csvrdr:
+                    yield r
+            reader = readf
         ncols = len(headers)
         colnos=[]
         for c in columns:
             if c in headers:
                 colnos.append(headers.index(c))
-            elif len(colnos) < 2:
-                print "Column",c,"missing in",inputfile
+            else:
                 break
+        if len(colnos) < 2:
+            print "Column",c,"missing in",inputfile
+            break
         if date_column:
             if date_column in headers:
                 date_colno = headers.index(date_column)
