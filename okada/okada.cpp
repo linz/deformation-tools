@@ -82,7 +82,7 @@ class OkadaPoint
         // reference point x0, y0, d0
         void SetFaultPoint( double fs, double fd ){ this->fs = fs; this->fd = fd; }
 
-        void AddOkada( double U1, double U2, double U3, double *dislocation, double *strain );
+        void AddOkada( double U1, double U2, double U3, double *dislocation, double *strain, double factor );
     private:
         // Input parameters
         FaultRefSys &fsys;
@@ -137,7 +137,7 @@ void OkadaPoint::SetPosition()
 }
 
 void OkadaPoint::AddOkada( double U1, double U2, double U3, 
-        double *dislocation, double *strain )
+        double *dislocation, double *strain, double factor )
 {
 
     SetPosition();
@@ -268,19 +268,19 @@ void OkadaPoint::AddOkada( double U1, double U2, double U3,
     
     double coss = fsys.coss;
     double sins = fsys.sins;
-    dislocation[0] += ux*coss-uy*sins;
-    dislocation[1] += uy*coss+ux*sins;
-    dislocation[2] += uz;
+    dislocation[0] += (ux*coss-uy*sins)*factor;
+    dislocation[1] += (uy*coss+ux*sins)*factor;
+    dislocation[2] += uz*factor;
 
     if( calcStrains )
     {
         double cs=coss*sins;
         double c2=coss*coss;
         double s2=sins*sins;
-        strain[0] += c2*uxx+cs*(uxy+uyx)+s2*uyy;
-        strain[1] += cs*(uyy-uxx)+c2*uxy-s2*uyx;
-        strain[2] += cs*(uyy-uxx)+c2*uyx-s2*uxy;
-        strain[3] += s2*uxx-cs*(uxy+uyx)+c2*uyy;
+        strain[0] += (c2*uxx+cs*(uxy+uyx)+s2*uyy)*factor;
+        strain[1] += (cs*(uyy-uxx)+c2*uxy-s2*uyx)*factor;
+        strain[2] += (cs*(uyy-uxx)+c2*uyx-s2*uxy)*factor;
+        strain[3] += (s2*uxx-cs*(uxy+uyx)+c2*uyy)*factor;
     }
 }
 
@@ -372,7 +372,7 @@ void SegmentedFault::SetFaultSlip( int isegs, int isegd, double Uss, double Uds,
 }
 
 
-bool SegmentedFault::AddOkada( double x, double y, double *dislocation, double *strain )
+bool SegmentedFault::AddOkada( double x, double y, double *dislocation, double *strain, double factor )
 {
     if( ! slipvector ) return false;
 
@@ -391,12 +391,12 @@ bool SegmentedFault::AddOkada( double x, double y, double *dislocation, double *
                 int isegd = j + j1;
                 if( isegd < 0 || isegd == nsegd ) continue;
                 double *vector = SlipVector(isegs, isegd );
-                int factor = i1 == j1 ? 1 : -1;
-                U1 += factor * vector[0];
-                U2 += factor * vector[1];
-                U3 += factor * vector[2];
+                int ufactor = i1 == j1 ? 1 : -1;
+                U1 += ufactor * vector[0];
+                U2 += ufactor * vector[1];
+                U3 += ufactor * vector[2];
                 double pux, puy, puz;
-                pt.AddOkada( U1, U2, U3, dislocation, strain );
+                pt.AddOkada( U1, U2, U3, dislocation, strain, factor );
             }
         }
     }

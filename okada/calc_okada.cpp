@@ -83,14 +83,16 @@ void GNSProjection::LatLon( double x, double y, double &lon, double &lat )
 class FaultSet
 {
 public:
-    FaultSet() {};
-    FaultSet(GNSProjection proj) : proj(proj) {};
+    FaultSet() : factor(1.0) {};
+    FaultSet(GNSProjection proj) : proj(proj), factor(1.0) {};
     ~FaultSet();
     bool ReadGNSDefinition( istream &str, int nskip = 0 );
-    bool CalcOkada( double lon, double lat, double *dislocation, double *strain, bool reset=true );
+    void setFactor( double fctr ){ factor=fctr; }
+    bool AddOkada( double lon, double lat, double *dislocation, double *strain, bool reset=true );
     ostream & write( ostream &os, int style=0, bool header=true );
 private:
     GNSProjection proj;
+    double factor;
     list<SegmentedFault *>faults;
     list<string> names;
 };
@@ -260,7 +262,7 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
     return ok;
 }
 
-bool FaultSet::CalcOkada( double lon, double lat, double *dislocation, double *strain, bool reset )
+bool FaultSet::AddOkada( double lon, double lat, double *dislocation, double *strain, bool reset )
 {
     if( reset )
     {
@@ -272,7 +274,7 @@ bool FaultSet::CalcOkada( double lon, double lat, double *dislocation, double *s
     proj.XY(lon,lat,x,y);
     for( list<SegmentedFault *>::const_iterator i = faults.begin(); i != faults.end(); i++ )
     {
-        if( ! (*i)->AddOkada(x,y,dislocation,strain)) ok = false;
+        if( ! (*i)->AddOkada(x,y,dislocation,strain,factor)) ok = false;
     }
     return ok;
 }
@@ -538,6 +540,21 @@ int main( int argc, char *argv[] )
     {
         string filename(*i);
         if( filename.length() == 0 ) continue;
+
+        double factor=1.0;
+        string::size_type end= filename.find('*');
+        if( end != string::npos ) 
+        {
+            string factorstr=filename.substr(0,end);
+            filename=filename.substr(end+1);
+            if( sscanf(factorstr.c_str(),"%lf",&factor) != 1 )
+            {
+                cerr << "Invalid fault model file scale factor " << factor << " defined for " << filename << "\n";
+                return 0;
+            }
+            cout << "Scale factor = " << factor << "\n";
+        }
+
         ifstream f(filename.c_str());
 
         if( ! f.good() )
@@ -571,6 +588,7 @@ int main( int argc, char *argv[] )
 
         FaultSet *faults = new FaultSet( proj );
         if( ! faults->ReadGNSDefinition(f, nskip) ) { return 0; }
+        faults->setFactor(factor);
         faultlist.push_back(faults);
     }
 
@@ -688,7 +706,7 @@ int main( int argc, char *argv[] )
             bool reset = true;
             for( list<FaultSet *>::iterator f = faultlist.begin(); f != faultlist.end(); f++ )
             {
-                (*f)->CalcOkada( lon0, lat0, uxyz, strain, reset );
+                (*f)->AddOkada( lon0, lat0, uxyz, strain, reset );
                 reset = false;
             }
             if( havenames ) out << name << "\t";
@@ -744,7 +762,7 @@ int main( int argc, char *argv[] )
                     bool reset = true;
                     for( list<FaultSet *>::iterator f = faultlist.begin(); f != faultlist.end(); f++ )
                     {
-                        (*f)->CalcOkada( lon, lat, uxyz, strain, reset );
+                        (*f)->AddOkada( lon, lat, uxyz, strain, reset );
                         reset=false;
                     }
                     out << setprecision(llprecision)

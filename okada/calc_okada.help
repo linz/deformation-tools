@@ -13,6 +13,8 @@ The program is run using the following syntax:
 where
   fault_model_file   defines the fault model (details below).  Several fault
                      models can be combined using file1+file2+file3..
+                     Each file can be preceded by a scale factor, eg
+                     1.5*file1+0.2*file2
   test_point_file    defines the points at which the deformation will be 
                      computed.  The test_point_file can be replaced with
                      a grid definition entered as 

@@ -89,7 +89,7 @@ class SegmentedFault
         // Add the dislocations and strains from the formulae to cumulative
         // values.  strain can be 0 to skip strain calcs
         //
-        bool AddOkada( double x, double y, double *dislocation, double *strain=0 );
+        bool AddOkada( double x, double y, double *dislocation, double *strain=0, double factor=1.0 );
         // Calculate dislocation using Okada formulae at a specified point
         // Return false if this cannot be done (eg fault not completely defined)
 
