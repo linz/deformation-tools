@@ -234,7 +234,9 @@ class defgrid( grid ):
 
         ms = np.sqrt(tolerance/(5*precision))*gridsize;
         offsets=[margin]
-        while margin < maxsize/ms: 
+
+        maxmargin = min(self.array.shape)/4-2
+        while margin < maxsize/ms and margin < maxmargin: 
             margin *= 2
             offsets.append(margin)
         # print "Offset required to calculate resolution",offsets[-1]," (gridsize ",gridsize*offsets[-1],")"

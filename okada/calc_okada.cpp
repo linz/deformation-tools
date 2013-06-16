@@ -552,7 +552,7 @@ int main( int argc, char *argv[] )
                 cerr << "Invalid fault model file scale factor " << factor << " defined for " << filename << "\n";
                 return 0;
             }
-            cout << "Scale factor = " << factor << "\n";
+            // cout << "Scale factor = " << factor << "\n";
         }
 
         ifstream f(filename.c_str());

@@ -432,9 +432,14 @@ static void run_trim( grid &g, commandlist &commands )
 static void run_evaluate( grid &g, commandlist &commands )
 {
     bool haveids=false;
+    bool csv=false;
     string infile = next_command(commands,"Input file for evaluate");
     if( infile == "with_ids" ){ 
         haveids=true; 
+        infile = next_command(commands,"Input file for evaluate");
+        }
+    if( infile == "csv" ){ 
+        csv=true; 
         infile = next_command(commands,"Input file for evaluate");
         }
     if( infile == "at" ) infile = next_command(commands,"Input file for evaluate");
@@ -448,10 +453,19 @@ static void run_evaluate( grid &g, commandlist &commands )
     if( !fout ) throw runtime_error(string("Cannot open evaluation point output file ").append(outfile)); 
     string input;
     string id;
+    char delim = csv ? ',' : '\t';
     vector<double> v;
+    fout << "lon" << delim << "lat";
+    for( int i = 0; i < g.nvalue(); i++ )
+    {
+        fout << delim << g.fieldName(i);
+    }
+    fout << endl;
+
     fout << setprecision(12);
     while( getline(fin,input) )
     {
+        if( csv ) std::replace(input.begin(),input.end(),',',' ');
         istringstream s(input);
         grid::point p;
         if( haveids ) s >> id;
@@ -459,10 +473,10 @@ static void run_evaluate( grid &g, commandlist &commands )
         g.valueAt(p,v);
         if( haveids ) fout << id << "\t";
 
-        fout << p.x << "\t" << p.y;
+        fout << p.x << delim << p.y;
         for( vector<double>::iterator vi = v.begin(); vi != v.end(); vi++ )
         {
-            fout << "\t" << (*vi);
+            fout << delim << (*vi);
         }
         fout << endl;
     }

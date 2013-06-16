@@ -208,6 +208,8 @@ def calc_grid( modeldef, griddef, gridfile ):
             built=False
         if built:
             for mf in modeldef.split('+'):
+                if '*' in mf:
+                    mf=mf.split('*',1)[1]
                 if os.path.getmtime(mf) > os.path.getmtime(gridfile):
                     built=False
                     break
@@ -639,7 +641,7 @@ def write_grid_wkt( name, level, griddef ):
 def write_wkt( item, level, wkt ):
     wktfile.write("{0}|{1}|{2}\n".format(item,level,wkt))
 
-def build_linzshift_model( gridlist, shiftpath=None ):
+def build_linzshift_model( gridlist, modeldef, additive, shiftpath=None, splitbase=False ):
     '''
     Creates shift definition files using list of grids.  Assumes that grids have
     been generated using linzgrid=True
@@ -647,6 +649,9 @@ def build_linzshift_model( gridlist, shiftpath=None ):
 
     if not gridlist or not gridlist[0].gdf:
         raise RuntimeError("Cannot build shift model - haven't built LINZ grid format files")
+    if not additive:
+        raise RuntimeError("Cannot build shift model - grids must be built as additive")
+
     if not shiftpath:
         shiftpath = os.path.dirname(gridlist[0].gdf)
     if not os.path.isdir(shiftpath):
@@ -684,35 +689,41 @@ def build_linzshift_model( gridlist, shiftpath=None ):
                 ))
         call(['makelinzshiftmodel.pl',shiftdef,shiftbin],cwd=shiftpath)
 
-def get_model_spec( modeldef ):
-    name=''
-    date=None
-    descriptions=''
-    for modelfile in modeldef.split('+'):
-        modelname=os.path.basename(modelfile)
-        modelname=re.sub(r'\..*','',modelname)
-        name = name+modelname
-        with open(modelfile) as f:
-            event = f.readline()
-            model = f.readline()
-            version = f.readline()
-            descriptions = descriptions+event+model+version
-            match=re.search(r'(\d{1,2})\s+(\w{3})\w*\s+(\d{4})\s*$',event)
-            modeldate = None
-            if match:
-                try:
-                    datestr=match.group(1)+' '+match.group(2)+' '+match.group(3)
-                    modeldate = datetime.datetime.strptime(datestr,'%d %b %Y')
-                except:
-                    pass
-            if not modeldate:
-                raise RuntimeError("Event record at start of {0} does not end with a valid date".format(modelfile))
-            modeldate=modeldate.strftime('%Y-%m-%d')
-            if not date:
-                date = modeldate
-            if modeldate != date:
-                raise RuntimeError("Events forming model don't have a common date")
-    return name, descriptions.strip(), date
+def get_model_spec( modelfile ):
+    modelname=os.path.basename(modelfile)
+    modelname=re.sub(r'\..*','',modelname)
+    with open(modelfile) as f:
+        event = f.readline()
+        model = f.readline()
+        version = f.readline()
+        description = event+model+version
+        match=re.search(r'(\d{1,2})\s+(\w{3})\w*\s+(\d{4})\s*$',event)
+        modeldate = None
+        if match:
+            try:
+                datestr=match.group(1)+' '+match.group(2)+' '+match.group(3)
+                modeldate = datetime.datetime.strptime(datestr,'%d %b %Y')
+            except:
+                pass
+        if not modeldate:
+            raise RuntimeError("Event record at start of {0} does not end with a valid date".format(modelfile))
+        modeldate=modeldate.strftime('%Y-%m-%d')
+    ramp=[]
+    rampfile=os.path.splitext(modelfile)[0]+'.ramp'
+    if os.path.exists(rampfile):
+        ramp=[]
+        with open(rampfile) as f:
+            for l in f:
+                if re.match(r'^\s*\#\s*$',l):
+                    continue
+                m = re.match(r'^\s*(\d\d\d\d\-\d\d\-\d\d)\s+(\d+(?:\.\d*))\s*$',l)
+                if m:
+                    ramp.append((m.group(1),float(m.group(2))))
+                else:
+                    raise ValueError("Invalid record "+l+" in ramp file "+rampfile)
+    if not ramp:
+        ramp=[(modeldate,1.0)]
+    return modelname, description, modeldate, ramp
 
 def build_published_component( gridlist, modeldef, additive, comppath=None ):
     '''
@@ -720,7 +731,7 @@ def build_published_component( gridlist, modeldef, additive, comppath=None ):
     component of a LINZ published deformation model
     '''
 
-    modelname,modeldesc,modeldate = get_model_spec( modeldef )
+    modelname,modeldesc,modeldate,ramps = get_model_spec( modeldef )
     patchdir='patch_'+modelname+'_'+modeldate.replace('-','')
 
     if not gridlist or not gridlist[0].csv:
@@ -733,6 +744,7 @@ def build_published_component( gridlist, modeldef, additive, comppath=None ):
 
     write_log("Writing published model component {0}".format(comppath))
 
+    finalramp=ramps[-1][1]
     compcsv=os.path.join(comppath,'component.csv')
     with open(compcsv,"w") as ccsvf:
         ccsv=csv.writer(ccsvf)
@@ -787,11 +799,26 @@ def build_published_component( gridlist, modeldef, additive, comppath=None ):
                     gd.column('du')*gd.column('du'))),
                 file1=csvname,
                 )
-            if not additive:
-                compdata['subcomponent']=1
-                compdata['priority']=priority
-            csvdata.update(compdata)
-            ccsv.writerow([csvdata[c] for c in published_component_columns])
+            for ir,r in enumerate(ramps):
+                rdate=r[0]
+                rvalue=r[1]
+                if ir == 0:
+                    if rvalue==0:
+                        continue
+                    compdata['temporal_model']='step'
+                    compdata['time0']=rdate
+                else:
+                    compdata['temporal_model']='ramp'
+                    compdata['time0']=ramps[ir-1][0]
+                    rvalue -= ramps[ir-1][1]
+                compdata['time1']=rdate
+                compdata['factor0']=-rvalue if publish_reverse_patch else 0
+                compdata['factor1']=0 if publish_reverse_patch else rvalue
+                if not additive:
+                    compdata['subcomponent']=ir+1
+                    compdata['priority']=priority
+                csvdata.update(compdata)
+                ccsv.writerow([csvdata[c] for c in published_component_columns])
 
 if __name__ == "__main__":
 
@@ -805,6 +832,7 @@ if __name__ == "__main__":
     parser.add_argument('--component-model-version',default=runtime_version,help="Deformation model version to include in published component")
     parser.add_argument('--subgrids-nest',action='store_false',help="Grid CSV files calculated to replace each other rather than total to deformation")
     parser.add_argument('--parcel-shift',action='store_true',help="Configure for calculating parcel_shift rather than rigorous deformation patch")
+    parser.add_argument('--apply-ramp-scale',action='store_true',help="Scale the grid by the ramp final value")
     parser.add_argument('--test-settings',action='store_true',help="Configure for testing - generate lower accuracy grids")
     parser.add_argument('--max-level',type=int,help="Maximum number of split levels to generate (each level increases resolution by 4)")
     parser.add_argument('--split-base',action='store_true',help="Base deformation will be split into separate patches if possible")
@@ -832,6 +860,7 @@ if __name__ == "__main__":
         os.makedirs(patchpath)
                 
     models=args.model_file
+    moddefs=[]
     if not models:
         models.append(patchname)
 
@@ -844,13 +873,20 @@ if __name__ == "__main__":
             if os.path.exists(mf): 
                 found = True
                 models[i]=mf
+                if args.apply_ramp_scale:
+                    modelname,modeldesc,modeldate,ramps = get_model_spec( mf )
+                    rampscale=ramps[-1][1]
+                    if rampscale != 1.0:
+                        mf=str(rampscale)+'*'+mf
+                moddefs.append(mf)
                 break
+                
         if not found:
             print "Model file {0} doesn't exist".format(f)
             sys.exit()
 
     # Model definition for calc okada
-    modeldef='+'.join(models)
+    modeldef='+'.join(moddefs)
     modelname=' '.join([os.path.basename(x) for x in models])
 
     logfile=open(patchfile+".build.log","w")
@@ -867,7 +903,7 @@ if __name__ == "__main__":
     create_patch_csv( gridlist, modelname, linzgrid=build_linzgrid, additive=additive, trimgrid=trimgrid )
 
     if shift_path:
-        build_linzshift_model( gridlist, shiftpath=shift_path )
+        build_linzshift_model( gridlist, modeldef, additive, shiftpath=shift_path, splitbase=split_base )
 
     if comp_path:
         build_published_component( gridlist, modeldef, additive, comp_path )

@@ -64,18 +64,9 @@ public:
     bool readfile( const char * filename, char delim=' ', int maxcols=99 );
     bool writefile( const char * filename, const char *delim = 0, std::vector<int> *colids=0, bool markedonly=false );
     void setprecision( int dataprec ){ m_dataprec = dataprec; }
-    int nrow()
-    {
-        return m_nrow;
-    }
-    int ncol()
-    {
-        return m_ncol;
-    }
-    int nvalue()
-    {
-        return m_nvalue;
-    }
+    int nrow() { return m_nrow; }
+    int ncol() { return m_ncol; }
+    int nvalue() { return m_nvalue; }
     std::vector<double>::pointer values( int row, int col )
         { return values(node(row,col));}
     std::vector<double>::pointer values( const node &n );
