@@ -42,6 +42,8 @@ Options can include:
 
   -s                 Include strain parameters in the output
 
+  -v                 Use comma as delimiter for input/output
+
   -x                 Extra significant figures to reduce rounding errors
 
   -h nskip           Skip specified number of header lines in the definition 

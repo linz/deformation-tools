@@ -419,6 +419,7 @@ int main( int argc, char *argv[] )
     bool havenames = false;
     bool showlength = false;
     bool calcstrain = false;
+    char delim='\t';
     int nskip = 0;
     int llprecision = 6;
     int dxyprecision = 4;
@@ -483,6 +484,10 @@ int main( int argc, char *argv[] )
         case 's':
         case 'S':
             calcstrain = true;
+            break;
+        case 'v':
+        case 'V':
+            delim=',';
             break;
         case 'h':
         case 'H':
@@ -649,16 +654,16 @@ int main( int argc, char *argv[] )
     }
     ostream &out =  outs ? *outs : cout;
 
-    if( havenames ) out << "name\t";
-    out << "lon\tlat\tde\tdn\tdu";
-    if( showlength ) out << "\tds";
-    if( calcstrain ) out << "\tdil\trot\tshear\terr";
+    if( havenames ) out << "name" << delim;
+    out << "lon" << delim << "lat" << delim << "de" << delim << "dn" << delim << "du";
+    if( showlength ) out << delim << "ds";
+    if( calcstrain ) out << delim << "dil" << delim << "rot" << delim << "shear" << delim << "err";
     if( compare )
     {
-        out << "\tobs_de\tobs_dn\tobs_du";
-        if( showlength) out << "\tobs_ds";
-        out << "\tdif_de\tdif_dn\tdif_du";
-        if( showlength) out << "\tdif_ds";
+        out << "" << delim << "obs_de" << delim << "obs_dn" << delim << "obs_du";
+        if( showlength) out << "" << delim << "obs_ds";
+        out << "" << delim << "dif_de" << delim << "dif_dn" << delim << "dif_du";
+        if( showlength) out << delim << "dif_ds";
     }
     out << endl;
     out << setiosflags( ios::fixed );
@@ -678,6 +683,7 @@ int main( int argc, char *argv[] )
 
         double lon0, lat0, lon1, lat1, dlon, dlat;
         int nln, nlt;
+        replace(buffer.begin(),buffer.end(),delim,' ');
         stringstream s(buffer);
         string gridstr;
 
@@ -709,11 +715,11 @@ int main( int argc, char *argv[] )
                 (*f)->AddOkada( lon0, lat0, uxyz, strain, reset );
                 reset = false;
             }
-            if( havenames ) out << name << "\t";
+            if( havenames ) out << name << delim;
             out << setprecision(llprecision)
-                << lon0 <<  "\t" << lat0
+                << lon0 <<  "" << delim << lat0
                 << setprecision(dxyprecision)
-                << "\t" << ux << "\t" << uy << "\t" << uz;
+                << delim << ux << delim << uy << delim << uz;
             if( showlength )
             {
                 double us = sqrt(ux*ux+uy*uy);
@@ -724,27 +730,27 @@ int main( int argc, char *argv[] )
                 double dil, rot, shear, err;
                 calcStrainComponents(strain,dil,rot,shear,err);
                 out << setprecision(strnprecision)
-                    << "\t" << dil << "\t" << rot
-                    << "\t" << shear << "\t" << err;
+                    << delim << dil << delim << rot
+                    << delim << shear << delim << err;
             }
             if( compare )
             {
                 out << setprecision(dxyprecision)
-                    << "\t" << oux << "\t" << ouy << "\t" << ouz;
+                    << delim << oux << delim << ouy << delim << ouz;
                 if( showlength )
                 {
                     double us = sqrt(oux*oux+ouy*ouy);
-                    out << "\t" << us;
+                    out << delim << us;
                 }
                 oux -= ux; ouy -= uy; ouz -= uz;
                 if( fabs(oux) > demax ) demax = fabs(oux); 
                 if( fabs(ouy) > dnmax ) dnmax = fabs(ouy); 
                 if( fabs(ouz) > dumax ) dumax = fabs(ouz); 
-                out << "\t" << oux << "\t" << ouy << "\t" << ouz;
+                out << delim << oux << delim << ouy << delim << ouz;
                 if( showlength )
                 {
                     double us = sqrt(oux*oux+ouy*ouy);
-                    out << "\t" << us;
+                    out << delim << us;
                 }
             }
             out << endl;
@@ -766,21 +772,21 @@ int main( int argc, char *argv[] )
                         reset=false;
                     }
                     out << setprecision(llprecision)
-                        << lon <<  "\t" << lat << "\t"
+                        << lon <<  delim << lat << delim
                         << setprecision(dxyprecision)
-                        << ux << "\t" << uy << "\t" << uz;
+                        << ux << delim << uy << delim << uz;
                     if( showlength )
                     {
                         double us = sqrt(ux*ux+uy*uy);
-                        out << "\t" << us;
+                        out << delim << us;
                     }
                     if( calcstrain )
                     {
                         double dil, rot, shear, err;
                         calcStrainComponents(strain,dil,rot,shear,err);
                         out << setprecision(strnprecision)
-                            << "\t" << dil << "\t" << rot
-                            << "\t" << shear << "\t" << err;
+                            << delim << dil << delim << rot
+                            << delim << shear << delim << err;
                     }
                     out << endl;
                 }
