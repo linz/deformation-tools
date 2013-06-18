@@ -517,6 +517,7 @@ def build_deformation_grids( patchpath, patchname, modeldef, splitbase=True ):
         create_grids(patchgrids, modeldef,patchpath,name,1,griddef,base_size,extentfile=extfile)
         for p in patchgrids:
             p.base=name if splitbase else patchname
+            p.basename=patchname
             gridlist.append(p)
     return gridlist
 
@@ -641,7 +642,7 @@ def write_grid_wkt( name, level, griddef ):
 def write_wkt( item, level, wkt ):
     wktfile.write("{0}|{1}|{2}\n".format(item,level,wkt))
 
-def build_linzshift_model( gridlist, modeldef, additive, shiftpath=None, splitbase=False ):
+def build_linzshift_model( gridlist, modeldef, additive, shiftpath, splitbase=False ):
     '''
     Creates shift definition files using list of grids.  Assumes that grids have
     been generated using linzgrid=True
@@ -652,14 +653,16 @@ def build_linzshift_model( gridlist, modeldef, additive, shiftpath=None, splitba
     if not additive:
         raise RuntimeError("Cannot build shift model - grids must be built as additive")
 
-    if not shiftpath:
-        shiftpath = os.path.dirname(gridlist[0].gdf)
+    shiftname=os.path.basename(shiftpath)
+    shiftpath = os.path.dirname(shiftpath)
     if not os.path.isdir(shiftpath):
         os.makedirs(shiftpath)
+    patchname=gridlist[0].basename
+    plen=len(patchname)
     baselist=set([patch.base for patch in gridlist])
     for base in baselist:
-        shiftdef=base+'_shift.def'
-        shiftbin=base+'_shift.bin'
+        shiftdef=shiftname+base[plen:]+'_shift.def'
+        shiftbin=shiftname+base[plen:]+'_shift.bin'
         shiftfile=os.path.join(shiftpath,shiftdef)
         write_log("Creating shift definition file {0}".format(shiftfile))
         with open(shiftfile,'w') as f:
@@ -677,6 +680,7 @@ def build_linzshift_model( gridlist, modeldef, additive, shiftpath=None, splitba
                 if patch.base != base and splitbase:
                     continue
                 gdf=os.path.basename(patch.gdf)
+                gdf=shiftname+gdf[plen:]
                 gdffile=os.path.join(shiftpath,gdf)
                 if gdffile != patch.gdf:
                     shutil.copyfile(patch.gdf,gdffile)
@@ -725,7 +729,7 @@ def get_model_spec( modelfile ):
         ramp=[(modeldate,1.0)]
     return modelname, description, modeldate, ramp
 
-def build_published_component( gridlist, modeldef, additive, comppath=None ):
+def build_published_component( gridlist, modeldef, additive, comppath, cleandir=False ):
     '''
     Creates the component.csv file and grid components used as a published
     component of a LINZ published deformation model
@@ -736,11 +740,14 @@ def build_published_component( gridlist, modeldef, additive, comppath=None ):
 
     if not gridlist or not gridlist[0].csv:
         raise RuntimeError("Cannot build shift model - haven't built grid CSV files")
-    if not comppath:
-        comppath = os.path.dirname(gridlist[0].gdf)
     comppath = os.path.join( comppath, 'model', patchdir )
     if not os.path.isdir(comppath):
         os.makedirs(comppath)
+    if cleandir:
+        for f in os.listdir(comppath):
+            fn=os.path.join(comppath,f)
+            if not os.path.isdir(fn):
+                os.remove(fn)
 
     write_log("Writing published model component {0}".format(comppath))
 
@@ -835,8 +842,10 @@ if __name__ == "__main__":
     parser.add_argument('--apply-ramp-scale',action='store_true',help="Scale the grid by the ramp final value")
     parser.add_argument('--test-settings',action='store_true',help="Configure for testing - generate lower accuracy grids")
     parser.add_argument('--max-level',type=int,help="Maximum number of split levels to generate (each level increases resolution by 4)")
+    parser.add_argument('--base-tolerance',type=float,help="Base level tolerance - depends on base column")
     parser.add_argument('--split-base',action='store_true',help="Base deformation will be split into separate patches if possible")
     parser.add_argument('--no-trim-subgrids',action='store_false',help="Subgrids will not have redundant rows/columns trimmed")
+    parser.add_argument('--clean-dir',action='store_true',help="Clean publishable component subdirectory")
 
     args=parser.parse_args()
         
@@ -854,6 +863,7 @@ if __name__ == "__main__":
         write_log("Configuring model with low accuracy testing settings")
         configure_for_testing()
     max_split_level=args.max_level if args.max_level else max_split_level
+    base_limit_tolerance=args.base_tolerance if args.base_tolerance else base_limit_tolerance
 
     patchpath,patchname=os.path.split(args.patch_file)
     if not os.path.isdir(patchpath):
@@ -906,4 +916,4 @@ if __name__ == "__main__":
         build_linzshift_model( gridlist, modeldef, additive, shiftpath=shift_path, splitbase=split_base )
 
     if comp_path:
-        build_published_component( gridlist, modeldef, additive, comp_path )
+        build_published_component( gridlist, modeldef, additive, comp_path, args.clean_dir )
