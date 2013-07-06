@@ -54,4 +54,4 @@ class ellipsoid( object ):
         h=p*clt+z*slt-bsac
         return np.degrees(ln),np.degrees(lt),h
 
-grs80 = ellipsoid(6378160.0,298.25)
+grs80 = ellipsoid(6378137.0,298.257222101)
