@@ -117,7 +117,7 @@ END_DESCRIPTION
 shift_model_component='''
 SHIFT_MODEL_COMPONENT {gridfile}
 MODEL_TYPE grid
-NEGATIVE yes
+NEGATIVE no
 DESCRIPTION
 {component}
 END_DESCRIPTION
