@@ -573,10 +573,25 @@ class Model( object ):
         if useCache:
             self._cache = Cache(cacheFile)
 
+        # Components to use.  Default is all.  Specific components can be selected
+        # as "compononent+...+component", or "-component+component+....+component"
+
+        componentList=[]
+        useList=True
+        if loadComponent:
+            if loadComponent.startswith('-'):
+                useList=False
+                loadComponent=loadComponent[1:]
+            componentList=loadComponent.split('+')
+
         for mdl in CsvFile('model',modfile,self.modelspec):
             component = mdl.component
-            if loadComponent and component != loadComponent:
-                continue
+            if componentList:
+                if component in componentList:
+                    if not useList:
+                        continue
+                elif useList:
+                    continue
 
             if mdl.version_added not in versions:
                 raise ModelDefinitionError("Model component "+mdl.component+" version_added "+mdl.version_added+" is not in version.csv")
