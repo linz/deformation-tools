@@ -7,7 +7,7 @@
 #
 
 from collections import namedtuple
-from shapely.geometry import MultiPolygon,Polygon,LineString,Point
+from shapely.geometry import MultiPolygon,Polygon,LineString,Point,shape
 from shapely.prepared import prep
 from subprocess import call
 import accuracy_standards
@@ -97,6 +97,15 @@ def configure_for_testing():
     subcell_resolution_tolerance *= 100
     subcell_ramp_tolerance *= 100
     max_split_level -= 2
+
+# Polygons defining area over which model is required to meet standards...
+# Tolerance is offset in degrees used to buffer and simplify model in order to 
+# simplify calculations
+# Land areas is a multipolygon defining the required coverage.  If it is empty then
+# land is treated as infinite!
+
+land_area_tolerance=0.01
+land_areas=None
 
 # Outputs required ...
 
@@ -364,6 +373,18 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
         grid2r = grid2.calcResolution(subcell_resolution_tolerance,precision=0.0000001)
         parentsize=cellsize[1]/scale_factor[1]
         subcell_areas=grid2r.regionsExceedingLevel('reqsize',-parentsize,multiple=-1)
+
+        if land_areas:
+            valid_areas=[]
+            for sc in subcell_areas:
+                p=sc.intersection(land_areas)
+                if 'geoms' not in dir(p):
+                    p=[p]
+                for g in p:
+                    if type(g) == Polygon:
+                        valid_areas.append(g)
+            subcell_areas=valid_areas
+
         grid2r=None
         # Expand subcell areas by parent grid size to avoid rounding issues
         if subcell_areas:
@@ -827,6 +848,24 @@ def build_published_component( gridlist, modeldef, additive, comppath, cleandir=
                 csvdata.update(compdata)
                 ccsv.writerow([csvdata[c] for c in published_component_columns])
 
+def load_land_areas( polygon_file ):
+    global land_areas
+    areas=[]
+    if polygon_file:
+        import fiona
+        write_log( "Loading land area definition from "+polygon_file)
+        with fiona.open(polygon_file) as f:
+            for feature in f:
+                mp=shape(feature['geometry'])
+                if type(mp) != MultiPolygon:
+                    mp=[mp]
+                for p in mp:
+                    p=Polygon(p.exterior)
+                    p=p.buffer(land_area_tolerance).simplify(land_area_tolerance)
+                    areas.append(p)
+    if areas:
+        land_areas=MultiPolygon(areas).buffer(0.0)
+
 if __name__ == "__main__":
 
     # Process arguments
@@ -846,6 +885,7 @@ if __name__ == "__main__":
     parser.add_argument('--split-base',action='store_true',help="Base deformation will be split into separate patches if possible")
     parser.add_argument('--no-trim-subgrids',action='store_false',help="Subgrids will not have redundant rows/columns trimmed")
     parser.add_argument('--clean-dir',action='store_true',help="Clean publishable component subdirectory")
+    parser.add_argument('--land-area',help="Area over which model must be defined")
 
     args=parser.parse_args()
         
@@ -864,6 +904,9 @@ if __name__ == "__main__":
         configure_for_testing()
     max_split_level=args.max_level if args.max_level else max_split_level
     base_limit_tolerance=args.base_tolerance if args.base_tolerance else base_limit_tolerance
+
+    if args.land_area:
+        load_land_areas(args.land_area)
 
     patchpath,patchname=os.path.split(args.patch_file)
     if not os.path.isdir(patchpath):
