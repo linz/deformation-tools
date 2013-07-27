@@ -12,6 +12,10 @@ class ellipsoid( object ):
 
     @staticmethod
     def enu_axes( lon, lat ):
+        '''
+        Returns an array defining the east, north, and up unit vectors
+        at a specified latitude and longitude
+        '''
         cln,sln = ellipsoid._cossin(lon)
         clt,slt = ellipsoid._cossin(lat)
         ve=np.array([-sln,cln,0])
@@ -31,6 +35,10 @@ class ellipsoid( object ):
         self.a2b2=self.a2-self.b2
 
     def xyz( self, lon, lat, hgt=0 ):
+        '''
+        Calculate the geocentric X,Y,Z coordinates at a longitude 
+        and latitude
+        '''
         cln,sln = ellipsoid._cossin(lon)
         clt,slt = ellipsoid._cossin(lat)
         bsac=np.hypot(self.b*slt,self.a*clt)
@@ -39,6 +47,10 @@ class ellipsoid( object ):
         return xyz
 
     def geodetic( self, xyz ):
+        '''
+        Calculate the longitude, latitude, and height corresponding 
+        to a geocentric XYZ coordinate
+        '''
         x,y,z = xyz[0:3]
         ln=np.arctan2(y,x)
         p=np.hypot(x,y)
