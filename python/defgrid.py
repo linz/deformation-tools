@@ -244,6 +244,40 @@ class defgrid( grid ):
         self.dlt=(g[-1,0,1]-g[0,0,1])/(g.shape[0]-1)
         self.extents=np.array([g[0,0,0:2],g[-1,-1,0:2]])
 
+
+    def bilinear( self, x, y ):
+        grdx=(np.array(x)-self.extents[0,0])/self.dln
+        grdy=(np.array(y)-self.extents[0,1])/self.dlt
+        g=self.array
+        valid=(grdx >= 0.0) & (grdx < (g.shape[1]-1)) & (grdy >= 0) & (grdy < (g.shape[0]-1))
+        nx=np.where(valid,grdx.astype(int),0)
+        ny=np.where(valid,grdy.astype(int),0)
+        # print "extents",self.extents
+        # print "shape",g.shape
+        # print "nx",nx
+        # print "ny",ny
+        # print "valid",valid
+        # print "gx",grdx
+        # print "gy",grdy
+        # print "nodes 1",g[nx,ny]
+        # print "nodes 2",g[nx+1,ny]
+        # print "nodes 3",g[nx,ny+1]
+        # print "nodes 4",g[nx+1,ny+1]
+        grdx -= nx
+        grdy -= ny
+        grdx=grdx.reshape(grdx.shape[0],1)
+        grdy=grdy.reshape(grdy.shape[0],1)
+        valid=valid.reshape(valid.shape[0],1)
+        interp=((g[ny,nx]*(1-grdx)+g[ny,nx+1]*grdx)*(1-grdy)+
+               (g[ny+1,nx]*(1-grdx)+g[ny+1,nx+1]*grdx)*grdy)
+        empty=np.zeros((grdx.shape[0],g.shape[2]))
+        # print "interp",interp
+        # print "empty",empty
+        return np.where(valid,
+                        (g[ny,nx]*(1-grdx)+g[ny,nx+1]*grdx)*(1-grdy)+
+                        (g[ny+1,nx]*(1-grdx)+g[ny+1,nx+1]*grdx)*grdy,
+                        empty)
+
     def calcResolution( self, tolerance, maxsize=100000.0,precision=0.0001,margin=1 ):
         '''
         For all the internal nodes in the grid calculate the misfit 
