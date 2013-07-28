@@ -15,6 +15,9 @@ class Time( object ):
     def __str__( self ):
         return self.strftime()
 
+    def __repr__( self ):
+        return "Time('"+self.strftime()+"')"
+
     def __cmp__( self, dt ):
         dt = Time.Parse(dt)
         if dt == None:

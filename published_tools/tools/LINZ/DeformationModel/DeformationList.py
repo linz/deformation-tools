@@ -78,6 +78,3 @@ class DeformationList( object ):
                 raise UndefinedValueError('The deformation is undefined at this location')
         return [value[c] if c >= 0 else 0.0 for c in self._columnmapping]
 
-
-
-

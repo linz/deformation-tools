@@ -46,6 +46,14 @@ class Grid( object ):
         self._valid = False
         self._data = DeformationList( columns, self._npt )
 
+    def gridSpec( self ):
+        return self._minlon, self._minlat, self._maxlon, self._maxlat, self._nlon, self._nlat
+
+    def gridFile( self ):
+        return self._gridfile
+
+    def data( self ):
+        return self._data
 
     def load( self ):
         if self._loaded:

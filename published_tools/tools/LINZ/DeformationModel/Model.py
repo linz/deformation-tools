@@ -41,6 +41,7 @@ class TimeComponent( object ):
         self.hash = self.hashKey(compdef)
         self.min_date = compdef.min_date
         self.max_date = compdef.max_date
+        self.temporal_model = compdef.temporal_model
         self.temporal_complete = compdef.temporal_complete
         self.description = compdef.description
         self.calc_date = None
@@ -48,6 +49,11 @@ class TimeComponent( object ):
         self.calc_value = None
         self.calc_error_value = None
         self.calc_valid = True
+        self.time0=compdef.time0
+        self.time1=compdef.time1
+        self.factor0=compdef.factor0
+        self.factor1=compdef.factor1
+        self.decay=compdef.decay
         self._model = TimeModel(compdef.temporal_model,compdef.factor0,compdef.time0,compdef.factor1,compdef.time1,compdef.decay)
 
     def calcFactor( self, date, baseDate=None ):
@@ -81,6 +87,9 @@ class TimeComponent( object ):
         if self.calc_value == None:
             raise OutOfRangeError('Date outside valid range')
         return (self.calc_value, self.calc_error_value)
+
+    def model(self):
+        return self._model
 
     def __str__( self ):
         return str(self._model)
@@ -179,6 +188,10 @@ class SpatialComponent( object ):
     def __str__(self):
         return self._description
 
+    # So that this can be used as a spatial component set
+    def models( self ):
+        yield self
+
     def load( self ):
         '''
         Spatial models are loaded on demand by default.  
@@ -194,6 +207,9 @@ class SpatialComponent( object ):
 
     def name( self ):
         return self._name
+
+    def model( self ):
+        return self._model
 
     def containsPoint( self, x, y):
         if x < self.min_lon or x > self.max_lon: return False
@@ -295,6 +311,10 @@ class SpatialComponentSet( object ):
         for m in reversed(self._sortedModels):
             description=description+"\n"+str(m)
         return description
+
+    def models(self):
+        for m in reversed(self._sortedModels):
+            yield m
 
     def load( self ):
         '''
@@ -832,7 +852,13 @@ class Model( object ):
         '''
         return self._datumsrid
 
-    def description( self ):
+    def components( self, allversions=False ):
+        compkey=lambda c: (0 if c.component == 'ndm' else 1,c.versionAdded,c.component)
+        for c in sorted(self._components,key=compkey):
+            if allversions or c.appliesForVersion(self.version()):
+                yield c
+
+    def description( self, allversions=False, components=True ):
         '''
         Return a description of the model
         '''
@@ -841,40 +867,47 @@ class Model( object ):
         mtd = self._metadata
         outs.write("Deformation model: "+mtd['model_name']+"\n")
         outs.write("Datum: "+mtd['datum_name']+" (reference epoch "+mtd['datum_epoch']+")\n")
-        outs.write("Version: "+self._curversion+"\n")
+        outs.write("Version: "+self.version()+"\n")
         outs.write("\n")
         outs.write(mtd['description']+"\n")
 
-        outs.write("\nVersions available:\n")
-        for version in self.versions():
-            v = self.versionInfo(version)
-            outs.write("    "+v.version+
-                      " released "+v.release_date.strftime('%d-%b-%Y')+
-                      ": "+v.reason+"\n")
+        if allversions:
+            outs.write("\nVersions available:\n")
+            for version in self.versions():
+                v = self.versionInfo(version)
+                outs.write("    "+v.version+
+                          " released "+v.release_date.strftime('%d-%b-%Y')+
+                          ": "+v.reason+"\n")
 
-        compkey=lambda c: (0 if c.component == 'ndm' else 1,c.versionAdded,c.component)
-        compcount = {}
-        for c in self._components: 
-            compcount[c.component] = compcount[c.component]+1 if c.component in compcount else 1
+        if components:
+            compcount = {}
+            for c in self.components(allversions): 
+                compcount[c.component] = compcount[c.component]+1 if c.component in compcount else 1
 
-        outs.write("\nComponents:\n")
-        for c in sorted(self._components,key=compkey):
-            description = c.compdesc.replace("\n","\n        ")
-            outs.write("\n    Component: "+c.component+": " + description +"\n")
-            prefix="    "
-            if compcount[c.component] > 1:
-                description = c.description.replace("\n","\n            ")
-                outs.write("    Sub-component: "+description+"\n")
-                prefix="        "
-            outs.write(prefix+"Version added: "+c.versionAdded)
-            if c.versionRevoked != '0':
-                outs.write("  revoked: "+c.versionRevoked)
-            outs.write("\n")
-            outs.write(prefix+"Time model: "+str(c.timeComponent)+"\n")
-            description = str(c.spatialComponent).replace("\n","\n    "+prefix)
-            outs.write("    Spatial model: "+description+"\n")
+            outs.write("\nComponents:\n")
+            lastcomponent=None
+            for c in self.components( allversions ):
+                if c.component != lastcomponent:
+                    description = c.compdesc.strip().replace("\n","\n        ")
+                    outs.write("\n    Component: "+c.component+": " + description +"\n")
+                    lastcomponent=c.component
+                prefix="    "
+                if compcount[c.component] > 1:
+                    description = c.description.strip().replace("\n","\n            ")
+                    outs.write("        Sub-component: "+description+"\n")
+                    prefix="        "
+                if allversions:
+                    outs.write(prefix+"    Version added: "+c.versionAdded)
+                    if c.versionRevoked != '0':
+                        outs.write(" revoked: "+c.versionRevoked)
+                    outs.write("\n")
+                outs.write(prefix+"    Time model: "+str(c.timeComponent)+"\n")
+                description = str(c.spatialComponent).replace("\n","\n        "+prefix)
+                outs.write(prefix+"    Spatial model: "+description+"\n")
 
         description = outs.getvalue()
         outs.close()
         return description
 
+    def __str__( self ):
+        return self.description(allversions=True)
