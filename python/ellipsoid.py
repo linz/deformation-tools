@@ -46,6 +46,19 @@ class ellipsoid( object ):
         xyz=[p*cln,p*sln,self.b2*slt/bsac+hgt*slt]
         return xyz
 
+    def metres_per_degree( self, lon, lat, hgt=0 ):
+        '''
+        Calculate the number of metres per degree east and
+        north
+        '''
+        cln,sln = ellipsoid._cossin(lon)
+        clt,slt = ellipsoid._cossin(lat)
+        bsac=np.hypot(self.b*slt,self.a*clt)
+        p = self.a2*clt/bsac + hgt*clt
+        dedln=np.radians(p)
+        dndlt=np.radians((self.a2*self.b2)/(bsac*bsac*bsac)+hgt)
+        return dedln,dndlt
+
     def geodetic( self, xyz ):
         '''
         Calculate the longitude, latitude, and height corresponding 
