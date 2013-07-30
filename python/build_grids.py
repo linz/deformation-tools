@@ -511,29 +511,61 @@ def build_deformation_grids( patchpath, patchname, modeldef, splitbase=True ):
     write_log("Maximum shift outside patch extents {0}".format(dsmax))
     write_log("Buffering patches by {0}".format(buffersize))
 
-    # Properly should apply same merging of grid definitions here as in create_grid (or
-    # refactor so that they all come together...)
+    # Test areas against land definitions, buffer, and merge overlapping grid definitions
+    # refactor so that they all        
 
+    if land_areas:
+        write_log("Intersecting areas with land extents".format(len(real_extents)))
+        valid_areas=[]
+        for sc in real_extents:
+            p=sc.intersection(land_areas)
+            if 'geoms' not in dir(p):
+                p=[p]
+            for g in p:
+                if type(g) == Polygon:
+                    valid_areas.append(g)
+        real_extents=valid_areas
+
+    # Form merged buffered areas
+    extent_defs=[]
+    extents=[]
+    for i, extent in enumerate(real_extents):
+        write_wkt("Base required area {0}".format(i+1),0,extent.to_wkt()) 
+        buffered_extent=buffered_polygon( extent, buffersize )
+        write_wkt("Buffered base extents {0}".format(i+1),0,buffered_extent.to_wkt())
+        bounds = expanded_bounds( buffered_extent, cellbuffer=base_size )
+        write_wkt("Expanded extents {0}".format(i+1),0,bounds_wkt(bounds))
+        griddef = bounds_grid_def( bounds, base_size )
+        grid_def_list_merge( extent_defs, griddef )
+        extents.append(extent)
+
+    write_log("{0} patch extents after buffering".format(len(extent_defs)))
+
+    # Now process the extents...
     name = patchname
     gridlist=[]
-    for i,extent in enumerate(real_extents):
-        if len(real_extents) > 1:
+    for i,griddef in enumerate(extent_defs):
+        if len(extent_defs) > 1:
             name='{0}_P{1}'.format(patchname,i)
-        write_log("Building patch {0}".format(name))
-        write_wkt("Patch base extents {0}".format(name),0,extent.to_wkt())
-        buffered_extent=buffered_polygon( extent, buffersize )
-        write_wkt("Buffered base extents {0}".format(name),0,buffered_extent.to_wkt())
-        bounds = expanded_bounds( buffered_extent, cellbuffer=base_size )
-        write_wkt("Expanded extents {0}".format(name),0,bounds_wkt(bounds))
-        griddef = bounds_grid_def( bounds, base_size )
         write_wkt("Grid extents {0}".format(name),0,bounds_wkt(griddef))
+        # Write the wkt definitions of the extents and buffered extents defining
+        # the areas.  Note need to recalculate buffer in to ensure resulting buffers
+        # are merged properly if they overlap
         extfile=os.path.join(patchpath,name)
-        with open(extfile+".extent.wkt","w") as f:
-            f.write(extent.to_wkt())
-            f.write("\n")
+        extentpoly=bounds_poly(griddef)
+        with open(extfile+".extent.wkt","w") as f: 
+            areas=[]
+            for area in extents:
+                if extentpoly.contains(area) or extentpoly.intersects(area):
+                    f.write(area.to_wkt())
+                    f.write("\n")
+                    areas.append(area)
+
+        areas = buffered_polygon(MultiPolygon(areas),buffersize)
         with open(extfile+".buffer.wkt","w") as f:
-            f.write(buffered_extent.to_wkt())
+            f.write(areas.to_wkt())
             f.write("\n")
+
         patchgrids=[]
         create_grids(patchgrids, modeldef,patchpath,name,1,griddef,base_size,extentfile=extfile)
         for p in patchgrids:
