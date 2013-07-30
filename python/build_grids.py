@@ -104,7 +104,8 @@ def configure_for_testing():
 # Land areas is a multipolygon defining the required coverage.  If it is empty then
 # land is treated as infinite!
 
-land_area_tolerance=0.01
+land_area_buffer=0.2
+land_area_tolerance=0.05
 land_areas=None
 
 # Outputs required ...
@@ -893,7 +894,7 @@ def load_land_areas( polygon_file ):
                     mp=[mp]
                 for p in mp:
                     p=Polygon(p.exterior)
-                    p=p.buffer(land_area_tolerance).simplify(land_area_tolerance)
+                    p=p.buffer(land_area_buffer).simplify(land_area_tolerance)
                     areas.append(p)
     if areas:
         land_areas=MultiPolygon(areas).buffer(0.0)
