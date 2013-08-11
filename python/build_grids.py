@@ -60,12 +60,17 @@ tolerance_factor=0.4
 
 # Test column for determining extents of patch
 base_limit_test_column='err'
+base_limit_bounds_column='ds'
 
 # Minium value for test column within patch (note - column is in ppm)
 base_limit_tolerance=accuracy_standards.NRF.lap*tolerance_factor*1.0e6
 
 # Precision for scaling down from edge of patch
 base_ramp_tolerance=accuracy_standards.NRF.lap*tolerance_factor
+
+# Absolute limit on extents of patch - not required where magnitude (ds)
+# less than this level.
+base_limit_bounds_tolerance=accuracy_standards.NRF.lac*tolerance_factor
 
 # Values controlling splitting cells into subgrids
 
@@ -297,12 +302,14 @@ def grid_def_list_merge( deflist, griddef ):
 def buffered_polygon( polygon, buffer ):
     '''
     Buffer a polygon by an extents in metres.  Approximately scales to metres, applies buffer,
-    and scales back.
+    and scales back. Returns a multipolygon
     '''
     if buffer > 0:
         polygon=affinity.scale(polygon,xfact=1.0/scale_factor[0],yfact=1.0/scale_factor[1],origin=origin)
         polygon=polygon.buffer(buffer)
         polygon=affinity.scale(polygon,xfact=scale_factor[0],yfact=scale_factor[1],origin=origin)
+    if 'geoms' not in dir(polygon):
+        polygon=MultiPolygon([polygon])
     return polygon
 
 def expanded_bounds( polygon, buffer=0, cellbuffer=(0,0), trim=base_extents ):
@@ -500,14 +507,29 @@ def build_deformation_grids( patchpath, patchname, modeldef, splitbase=True ):
     # a list of polygons
 
     real_extents = trialgrid.regionsExceedingLevel(base_limit_test_column,base_limit_tolerance)
+    real_extents=MultiPolygon(real_extents)
     write_log("{0} patch extents found".format(len(real_extents)))
+    write_wkt("Extents requiring patch (base tolerance)",0,real_extents.to_wkt())
+
+    # Bounds beyond which patch not required because guaranteed by local accuracy bounds
+    bounds_extents = trialgrid.regionsExceedingLevel(base_limit_bounds_column,base_limit_bounds_tolerance)
+    bounds_extents=MultiPolygon(bounds_extents)
 
     # Now want to find maximum shift outside extents of test.. 
-    # Prepare a multipolygon for testing containment.. add a small buffer to
+    # Prepare a multipolygon for testing containment.. add a buffer to
     # handle points on edge of region where patch runs against base polygon
 
     dsmax = maxShiftOutsideAreas( trialgrid, real_extents )
     buffersize = dsmax/base_ramp_tolerance
+
+    buffered_extent=buffered_polygon( MultiPolygon(real_extents), buffersize )
+    write_wkt("Buffered extents",0,buffered_extent.to_wkt())
+    write_wkt("Absolute bounds on patch",0,bounds_extents.to_wkt())
+
+    real_extents=buffered_extent.intersection( MultiPolygon(bounds_extents) )
+    if 'geoms' not in dir(real_extents):
+        real_extents = MultiPolygon([real_extents])
+    write_wkt("Bounds before potential land intersection",0,real_extents.to_wkt())
 
     write_log("Maximum shift outside patch extents {0}".format(dsmax))
     write_log("Buffering patches by {0}".format(buffersize))
@@ -525,16 +547,15 @@ def build_deformation_grids( patchpath, patchname, modeldef, splitbase=True ):
             for g in p:
                 if type(g) == Polygon:
                     valid_areas.append(g)
-        real_extents=valid_areas
+        real_extents=MultiPolygon(valid_areas)
+        write_wkt("Bounds after land area intersection",0,real_extents.to_wkt())
 
     # Form merged buffered areas
     extent_defs=[]
     extents=[]
     for i, extent in enumerate(real_extents):
         write_wkt("Base required area {0}".format(i+1),0,extent.to_wkt()) 
-        buffered_extent=buffered_polygon( extent, buffersize )
-        write_wkt("Buffered base extents {0}".format(i+1),0,buffered_extent.to_wkt())
-        bounds = expanded_bounds( buffered_extent, cellbuffer=base_size )
+        bounds = expanded_bounds( extent, cellbuffer=base_size )
         write_wkt("Expanded extents {0}".format(i+1),0,bounds_wkt(bounds))
         griddef = bounds_grid_def( bounds, base_size )
         grid_def_list_merge( extent_defs, griddef )
