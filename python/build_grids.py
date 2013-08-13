@@ -560,6 +560,7 @@ def build_deformation_grids( patchpath, patchname, modeldef, splitbase=True ):
         griddef = bounds_grid_def( bounds, base_size )
         grid_def_list_merge( extent_defs, griddef )
         extents.append(extent)
+    extent_defs.sort(key=lambda x:x[0][1])
 
     write_log("{0} patch extents after buffering".format(len(extent_defs)))
 
