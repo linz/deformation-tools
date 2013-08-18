@@ -527,7 +527,7 @@ int main( int argc, char *argv[] )
         help();
     }
 
-    if( argc != 4)
+    if( ! (argc == 4 || (argc ==2 && wktfile)))
     {
         cerr << "Require parameters: [-w[l|p] wktfile] fault_model_file test_point_file output_file\n";
         return 0;
@@ -597,6 +597,24 @@ int main( int argc, char *argv[] )
         faultlist.push_back(faults);
     }
 
+    if( wktfile )
+    {
+        ofstream wkt(wktfile);
+        if( ! wkt.good())
+        {
+            cerr << "Cannot open wkt output file " << argv[4] << endl;
+            return 0;
+        }
+        bool header = true;
+        for( list<FaultSet *>::iterator f = faultlist.begin(); f != faultlist.end(); f++ )
+        {
+            (*f)->write(wkt,wkttype,header);
+            header=false;
+        }
+        wkt.close();
+    }
+    if( argc == 2 ) exit(0);
+
     // Open the input and output files..
     
     istream *in;
@@ -618,23 +636,6 @@ int main( int argc, char *argv[] )
 	  cerr << "Cannot open input test point file " << argv[2] << endl;
 	  return 0;
       }
-    }
-
-    if( wktfile )
-    {
-        ofstream wkt(wktfile);
-        if( ! wkt.good())
-        {
-            cerr << "Cannot open wkt output file " << argv[4] << endl;
-            return 0;
-        }
-        bool header = true;
-        for( list<FaultSet *>::iterator f = faultlist.begin(); f != faultlist.end(); f++ )
-        {
-            (*f)->write(wkt,wkttype,header);
-            header=false;
-        }
-        wkt.close();
     }
 
     double demax = 0.0;
