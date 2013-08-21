@@ -290,7 +290,7 @@ ostream &FaultSet::write( ostream &os, int style, bool header )
     else { prefix="POLYGON"+zstring+"(("; suffix="))"; }
 
     if( header )
-        os << "id\tstrike\tdip\tUss\tUds\tUts\tmin_depth\tmax_depth\tname\tshape" << endl;
+        os << "id\tstrike\tdip\tUss\tUds\tUts\tslip\tmin_depth\tmax_depth\tname\tshape" << endl;
 
     int nflt = 0;
 
@@ -312,8 +312,9 @@ ostream &FaultSet::write( ostream &os, int style, bool header )
            << nflt << "\t" << f->strike() << "\t" << f->dip() << "\t";
 
         double *sv = f->SlipVector(0,0);
+        double slip=sqrt(sv[0]*sv[0]+sv[1]*sv[1]+sv[2]*sv[2]);
         os << setprecision(4);
-        os << sv[0] << "\t" << sv[1] << "\t" << sv[2] << "\t";
+        os << sv[0] << "\t" << sv[1] << "\t" << sv[2] << "\t" << slip << "\t";
         os << setprecision(7);
         double x, y, z, minz, maxz;
         f->FaultLocation(0, 0, x, y, minz );
