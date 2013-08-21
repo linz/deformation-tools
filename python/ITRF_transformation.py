@@ -227,5 +227,6 @@ if __name__=="__main__":
     print result
     print itrf2008_nzgd2000.params
     print itrf2008_nzgd2000.transform(crds)
+    print itrf2008_nzgd2000.transform(crds,date=2013.5)
 
 
