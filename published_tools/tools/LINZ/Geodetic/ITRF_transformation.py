@@ -99,7 +99,7 @@ def dateAsYear( dvalue ):
     if type(dvalue)==float: 
         return dvalue
     if type(dvalue)==int:
-        return float(date)
+        return float(dvalue)
     if type(dvalue)==datetime:
         year=dvalue.year
         dt=dvalue-datetime(year,1,1)
@@ -115,7 +115,7 @@ def dateAsYear( dvalue ):
 class ITRF_transformation( object ):
 
     @staticmethod
-    def transformation( itrf_to=ITRF_ref, itrf_from=ITRF_ref ):
+    def transformation( to_itrf=ITRF_ref, from_itrf=ITRF_ref ):
         '''
         Determine the transformation from one ITRF realisation to another,
         returns an ITRF_transformation object.
@@ -123,19 +123,19 @@ class ITRF_transformation( object ):
         rffrom=None
         rfto=None
         for p in ITRF_params:
-            if p[0] == itrf_to:
+            if p[0] == to_itrf:
                 rfto=ITRF_transformation(ITRF_ref,p[0],p[1],p[2],refdate)
-                if itrf_from==ITRF_ref:
+                if from_itrf==ITRF_ref:
                     return rfto
-            if p[0] == itrf_from:
+            if p[0] == from_itrf:
                 rffrom=ITRF_transformation(ITRF_ref,p[0],p[1],p[2],refdate).reversed()
-                if itrf_to==ITRF_ref:
+                if to_itrf==ITRF_ref:
                     return rffrom
         if not rffrom:
-            raise RuntimeError(itrffrom+' is not a recognized ITRF')
+            raise RuntimeError(from_itrf+' is not a recognized ITRF')
         if not rfto:
-            raise RuntimeError(itrfto+' is not a recognized ITRF')
-        return itrffrom.add(itrfto)
+            raise RuntimeError(to_itrf+' is not a recognized ITRF')
+        return rffrom.add(rfto)
 
     def __init__( self, rffrom, rfto, params, rates=None, refdate=refdate, source=None ):
         self.rffrom=rffrom
@@ -275,25 +275,27 @@ class ITRF_transformation( object ):
         '''
         from ellipsoid import grs80
         xyz=grs80.xyz(lon,lat,hgt)
-        xyz=self.transform(xyz)
+        xyz=self.transform(xyz,date=date)
         return grs80.geodetic(self._tf(xyz))
 
 
-itrf2008_nzgd2000=ITRF_transformation.transformation(itrf_from='ITRF2008')
-nzgd2000_itrf2008=ITRF_transformation.transformation(itrf_to='ITRF2008')
+transformation=ITRF_transformation.transformation
+itrf2008_nzgd2000=ITRF_transformation.transformation(from_itrf='ITRF2008')
+nzgd2000_itrf2008=ITRF_transformation.transformation(to_itrf='ITRF2008')
 
 if __name__=="__main__":
     import sys
     import argparse
     import re
     parser=argparse.ArgumentParser(description='Convert Cartesian coordinates between ITRF systems')
-    parser.add_argument('-f','--from-itrf',default='ITRF96',help="Source ITRF - default ITRF96")
-    parser.add_argument('-t','--to-itrf',default='ITRF2008',help="Target ITRF - default ITRF2008")
+    parser.add_argument('-f','--from-itrf',default='ITRF2008',help="Source ITRF - default ITRF96")
+    parser.add_argument('-t','--to-itrf',default='ITRF96',help="Target ITRF - default ITRF2008")
     parser.add_argument('-d','--date',help="Transformation date (yyyymmdd or yyyy.yyy) - default today")
     parser.add_argument('-l','--list',action='store_true',help="List transformation parameters")
     parser.add_argument('-x','--xyz',nargs=3,type=float,metavar=('X','Y','Z'),help="XYZ coordinates to transform (input/output files ignored)")
     parser.add_argument('-c','--csv',action='store_true',help="File format CSV - default whitespace delimited")
     parser.add_argument('-z','--column-names',metavar=('X_COL','Y_COL','Z_COL'),nargs=3,help="Column names of X,Y,Z fields - default first three columns")
+    parser.add_argument('-g','--geodetic',action='store_true',help="Coordinates are lon,lat,hgt")
     parser.add_argument('-v','--verbose',action='store_true',help="More verbose output")
     parser.add_argument('input_file',nargs='?',help="Input file of XYZ coordinates")
     parser.add_argument('output_file',nargs='?',help="Output file of XYZ coordinates")
@@ -313,21 +315,21 @@ if __name__=="__main__":
 
     itrfs=[x[0] for x in ITRF_params]
 
-    itrf_from=args.from_itrf.upper()
-    if itrf_from not in itrfs:
-        if 'ITRF'+itrf_from in itrfs:
-            itrf_from='ITRF'+itrf_from
+    from_itrf=args.from_itrf.upper()
+    if from_itrf not in itrfs:
+        if 'ITRF'+from_itrf in itrfs:
+            from_itrf='ITRF'+from_itrf
         else:
-            print itrf_from,'is not a valid ITRF'
+            print from_itrf,'is not a valid ITRF'
             print 'Options are:',', '.join(itrfs)
             sys.exit()
 
-    itrf_to=args.to_itrf.upper()
-    if itrf_to not in itrfs:
-        if 'ITRF'+itrf_to in itrfs:
-            itrf_to='ITRF'+itrf_to
+    to_itrf=args.to_itrf.upper()
+    if to_itrf not in itrfs:
+        if 'ITRF'+to_itrf in itrfs:
+            to_itrf='ITRF'+to_itrf
         else:
-            print itrf_to,'is not a valid ITRF'
+            print to_itrf,'is not a valid ITRF'
             print 'Options are:',', '.join(itrfs)
             sys.exit()
 
@@ -342,16 +344,24 @@ if __name__=="__main__":
             dt=float(args.date)
     year=dateAsYear(dt)
 
-    tfm=ITRF_transformation.transformation(itrf_from=itrf_from,itrf_to=itrf_to).atDate(year)
+    tfm=ITRF_transformation.transformation(from_itrf=from_itrf,to_itrf=to_itrf).atDate(year)
 
     if args.list:
         print tfm
     elif args.verbose:
-        print "Transforming from {0} to {1} at {2:.2f}".format(itrf_from,itrf_to,year)
+        print "Transforming from {0} to {1} at {2:.2f}".format(from_itrf,to_itrf,year)
+
+    if args.geodetic:
+        transfunc=tfm.transformLonLat
+        crdfmt=["{0:.8f}","{0:.8f}","{0:.4f}"]
+    else:
+        transfunc=tfm.transform
+        crdfmt=["{0:.4f}"]*3
 
     if args.xyz:
-        xyzt=tfm.transform(args.xyz)
-        print "{0:.4f} {1:.4f} {2:.4f}".format(*xyzt)
+        xyzt=transfunc(args.xyz)
+        xyzs=[f.format(x) for f,x in zip(crdfmt,xyzt)]
+        print "{0} {1} {2}".format(*xyzs)
         sys.exit()
 
     if args.input_file:
@@ -393,7 +403,7 @@ if __name__=="__main__":
                     if len(row) < reqlen:
                         continue
                     xyz=[float(row[i]) for i in cols]
-                    xyzt=tfm.transform(xyz)
-                    for c,x in zip(cols,xyzt):
-                        row[c]="{0:.4f}".format(x)
+                    xyzt=transfunc(args.xyz)
+                    for f,c,x in zip(crdfmt,cols,xyzt):
+                        row[c]=f.format(x)
                     writerow(row)

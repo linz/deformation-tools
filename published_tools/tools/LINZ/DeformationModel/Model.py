@@ -508,6 +508,8 @@ class Model( object ):
         datum_name
         datum_epoch
         datum_epsg_srid
+        ellipsoid_a
+        ellipsoid_rf
         authority
         authority_website
         authority_address
@@ -569,6 +571,7 @@ class Model( object ):
         self._name = str(metadata['model_name'])
         self._datumcode = str(metadata['datum_code'])
         self._datumname = str(metadata['datum_name'])
+        self._ellipsoid = None
         try:
             self._datumsrid = int(metadata['datum_epsg_srid'])
         except:
@@ -669,13 +672,13 @@ class Model( object ):
         '''
         Release resources to avoid circular links that will prevent garbage collection.
         '''
-        if self._cache:
-            self._cache.close()
-            self._cache = None
         self._spatial_models = None
         self._temporal_models = None
         self._components = None
         self._stcomponents = None
+        if self._cache:
+            self._cache.close()
+            self._cache = None
 
     def setVersion( self, version=None, baseVersion=None ):
         '''
@@ -784,6 +787,55 @@ class Model( object ):
         result[3]=math.sqrt(abs(result[3]))
         result[4]=math.sqrt(abs(result[4]))
         return result
+
+    def ellipsoid( self ):
+        if self._ellipsoid is None:
+            from ..Geodetic import ellipsoid
+            a=float(self._metadata['ellipsoid_a'])
+            rf=float(self._metadata['ellipsoid_rf'])
+            self._ellipsoid=ellipsoid.ellipsoid(a,rf)
+        return self._ellipsoid
+
+    def applyTo( self, lon, lat=None, hgt=None, date=None, baseDate=None, subtract=False ):
+        '''
+        Applies the deformation to longitude/latitude coordinates.
+        
+        Input can be one of 
+           lon,lat
+           lon,lat,hgt
+           [lon,lat],
+           [lon,lat,hgt],
+           [[lon,lat],[lon,lat]...]
+           [[lon,lat,hgt],[lon,lat,hgt]...]
+
+        For the first four cases returns a single latitude/longitude/height
+        For the other cases returns an array of [lon,lat,hgt]
+
+        The deformation is added to the coordinates unless subtract is True,
+        in which case it is removed.
+        '''
+        import numpy as np
+        ell=self.ellipsoid()
+        if lat is None:
+            crds=lon
+            if not isinstance(crds,np.ndarray):
+                crds=np.array(crds)
+            single=len(crds.shape)==1
+            if single:
+                crds=crds.reshape((1,crds.size))
+        else:
+            single=True
+            crds=[[lon,lat,hgt or 0]]
+
+        results=[]
+        factor=-1 if subtract else 1
+        for crd in crds:
+            ln,lt=crd[:2]
+            ht=crd[2] if len(crd) > 2 else 0
+            deun=self.calcDeformation(ln,lt,date,baseDate)[:3]
+            dedln,dndlt=ell.metres_per_degree(ln,lt)
+            results.append([ln+factor*deun[0]/dedln,lt+factor*deun[1]/dndlt,ht+factor*deun[2]])
+        return results[0] if single else np.array(results)
 
     def name( self ):
         '''

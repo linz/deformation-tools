@@ -3,7 +3,7 @@ import sys
 import logging
 import datetime
 
-__version__='1.0b'
+__version__='1.0'
 
 if sys.version_info.major != 2:
     print "This program requires python 2"
@@ -26,8 +26,11 @@ from LINZ.DeformationModel.Time import Time
 from LINZ.DeformationModel import Model
 from LINZ.DeformationModel.Error import ModelDefinitionError, OutOfRangeError, UndefinedValueError
 
+from LINZ.Geodetic import ellipsoid
+from LINZ.Geodetic import ITRF_transformation
+
 syntax='''
-CalcDeformation.py: program to calculate deformation at a specific time and place using
+ITRF_NZGD2000.py: program to calculate deformation at a specific time and place using
 the LINZ deformation model.
 
 Syntax:
@@ -37,17 +40,16 @@ Syntax:
 Options are:
   -d date           The date at which to calculate the deformation 
     --date=..       (default current date), or ":col_name"
-  -b date           The reference date at which to calculate deformation.  The 
-    --base_date=..   default is to calculate relative to the reference coordinates
-  -u                Update the coordinates (default action is to calculate the 
-    --update        displacement components) 
+
+  -i itrf           The ITRF reference frame to transform from/to. Eg 2008,
+    --itrf=         ITRF2008, 97, etc.
+  -r                Reverse transformation (ie NZGD2000->ITRF)
+    --reverse
   -c lon:lat:h      Column names for the longitude, latitude, and height columns           
     --columns=      in input_file.  Default is lon, lat, hgt (optional)
   -f format         Format of the input and output files - format can be one of 
     --format=       csv (excel compatible csv), tab (tab delimited), 
                     w (whitespace delimited).
-  -x de:dn:du       Displacement components to calculate, any of de, dn, du,
-  --calculate=      eh, eh, separated by colon characters (default is de,dn,du)
   -g grid           Use a grid for input rather than an input file. The grid is
     --grid=         entered as "min_lon:min_lat:max_lon:max_lat:nlon:nlat"
   -a                Evaluate at longitude, latitude specified as arguments, rather
@@ -56,21 +58,10 @@ Options are:
     --model-dir=
   -v version        Version of model to calculate (default latest version)
     --version=      
-  -r version        Calculate change relative to previous (base) version
-    --baseversion=
-  -p                Calculate reverse patch corrections 
-    --patch 
-  -k                Check that the model is correctly formatted - do not do any 
-    --check         calculations
-  -o submodel       Only calculate for specified submodel (ndm or patch directory name)
-    --only=
-  -l                Just list details of the model (input and output file 
-    --list          are ignored)
   -q                Suppress optional output
     --quiet
   --cache=..        Cache options, ignore, clear, reset, use (default is use)
   --logging         Enable trace logging 
-
 '''
 
 def help():
@@ -80,16 +71,11 @@ def help():
 
 modeldir=None
 version=None
-base_version=None
-reverse_patch=False
-update=False
+reverse=False
 columns="lon lat hgt".split()
 date_column=None
 format="c"
 date=None
-base_date=None
-listonly=False
-check=False
 griddef=None
 inputfile=None
 outputfile=None
@@ -97,14 +83,8 @@ quiet=False
 atpoint=False
 ptlon=None
 ptlat=None
-calcfields='de dn du eh ev'.split()
-calculate=[0,1,2]
-
-ell_a=6378137.0
-ell_rf=298.257222101
-ell_b=ell_a*(1-1.0/ell_rf)
-ell_a2=ell_a*ell_a
-ell_b2=ell_b*ell_b
+pthgt=None
+itrf='ITRF2008'
 
 if len(sys.argv) < 2:
     help()
@@ -112,10 +92,10 @@ if len(sys.argv) < 2:
 optlist=None
 args=None
 try:
-    optlist, args = getopt.getopt( sys.argv[1:], 'hd:b:uc:f:x:g:m:v:r:po:kqla', 
-         ['help', 'date=', 'base_date=', 'update','columns=','format=','calculate=',
-          'grid=','model-dir=','version=','baseversion=','patch','check',
-          'only=','list','quiet','cache=','logging','atpoint'])
+    optlist, args = getopt.getopt( sys.argv[1:], 'hd:c:f:g:i:m:v:rqla', 
+         ['help', 'date=', 'columns=','format=',
+          'grid=','itrf=', 'model-dir=','version=',
+          'quiet','cache=','logging','atpoint'])
 except getopt.GetoptError:
     print str(sys.exc_info()[1])
     sys.exit()
@@ -123,16 +103,9 @@ except getopt.GetoptError:
 nargs = 2
 usecache=True
 clearcache=False
-submodel=None
 for o,v in optlist:
     if o in ('-h','--help'):
         help()
-    if o in ('-l','--list'):
-        listonly = True
-        nargs=0
-    elif o in ('-k','--check'):
-        check = True
-        nargs=0
     elif o in ('-d','--date'):
         if v.startswith(':'):
             date_column=v[1:]
@@ -142,18 +115,10 @@ for o,v in optlist:
             except:
                 print "Invalid date "+v+" requested, must be formatted YYYY-MM-DD"
                 sys.exit()
-    elif o in ('-b','--base_date'):
-       try:
-            base_date=Time.Parse(v) 
-       except:
-            print "Invalid base date "+v+" requested, must be formatted YYYY-MM-DD"
-            sys.exit()
-    elif o in ('-u','--update'):
-        update=True
     elif o in ('-c','--columns'):
         columns=v.split(':')
-        if len(columns) not in (2,3):
-            print "Invalid columns specified - must be 2 or 3 colon separated column names"
+        if len(columns) != 3:
+            print "Invalid columns specified - must be 3 colon separated column names"
             sys.exit()
     elif o in ('-f','--format'):
         v = v.lower()
@@ -162,31 +127,23 @@ for o,v in optlist:
         else:
             print "Invalid format specified, must be one of csv, tab, or whitespace"
             sys.exit()
-    elif o in ('-x','--calculate'):
-        cols = v.lower().split(':')
-        for c in cols:
-            if c not in calcfields:
-                print "Invalid calculated value "+c+" requested, must be one of "+' '.join(calcfields)
-                sys.exit()
-        calculate = [i for i,c in enumerate(calcfields) if c in cols]
     elif o in ('-g','--grid'):
         griddef=v
         nargs=1
     elif o in ('-a','--atpoint'):
         atpoint=True
         nargs=2
+    elif o in ('-i','--itrf'):
+        itrf=v
+        nargs=1
     elif o in ('-m','--model-dir'):
         modeldir = v
     elif o in ('-v','--version'):
         version = v
-    elif o in ('-r','--baseversion'):
-        base_version = v
-    elif o in ('-p','--patch'):
-        reverse_patch = True
+    elif o in ('-r','--reverse'):
+        reverse=True
     elif o in ('-q','--quiet'):
         quiet = True
-    elif o in ('-o', '--only'):
-        submodel=v
     elif o in ('--cache'):
         if v in ('use','clear','ignore','reset'):
             usecache = v in ('use','reset')
@@ -204,7 +161,7 @@ if len(args) > nargs:
     sys.exit()
 elif len(args) < nargs:
     if atpoint:
-        print "Require longitude and latitude coordinate"
+        print "Require longitude, latitude and optional height coordinate"
     elif nargs - len(args) == 2:
         print "Require input and output filename arguments"
     else:
@@ -215,6 +172,9 @@ if atpoint:
     try:
         ptlon=float(args[0])
         ptlat=float(args[1])
+        pthgt=0.0
+        if len(args) > 2:
+            pthgt=float(args[2])
     except:
         print "Invalid longitude/latitude "+args[0]+" "+args[1]
         sys.exit()
@@ -235,18 +195,10 @@ model=None
 # Use a loop to make exiting easy...
 for loop in [1]:
     try:
-        model = Model.Model(modeldir,load=check,
-                            useCache=usecache,clearCache=clearcache,loadComponent=submodel )
+        model = Model.Model(modeldir,useCache=usecache,clearCache=clearcache )
     except ModelDefinitionError:
         print "Error loading model:"
         print str(sys.exc_info()[1])
-        break
-    if check:
-        print "The deformation model is correctly formatted"
-        break
-
-    if listonly:
-        print model.description()
         break
 
     # Set the model version
@@ -254,20 +206,33 @@ for loop in [1]:
     if version == None:
         version = model.currentVersion()
 
-    if reverse_patch:
-        if base_version == None:
-            base_version = model.versions()[0]
-        model.setVersion( base_version, version )
+    if date == None and date_column == None:
+        date = Time.Now()
+    model.setVersion( version )
 
-        if date == None and date_column==None:
-            date = model.datumEpoch()
-        else:
-            if not quiet:
-                print "Using a date or date column with a patch option - are you sure?"
+    # Setup the ITRF transformation
+
+    try:
+        itrf_src=ITRF_transformation.transformation(from_itrf=itrf,to_itrf='ITRF96')
+        if reverse:
+            itrf_src = itrf_src.reversed()
+        print itrf_src
+        itrf_tfm=itrf_src.transformLonLat
+    except:
+        raise
+        print "Invalid ITRF "+itrf
+        break
+
+    if reverse:
+        def transform( lon, lat, hgt, date ):
+            llh=model.applyTo( lon, lat, hgt, date=date )
+            llh=itrf_tfm( llh, date=date.asYear() )
+            return llh
     else:
-        if date == None and date_column == None:
-            date = Time.Now()
-        model.setVersion( version, base_version )
+        def transform( lon, lat, hgt, date ):
+            llh=itrf_tfm( lon, lat, hgt, date=date.asYear() )
+            llh=model.applyTo( llh, date=date, subtract=True )
+            return llh
 
     # Determine the source for input
 
@@ -340,7 +305,7 @@ for loop in [1]:
                 colnos.append(headers.index(c))
             else:
                 break
-        if len(colnos) < 2:
+        if len(colnos) < 3:
             print "Column",c,"missing in",inputfile
             break
         if date_column:
@@ -355,23 +320,17 @@ for loop in [1]:
     # Create the output file
 
     if not quiet:
-        action = "Updating with" if update else "Calculating"
-        value = "patch correction" if reverse_patch else "deformation"
-        vsnopt = "between versions "+base_version+" and "+version if base_version else "for version "+version
+        action = "Converting "
+        action = action+"NZGD2000 to "+itrf if reverse else action+itrf+" to NZGD2000" 
         datopt = "the date in column "+date_column if date_column else str(date)
-        if base_date:
-            datopt = "between "+str(base_date)+" and "+datopt
-        else:
-            datopt = "at "+datopt
-        print "Deformation model "+model.name()
-        print "for datum "+model.datumName()
-        print action + " " + value + " " + vsnopt + " " + datopt
+        action = action + ' at '+datopt
+        print action
+        print "Deformation model "+model.name() + " version "+model.version()
+        print "for "+model.datumName()
 
     if atpoint:
-            defm = model.calcDeformation(ptlon,ptlat,date,base_date)
-            print "{0}{1:.4f} {2:.4f} {3:.4f}".format(
-                '' if quiet else 'Deformation at {0:.6f} {1:.6f}: '.format(ptlon,ptlat),
-                defm[0], defm[1],defm[2])
+            llh = transform(ptlon,ptlat,pthgt, date )
+            print "{0:.8f} {1:.8f} {2:.4f}".format(*llh)
             break
 
     try:
@@ -379,10 +338,6 @@ for loop in [1]:
     except:
         print "Cannot open output file",outputfile
         break
-
-    if not update:
-        for c in calculate:
-            headers.append(calcfields[c])
 
     writefunc = None
     if format=='w':
@@ -396,49 +351,21 @@ for loop in [1]:
 
     writefunc(headers)
 
-    latcalc=None
-    dedln=None
-    dndlt=None
-    nerror=0
-    nrngerr=0
-    nmissing=0
-    ncalc=0
-    nrec=0
-
     for data in reader():
-        nrec+=1
         if len(data) < ncols:
-            if not quiet:
-                print "Skipping record",nrec,"as too few columns"
-                continue
+            continue
         else:
             data=data[:ncols]
         try:
             lon = float(data[colnos[0]])
             lat = float(data[colnos[1]])
+            hgt = float(data[colnos[2]])
             if date_colno != None:
                 date = data[date_colno]
-            defm = model.calcDeformation(lon,lat,date,base_date)
-            if update:
-                from math import cos, sin, radians, hypot
-                if lat != latcalc:
-                    latcalc=lat
-                    clt = cos(radians(lat))
-                    slt = sin(radians(lat))
-                    bsac=hypot(ell_b*slt+ell_a*clt)
-                    dedln=radians(ell_a2*clt/bsac);
-                    dndlt=radians(ell_a2*ell_b2/(bsac*bsac*bsac))
-                lon += defm[0]/dedln
-                lat += defm[1]/dndlt
-                data[colnos[0]]="%.8lf"%(lon,)
-                data[colnos[1]]="%.8lf"%(lat,)
-                if len(colnos) > 2:
-                    hgt = float(data[colnos[2]])
-                    hgt += defm[2]
-                    data[colnos[2]] = "%.3lf"%(hgt,)
-            else:
-                for c in calculate:
-                    data.append("%.4lf"%defm[c])
+            llh = transform(lon,lat,date,base_date)
+            data[colnos[0]]="{0:.8lf}".format(lon,)
+            data[colnos[1]]="{0:.8lf}".format(lat,)
+            data[colnos[2]]="{0:.4lf}".format(hgt,)
             writefunc(data)
             ncalc += 1
         except OutOfRangeError:
@@ -451,7 +378,7 @@ for loop in [1]:
             nerror += 1
 
     if not quiet:
-        print ncalc,"deformation values calculated"
+        print ncalc," coordinates values converted"
         if nrngerr > 0:
             print nrngerr,"points were outside the valid range of the model"
         if nmissing > 0:

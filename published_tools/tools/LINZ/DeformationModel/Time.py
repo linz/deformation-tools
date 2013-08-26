@@ -31,6 +31,18 @@ class Time( object ):
         td = self._dt-t0._dt
         return td.days + float(td.seconds)/(24 * 3600)
 
+    def asDateTime( self ):
+        return self._dt
+
+    def asDate( self ):
+        return date(self._dt.year, self._dt.month, self._dt.day )
+
+    def asYear( self ):
+        year=self._dt.year
+        y0=date(year,1,1)
+        ndays=float((date(year+1,1,1)-date(year,1,1)).days)
+        return year+self.daysAfter(Time(y0))/ndays
+
     @staticmethod
     def Now():
         return Time(datetime.now())
