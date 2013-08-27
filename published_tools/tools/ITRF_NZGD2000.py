@@ -101,6 +101,7 @@ except getopt.GetoptError:
     sys.exit()
 
 nargs = 2
+nargsmax=2
 usecache=True
 clearcache=False
 for o,v in optlist:
@@ -130,12 +131,15 @@ for o,v in optlist:
     elif o in ('-g','--grid'):
         griddef=v
         nargs=1
+        nargsmax=1
     elif o in ('-a','--atpoint'):
         atpoint=True
         nargs=2
+        nargsmax=3
     elif o in ('-i','--itrf'):
         itrf=v
         nargs=1
+        nargsmax=1
     elif o in ('-m','--model-dir'):
         modeldir = v
     elif o in ('-v','--version'):
@@ -156,7 +160,7 @@ for o,v in optlist:
     else:
         print "Invalid parameter "+o+" specified"
 
-if len(args) > nargs:
+if len(args) > nargsmax:
     print "Too many arguments specified: " + " ".join(args[nargs:])
     sys.exit()
 elif len(args) < nargs:

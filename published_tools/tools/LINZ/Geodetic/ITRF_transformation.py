@@ -276,7 +276,7 @@ class ITRF_transformation( object ):
         from ellipsoid import grs80
         xyz=grs80.xyz(lon,lat,hgt)
         xyz=self.transform(xyz,date=date)
-        return grs80.geodetic(self._tf(xyz))
+        return grs80.geodetic(xyz)
 
 
 transformation=ITRF_transformation.transformation
@@ -288,8 +288,8 @@ if __name__=="__main__":
     import argparse
     import re
     parser=argparse.ArgumentParser(description='Convert Cartesian coordinates between ITRF systems')
-    parser.add_argument('-f','--from-itrf',default='ITRF2008',help="Source ITRF - default ITRF96")
-    parser.add_argument('-t','--to-itrf',default='ITRF96',help="Target ITRF - default ITRF2008")
+    parser.add_argument('-f','--from-itrf',default='ITRF2008',help="Source ITRF - default ITRF2008")
+    parser.add_argument('-t','--to-itrf',default='ITRF96',help="Target ITRF - default ITRF96")
     parser.add_argument('-d','--date',help="Transformation date (yyyymmdd or yyyy.yyy) - default today")
     parser.add_argument('-l','--list',action='store_true',help="List transformation parameters")
     parser.add_argument('-x','--xyz',nargs=3,type=float,metavar=('X','Y','Z'),help="XYZ coordinates to transform (input/output files ignored)")
