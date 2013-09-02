@@ -605,12 +605,17 @@ class Model( object ):
             if loadComponent.startswith('-'):
                 useList=False
                 loadComponent=loadComponent[1:]
-            componentList=loadComponent.split('+')
+            componentList=loadComponent.lower().split('+')
 
         for mdl in CsvFile('model',modfile,self.modelspec):
             component = mdl.component
             if componentList:
-                if component in componentList:
+                matched=False
+                for c in componentList:
+                    if component.lower()==c or component.lower().startswith('patch_'+c):
+                        matched=True
+                        break
+                if matched:
                     if not useList:
                         continue
                 elif useList:

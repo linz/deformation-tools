@@ -68,9 +68,9 @@ class Time( object ):
             return None
         if type(t) not in (str,unicode):
             raise InvalidValueError("Invalid date/time "+str(t))
-        m = re.match(r'^(\d\d\d\d)\-(\d\d)\-(\d\d)$',t)
+        m = re.match(r'^(\d\d\d\d)(\-?)(\d\d)\2(\d\d)$',t)
         if m:
-            return Time(datetime(int(m.group(1)),int(m.group(2)),int(m.group(3)),0,0,0))
+            return Time(datetime(int(m.group(1)),int(m.group(3)),int(m.group(4)),0,0,0))
         m = re.match(r'^(\d\d\d\d)\-(\d\d)\-(\d\d)\s+(\d\d)\:(\d\d)\:(\d\d)$',t)
         if m:
             return Time(

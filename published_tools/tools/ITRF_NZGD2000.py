@@ -138,8 +138,6 @@ for o,v in optlist:
         nargsmax=3
     elif o in ('-i','--itrf'):
         itrf=v
-        nargs=1
-        nargsmax=1
     elif o in ('-m','--model-dir'):
         modeldir = v
     elif o in ('-v','--version'):
@@ -217,19 +215,19 @@ for loop in [1]:
     # Setup the ITRF transformation
 
     try:
+        itrf=itrf.upper()
         itrf_src=ITRF_transformation.transformation(from_itrf=itrf,to_itrf='ITRF96')
         if reverse:
             itrf_src = itrf_src.reversed()
         print itrf_src
         itrf_tfm=itrf_src.transformLonLat
     except:
-        raise
         print "Invalid ITRF "+itrf
         break
 
     if reverse:
         def transform( lon, lat, hgt, date ):
-            llh=model.applyTo( lon, lat, hgt, date=date )
+            llh=model.applyTo( lon, lat, hgt, date=date.asYear() )
             llh=itrf_tfm( llh, date=date.asYear() )
             return llh
     else:
@@ -355,6 +353,9 @@ for loop in [1]:
 
     writefunc(headers)
 
+    ncalc=0
+    nrngerr=0
+    nmissing=0
     for data in reader():
         if len(data) < ncols:
             continue
@@ -366,10 +367,10 @@ for loop in [1]:
             hgt = float(data[colnos[2]])
             if date_colno != None:
                 date = data[date_colno]
-            llh = transform(lon,lat,date,base_date)
-            data[colnos[0]]="{0:.8lf}".format(lon,)
-            data[colnos[1]]="{0:.8lf}".format(lat,)
-            data[colnos[2]]="{0:.4lf}".format(hgt,)
+            llh = transform(lon,lat,hgt, date)
+            data[colnos[0]]="{0:.8f}".format(llh[0])
+            data[colnos[1]]="{0:.8f}".format(llh[1])
+            data[colnos[2]]="{0:.4f}".format(llh[2])
             writefunc(data)
             ncalc += 1
         except OutOfRangeError:

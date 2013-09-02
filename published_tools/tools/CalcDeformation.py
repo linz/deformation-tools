@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import sys
-import logging
+import os
 import datetime
 
 __version__='1.0b'
@@ -47,7 +47,7 @@ Options are:
     --format=       csv (excel compatible csv), tab (tab delimited), 
                     w (whitespace delimited).
   -x de:dn:du       Displacement components to calculate, any of de, dn, du,
-  --calculate=      eh, eh, separated by colon characters (default is de,dn,du)
+  --calculate=      eh, ev, separated by colon characters (default is de,dn,du)
   -g grid           Use a grid for input rather than an input file. The grid is
     --grid=         entered as "min_lon:min_lat:max_lon:max_lat:nlon:nlat"
   -a                Evaluate at longitude, latitude specified as arguments, rather
@@ -81,6 +81,7 @@ def help():
 modeldir=None
 version=None
 base_version=None
+subtract=False
 reverse_patch=False
 update=False
 columns="lon lat hgt".split()
@@ -112,9 +113,9 @@ if len(sys.argv) < 2:
 optlist=None
 args=None
 try:
-    optlist, args = getopt.getopt( sys.argv[1:], 'hd:b:uc:f:x:g:m:v:r:po:kqla', 
+    optlist, args = getopt.getopt( sys.argv[1:], 'hd:b:uc:f:x:g:m:v:po:kqla', 
          ['help', 'date=', 'base_date=', 'update','columns=','format=','calculate=',
-          'grid=','model-dir=','version=','baseversion=','patch','check',
+          'grid=','model-dir=','version=','patch','check',
           'only=','list','quiet','cache=','logging','atpoint'])
 except getopt.GetoptError:
     print str(sys.exc_info()[1])
@@ -178,9 +179,17 @@ for o,v in optlist:
     elif o in ('-m','--model-dir'):
         modeldir = v
     elif o in ('-v','--version'):
-        version = v
-    elif o in ('-r','--baseversion'):
-        base_version = v
+        m=re.match(r'^(\d{8})?(?:\-(\d{8}))?$',v)
+        if not v or not m:
+            print "Invalid model version "+v+" selected"
+            sys.exit()
+        if m.group(1):
+            version=m.group(1)
+            if m.group(2):
+                base_version=m.group(2)
+        else:
+            version=m.group(2)
+            subtract=True
     elif o in ('-p','--patch'):
         reverse_patch = True
     elif o in ('-q','--quiet'):
@@ -225,237 +234,251 @@ else:
         outputfile=args[-1]
 
 if not modeldir:
-    from os.path import dirname, abspath, join
+    modeldir=os.environ.get('NZGD2000_DEF_MODEL')
+
+if not modeldir:
+    from os.path import dirname, abspath, join, isdir, exists
     modeldir = join(dirname(dirname(abspath(__file__))),'model')
+    modelcsv=join(modeldir,'model.csv')
+    if not isdir(modeldir) or not exists(modelcsv):
+        modeldir='model'
 
 # Load the model, print its description if listonly is requested
 
 model=None
 
 # Use a loop to make exiting easy...
-for loop in [1]:
-    try:
-        model = Model.Model(modeldir,load=check,
-                            useCache=usecache,clearCache=clearcache,loadComponent=submodel )
-    except ModelDefinitionError:
-        print "Error loading model:"
-        print str(sys.exc_info()[1])
-        break
-    if check:
-        print "The deformation model is correctly formatted"
-        break
-
-    if listonly:
-        print model.description()
-        break
-
-    # Set the model version
-
-    if version == None:
-        version = model.currentVersion()
-
-    if reverse_patch:
-        if base_version == None:
-            base_version = model.versions()[0]
-        model.setVersion( base_version, version )
-
-        if date == None and date_column==None:
-            date = model.datumEpoch()
-        else:
-            if not quiet:
-                print "Using a date or date column with a patch option - are you sure?"
-    else:
-        if date == None and date_column == None:
-            date = Time.Now()
-        model.setVersion( version, base_version )
-
-    # Determine the source for input
-
-    reader = None
-    headers = None
-    colnos=None
-    date_colno = None
-
-    ncols = 2
-    dialect = csv.excel_tab if format =='t' else csv.excel;
-    if atpoint:
-        pass
-
-    elif griddef:
-        # Grid format
+try:
+    for loop in [1]:
         try:
-            parts=griddef.split(':')
-            if len(parts) != 6:
-                raise ValueError('')
-            min_lon=float(parts[0])
-            min_lat=float(parts[1])
-            max_lon=float(parts[2])
-            max_lat=float(parts[3])
-            nlon=int(parts[4])
-            nlat=int(parts[5])
-            if max_lon<=min_lon or max_lat<=min_lat or nlon<2 or nlat < 2:
-                raise ValueError('')
-            dlon = (max_lon-min_lon)/(nlon-1)
-            dlat = (max_lat-min_lat)/(nlat-1)
-            def readf():
-                lat = min_lat-dlat
-                for ilat in range(nlat):
-                    lat += dlat
-                    lon = min_lon-dlon
-                    for ilon in range(nlon):
-                        lon += dlon
-                        yield [str(lon),str(lat)]
-            reader=readf
-        except:
-            print "Invalid grid definition",griddef
-            break
-        colnos=[0,1]
-        headers=columns[0:2]
-        
-    else:
-        try:
-            instream = open(inputfile,"rb")
-        except:
-            print "Cannot open input file "+inputfile
-            break
-        # Whitespace
-        if format == 'w':
-            headers=instream.readline().strip().split()
-            def readf():
-                for line in instream:
-                    yield line.strip().split()
-            reader = readf
-        # CSV format
-        else:
-            csvrdr = csv.reader(instream,dialect=dialect)
-            headers=csvrdr.next()
-            def readf():
-                for r in csvrdr:
-                    yield r
-            reader = readf
-        ncols = len(headers)
-        colnos=[]
-        for c in columns:
-            if c in headers:
-                colnos.append(headers.index(c))
-            else:
-                break
-        if len(colnos) < 2:
-            print "Column",c,"missing in",inputfile
-            break
-        if date_column:
-            if date_column in headers:
-                date_colno = headers.index(date_column)
-            else:
-                print "Column",date_column,"missing in",inputfile
-                break
-
-            date_colno = colno
-
-    # Create the output file
-
-    if not quiet:
-        action = "Updating with" if update else "Calculating"
-        value = "patch correction" if reverse_patch else "deformation"
-        vsnopt = "between versions "+base_version+" and "+version if base_version else "for version "+version
-        datopt = "the date in column "+date_column if date_column else str(date)
-        if base_date:
-            datopt = "between "+str(base_date)+" and "+datopt
-        else:
-            datopt = "at "+datopt
-        print "Deformation model "+model.name()
-        print "for datum "+model.datumName()
-        print action + " " + value + " " + vsnopt + " " + datopt
-
-    if atpoint:
-            defm = model.calcDeformation(ptlon,ptlat,date,base_date)
-            print "{0}{1:.4f} {2:.4f} {3:.4f}".format(
-                '' if quiet else 'Deformation at {0:.6f} {1:.6f}: '.format(ptlon,ptlat),
-                defm[0], defm[1],defm[2])
-            break
-
-    try:
-        outstream = open(outputfile,"wb")
-    except:
-        print "Cannot open output file",outputfile
-        break
-
-    if not update:
-        for c in calculate:
-            headers.append(calcfields[c])
-
-    writefunc = None
-    if format=='w':
-        def writef(cols):
-            outstream.write(' '.join(cols))
-            outstream.write("\n")
-        writefunc = writef
-    else:
-        csvwrt = csv.writer(outstream,dialect=dialect)
-        writefunc=csvwrt.writerow
-
-    writefunc(headers)
-
-    latcalc=None
-    dedln=None
-    dndlt=None
-    nerror=0
-    nrngerr=0
-    nmissing=0
-    ncalc=0
-    nrec=0
-
-    for data in reader():
-        nrec+=1
-        if len(data) < ncols:
-            if not quiet:
-                print "Skipping record",nrec,"as too few columns"
-                continue
-        else:
-            data=data[:ncols]
-        try:
-            lon = float(data[colnos[0]])
-            lat = float(data[colnos[1]])
-            if date_colno != None:
-                date = data[date_colno]
-            defm = model.calcDeformation(lon,lat,date,base_date)
-            if update:
-                from math import cos, sin, radians, hypot
-                if lat != latcalc:
-                    latcalc=lat
-                    clt = cos(radians(lat))
-                    slt = sin(radians(lat))
-                    bsac=hypot(ell_b*slt+ell_a*clt)
-                    dedln=radians(ell_a2*clt/bsac);
-                    dndlt=radians(ell_a2*ell_b2/(bsac*bsac*bsac))
-                lon += defm[0]/dedln
-                lat += defm[1]/dndlt
-                data[colnos[0]]="%.8lf"%(lon,)
-                data[colnos[1]]="%.8lf"%(lat,)
-                if len(colnos) > 2:
-                    hgt = float(data[colnos[2]])
-                    hgt += defm[2]
-                    data[colnos[2]] = "%.3lf"%(hgt,)
-            else:
-                for c in calculate:
-                    data.append("%.4lf"%defm[c])
-            writefunc(data)
-            ncalc += 1
-        except OutOfRangeError:
-            nrngerr += 1
-        except UndefinedValueError:
-            nmissing += 1
-        except:
-            raise
+            model = Model.Model(modeldir,load=check,
+                                useCache=usecache,clearCache=clearcache,loadComponent=submodel )
+        except ModelDefinitionError:
+            print "Error loading model:"
             print str(sys.exc_info()[1])
-            nerror += 1
+            break
+        if check:
+            print "The deformation model is correctly formatted"
+            break
 
-    if not quiet:
-        print ncalc,"deformation values calculated"
-        if nrngerr > 0:
-            print nrngerr,"points were outside the valid range of the model"
-        if nmissing > 0:
-            print nmissing,"deformation values were undefined in the model"
+        # Set the model version
+
+        if version == None:
+            version = model.currentVersion()
+
+        if reverse_patch:
+            if base_version == None:
+                base_version = model.versions()[0]
+            model.setVersion( base_version, version )
+
+            if date == None and date_column==None:
+                date = model.datumEpoch()
+            else:
+                if not quiet:
+                    print "Using a date or date column with a patch option - are you sure?"
+        else:
+            if date == None and date_column == None:
+                date = Time.Now()
+            model.setVersion( version, base_version )
+
+        if listonly:
+            print model.description()
+            break
+
+        # Determine the source for input
+
+        reader = None
+        headers = None
+        colnos=None
+        date_colno = None
+
+        ncols = 2
+        dialect = csv.excel_tab if format =='t' else csv.excel;
+        if atpoint:
+            pass
+
+        elif griddef:
+            # Grid format
+            try:
+                parts=griddef.split(':')
+                if len(parts) != 6:
+                    raise ValueError('')
+                min_lon=float(parts[0])
+                min_lat=float(parts[1])
+                max_lon=float(parts[2])
+                max_lat=float(parts[3])
+                nlon=int(parts[4])
+                nlat=int(parts[5])
+                if max_lon<=min_lon or max_lat<=min_lat or nlon<2 or nlat < 2:
+                    raise ValueError('')
+                dlon = (max_lon-min_lon)/(nlon-1)
+                dlat = (max_lat-min_lat)/(nlat-1)
+                def readf():
+                    lat = min_lat-dlat
+                    for ilat in range(nlat):
+                        lat += dlat
+                        lon = min_lon-dlon
+                        for ilon in range(nlon):
+                            lon += dlon
+                            yield [str(lon),str(lat)]
+                reader=readf
+            except:
+                print "Invalid grid definition",griddef
+                break
+            colnos=[0,1]
+            headers=columns[0:2]
+            
+        else:
+            try:
+                instream = sys.stdin if inputfile=='-' else open(inputfile,"rb")
+            except:
+                print "Cannot open input file "+inputfile
+                break
+            # Whitespace
+            if format == 'w':
+                headers=instream.readline().strip().split()
+                def readf():
+                    for line in instream:
+                        yield line.strip().split()
+                reader = readf
+            # CSV format
+            else:
+                csvrdr = csv.reader(instream,dialect=dialect)
+                headers=csvrdr.next()
+                def readf():
+                    for r in csvrdr:
+                        yield r
+                reader = readf
+            ncols = len(headers)
+            colnos=[]
+            for c in columns:
+                if c in headers:
+                    colnos.append(headers.index(c))
+                else:
+                    break
+            if len(colnos) < 2:
+                print "Column",c,"missing in",inputfile
+                break
+            if date_column:
+                if date_column in headers:
+                    date_colno = headers.index(date_column)
+                else:
+                    print "Column",date_column,"missing in",inputfile
+                    break
+
+                date_colno = colno
+
+        # Create the output file
+
+        if not quiet:
+            action = "Updating with" if update else "Calculating"
+            value = "patch correction" if reverse_patch else "deformation"
+            vsnopt = "between versions "+base_version+" and "+version if base_version else "for version "+version
+            datopt = "the date in column "+date_column if date_column else str(date)
+            if base_date:
+                datopt = "between "+str(base_date)+" and "+datopt
+            else:
+                datopt = "at "+datopt
+            print "Deformation model "+model.name()
+            print "for datum "+model.datumName()
+            print action + " " + value + " " + vsnopt + " " + datopt
+
+        if atpoint:
+                defm = model.calcDeformation(ptlon,ptlat,date,base_date)
+                factor = -1 if subtract else 1
+                print "{0}{1:.4f} {2:.4f} {3:.4f}".format(
+                    '' if quiet else 'Deformation at {0:.6f} {1:.6f}: '.format(ptlon,ptlat),
+                    factor*defm[0], factor*defm[1],factor*defm[2])
+                break
+
+        try:
+            outstream = sys.stdout if outputfile=='-' else open(outputfile,"wb")
+        except:
+            print "Cannot open output file",outputfile
+            break
+
+        if not update:
+            for c in calculate:
+                headers.append(calcfields[c])
+
+        writefunc = None
+        if format=='w':
+            def writef(cols):
+                outstream.write(' '.join(cols))
+                outstream.write("\n")
+            writefunc = writef
+        else:
+            csvwrt = csv.writer(outstream,dialect=dialect)
+            writefunc=csvwrt.writerow
+
+        writefunc(headers)
+
+        latcalc=None
+        dedln=None
+        dndlt=None
+        nerror=0
+        nrngerr=0
+        nmissing=0
+        ncalc=0
+        nrec=0
+
+        for data in reader():
+            nrec+=1
+            if len(data) < ncols:
+                if not quiet:
+                    print "Skipping record",nrec,"as too few columns"
+                    continue
+            else:
+                data=data[:ncols]
+            try:
+                lon = float(data[colnos[0]])
+                lat = float(data[colnos[1]])
+                if date_colno != None:
+                    date = data[date_colno]
+                defm = model.calcDeformation(lon,lat,date,base_date)
+                if subtract:
+                    for i in range[3]:
+                        defm[i] = -defm[i]
+                if update:
+                    from math import cos, sin, radians, hypot
+                    if lat != latcalc:
+                        latcalc=lat
+                        clt = cos(radians(lat))
+                        slt = sin(radians(lat))
+                        bsac=hypot(ell_b*slt,ell_a*clt)
+                        dedln=radians(ell_a2*clt/bsac);
+                        dndlt=radians(ell_a2*ell_b2/(bsac*bsac*bsac))
+                    lon += defm[0]/dedln
+                    lat += defm[1]/dndlt
+                    data[colnos[0]]="%.8lf"%(lon,)
+                    data[colnos[1]]="%.8lf"%(lat,)
+                    if len(colnos) > 2:
+                        hgt = float(data[colnos[2]])
+                        hgt += defm[2]
+                        data[colnos[2]] = "%.3lf"%(hgt,)
+                else:
+                    for c in calculate:
+                        data.append("%.4lf"%defm[c])
+                writefunc(data)
+                ncalc += 1
+            except OutOfRangeError:
+                nrngerr += 1
+            except UndefinedValueError:
+                nmissing += 1
+            except:
+                raise
+                print str(sys.exc_info()[1])
+                nerror += 1
+
+        if not quiet:
+            print ncalc,"deformation values calculated"
+            if nrngerr > 0:
+                print nrngerr,"points were outside the valid range of the model"
+            if nmissing > 0:
+                print nmissing,"deformation values were undefined in the model"
+
+except:
+    print str(sys.exc_info()[1])
 
 
 if model:
