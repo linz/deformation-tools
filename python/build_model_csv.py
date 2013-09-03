@@ -5,7 +5,7 @@ import sys
 import csv
 
 print '''
-build_deformation_model_csv
+build_model_csv
 
 Interrogates the component.csv files in a deformation format model directory
 to build model.csv file.
@@ -28,32 +28,34 @@ if not os.path.isdir(modeldir):
     print rootdir,'does not have a "model" subdirectory'
     sys.exit()
 
-components=sorted([name for name in os.listdir(modeldir) 
+submodels=sorted([name for name in os.listdir(modeldir) 
             if re.match(r'(ndm|patch_)',name) and
                os.path.isdir(os.path.join(modeldir,name))])
 
-complist=[['component','version_added','version_revoked','reverse_patch','description']]
+complist=[['submodel','version_added','version_revoked','reverse_patch','description']]
 
-for c in components:
+for c in submodels:
     print "Processing component:",c
     compcsv = os.path.join(modeldir,c,'component.csv')
     if not os.path.exists(compcsv):
         print "Component csv file",compcsv," is missing"
     with file(compcsv) as ccsvf:
         version_added = '0'
-        version_revoked = '0'
+        version_revoked = '10000101'
         reverse_patch="N"
         description=""
         ccsv = csv.DictReader(ccsvf)
         for item in ccsv:
             if version_added == '0' or item['version_added'] < version_added:
                 version_added = item['version_added']
-            if item['version_revoked'] > version_revoked:
-                version_revoked = item['version_revoked']
+            ivr=item['version_revoked']
+            if version_revoked != '0' and (ivr == '0' or ivr  > version_revoked):
+                version_revoked = ivr
             if item['reverse_patch'] == 'Y':
                 reverse_patch='Y'
             if description == '':
-                description = item['description']
+                description = item['description'].strip()
+        print "  Added",version_added,"revoked",version_revoked,"reverse patch",reverse_patch
         complist.append([c,version_added,version_revoked,reverse_patch,description])
 
 modelcsv=os.path.join(modeldir,'model.csv')

@@ -148,7 +148,7 @@ published_component_columns='''
     version_added
     version_revoked
     reverse_patch
-    subcomponent
+    component
     priority
     min_lon
     max_lon
@@ -157,14 +157,14 @@ published_component_columns='''
     spatial_complete
     min_date
     max_date
-    temporal_complete
+    time_complete
     npoints1
     npoints2
     displacement_type
     error_type
     max_displacement
     spatial_model
-    temporal_model
+    time_function
     time0
     factor0
     time1
@@ -825,7 +825,7 @@ def build_published_component( gridlist, modeldef, additive, comppath, cleandir=
             if not os.path.isdir(fn):
                 os.remove(fn)
 
-    write_log("Writing published model component {0}".format(comppath))
+    write_log("Writing published model submodel {0}".format(comppath))
 
     finalramp=ramps[-1][1]
     compcsv=os.path.join(comppath,'component.csv')
@@ -836,7 +836,7 @@ def build_published_component( gridlist, modeldef, additive, comppath, cleandir=
             version_added=published_version,
             version_revoked=0,
             reverse_patch='Y' if publish_reverse_patch else 'N',
-            subcomponent=0,
+            component=0,
             priority=0,
             min_lon=0,
             max_lon=0,
@@ -845,14 +845,14 @@ def build_published_component( gridlist, modeldef, additive, comppath, cleandir=
             spatial_complete='Y',
             min_date=0,
             max_date=0,
-            temporal_complete='Y',
+            time_complete='Y',
             npoints1=0,
             npoints2=0,
             displacement_type='3d',
             error_type='none',
             max_displacement=0,
             spatial_model='llgrid',
-            temporal_model='step',
+            time_function='step',
             time0=modeldate,
             factor0=-1 if publish_reverse_patch else 0,
             time1=modeldate,
@@ -888,17 +888,17 @@ def build_published_component( gridlist, modeldef, additive, comppath, cleandir=
                 if ir == 0:
                     if rvalue==0:
                         continue
-                    compdata['temporal_model']='step'
+                    compdata['time_function']='step'
                     compdata['time0']=rdate
                 else:
-                    compdata['temporal_model']='ramp'
+                    compdata['time_function']='ramp'
                     compdata['time0']=ramps[ir-1][0]
                     rvalue -= ramps[ir-1][1]
                 compdata['time1']=rdate
                 compdata['factor0']=-rvalue if publish_reverse_patch else 0
                 compdata['factor1']=0 if publish_reverse_patch else rvalue
                 if not additive:
-                    compdata['subcomponent']=ir+1
+                    compdata['component']=ir+1
                     compdata['priority']=priority
                 csvdata.update(compdata)
                 ccsv.writerow([csvdata[c] for c in published_component_columns])
@@ -929,8 +929,8 @@ if __name__ == "__main__":
     parser.add_argument('patch_file',help='Base name used for output files')
     parser.add_argument('model_file',help='Model file(s) used to calculate deformation, passed to calc_okada',nargs='+')
     parser.add_argument('--shift-model-path',help="Create a linzshiftmodel in the specified directory")
-    parser.add_argument('--component-path',help="Create publishable component in the specified directory")
-    parser.add_argument('--component-model-version',default=runtime_version,help="Deformation model version to include in published component")
+    parser.add_argument('--submodel-path',help="Create publishable component in the specified directory")
+    parser.add_argument('--submodel-version',default=runtime_version,help="Deformation model version for which submodel first applies")
     parser.add_argument('--subgrids-nest',action='store_false',help="Grid CSV files calculated to replace each other rather than total to deformation")
     parser.add_argument('--parcel-shift',action='store_true',help="Configure for calculating parcel_shift rather than rigorous deformation patch")
     parser.add_argument('--apply-ramp-scale',action='store_true',help="Scale the grid by the ramp final value")
@@ -947,8 +947,8 @@ if __name__ == "__main__":
     patchfile = args.patch_file
     split_base=args.split_base
     shift_path=args.shift_model_path
-    comp_path=args.component_path
-    published_version=args.component_model_version
+    comp_path=args.submodel_path
+    published_version=args.submodel_version
     additive=args.subgrids_nest
     trimgrid=args.no_trim_subgrids
     if args.parcel_shift: 
