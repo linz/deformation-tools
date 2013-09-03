@@ -52,7 +52,7 @@ Options are:
                     w (whitespace delimited).
   -g grid           Use a grid for input rather than an input file. The grid is
     --grid=         entered as "min_lon:min_lat:max_lon:max_lat:nlon:nlat"
-  -a                Evaluate at longitude, latitude specified as arguments, rather
+  -x                Evaluate at longitude, latitude specified as arguments, rather
     --atpoint       using input/output files
   -m dir            Model base directory (default ../model)
     --model-dir=
@@ -92,7 +92,7 @@ if len(sys.argv) < 2:
 optlist=None
 args=None
 try:
-    optlist, args = getopt.getopt( sys.argv[1:], 'hd:c:f:g:i:m:v:rqla', 
+    optlist, args = getopt.getopt( sys.argv[1:], 'hd:c:f:g:i:m:v:rqlx', 
          ['help', 'date=', 'columns=','format=',
           'grid=','itrf=', 'model-dir=','version=',
           'quiet','cache=','logging','atpoint'])
@@ -132,7 +132,7 @@ for o,v in optlist:
         griddef=v
         nargs=1
         nargsmax=1
-    elif o in ('-a','--atpoint'):
+    elif o in ('-x','--atpoint'):
         atpoint=True
         nargs=2
         nargsmax=3
