@@ -25,6 +25,7 @@ import csv
 from LINZ.DeformationModel.Time import Time
 from LINZ.DeformationModel import Model
 from LINZ.DeformationModel.Error import ModelDefinitionError, OutOfRangeError, UndefinedValueError
+from LINZ.Geodetic.ellipsoid import grs80
 
 syntax='''
 CalcDeformation.py: program to calculate deformation at a specific time and place using
@@ -85,6 +86,7 @@ subtract=False
 reverse_patch=False
 update=False
 columns="lon lat hgt".split()
+usercolumns=False
 date_column=None
 format="c"
 date=None
@@ -113,8 +115,8 @@ if len(sys.argv) < 2:
 optlist=None
 args=None
 try:
-    optlist, args = getopt.getopt( sys.argv[1:], 'hd:b:uc:f:x:g:m:v:po:kqla', 
-         ['help', 'date=', 'base_date=', 'update','columns=','format=','calculate=',
+    optlist, args = getopt.getopt( sys.argv[1:], 'hd:b:uc:f:e:g:m:v:po:kqlxas', 
+         ['help', 'date=', 'base_date=', 'apply','subtract','columns=','format=','elements=',
           'grid=','model-dir=','version=','patch','check',
           'only=','list','quiet','cache=','logging','atpoint'])
 except getopt.GetoptError:
@@ -122,6 +124,7 @@ except getopt.GetoptError:
     sys.exit()
 
 nargs = 2
+maxargs = 2
 usecache=True
 clearcache=False
 submodel=None
@@ -131,9 +134,11 @@ for o,v in optlist:
     if o in ('-l','--list'):
         listonly = True
         nargs=0
+        maxargs=0
     elif o in ('-k','--check'):
         check = True
         nargs=0
+        maxargs=0
     elif o in ('-d','--date'):
         if v.startswith(':'):
             date_column=v[1:]
@@ -149,11 +154,15 @@ for o,v in optlist:
        except:
             print "Invalid base date "+v+" requested, must be formatted YYYY-MM-DD"
             sys.exit()
-    elif o in ('-u','--update'):
+    elif o in ('-a','--apply'):
         update=True
+    elif o in ('-s','--subtract'):
+        update=True
+        subtract=True
     elif o in ('-c','--columns'):
+        usercolumns=True
         columns=v.split(':')
-        if len(columns) not in (2,3):
+        if len(columns) not in (2,3,4):
             print "Invalid columns specified - must be 2 or 3 colon separated column names"
             sys.exit()
     elif o in ('-f','--format'):
@@ -163,7 +172,7 @@ for o,v in optlist:
         else:
             print "Invalid format specified, must be one of csv, tab, or whitespace"
             sys.exit()
-    elif o in ('-x','--calculate'):
+    elif o in ('-e','--elements'):
         cols = v.lower().split(':')
         for c in cols:
             if c not in calcfields:
@@ -173,9 +182,11 @@ for o,v in optlist:
     elif o in ('-g','--grid'):
         griddef=v
         nargs=1
-    elif o in ('-a','--atpoint'):
+        maxargs=1
+    elif o in ('-x','--atpoint'):
         atpoint=True
         nargs=2
+        maxargs=3
     elif o in ('-m','--model-dir'):
         modeldir = v
     elif o in ('-v','--version'):
@@ -204,11 +215,12 @@ for o,v in optlist:
             print "Invalid cache option - must be one of use, clear, reset, ignore"
             sys.exit()
     elif o in ('--logging'):
+        import logging
         logging.basicConfig(level=logging.INFO)
     else:
         print "Invalid parameter "+o+" specified"
 
-if len(args) > nargs:
+if len(args) > maxargs:
     print "Too many arguments specified: " + " ".join(args[nargs:])
     sys.exit()
 elif len(args) < nargs:
@@ -224,6 +236,7 @@ if atpoint:
     try:
         ptlon=float(args[0])
         ptlat=float(args[1])
+        pthgt=float(args[2]) if len(args)==3 else 0.0
     except:
         print "Invalid longitude/latitude "+args[0]+" "+args[1]
         sys.exit()
@@ -251,8 +264,8 @@ model=None
 try:
     for loop in [1]:
         try:
-            model = Model.Model(modeldir,load=check,
-                                useCache=usecache,clearCache=clearcache,loadComponent=submodel )
+            model = Model.Model(modeldir,loadAll=check,
+                                useCache=usecache,clearCache=clearcache,loadSubmodel=submodel )
         except ModelDefinitionError:
             print "Error loading model:"
             print str(sys.exc_info()[1])
@@ -351,13 +364,24 @@ try:
                 reader = readf
             ncols = len(headers)
             colnos=[]
+            columnsvalid=True
+            if len(columns) > 3:
+                date_column=date_column or columns[3]
+                if date_column != columns[3]:
+                    print "Inconsistent names specified for date column"
+                    break
+                columns=columns[:3]
+                if columns[2] == '':
+                    columns=columns[:2]
             for c in columns:
                 if c in headers:
                     colnos.append(headers.index(c))
-                else:
+                elif c=='hgt' and not usercolumns:
                     break
-            if len(colnos) < 2:
-                print "Column",c,"missing in",inputfile
+                else:
+                    print "Column",c,"missing in",inputfile
+                    columnsvalid=False
+            if not columnsvalid:
                 break
             if date_column:
                 if date_column in headers:
@@ -365,8 +389,6 @@ try:
                 else:
                     print "Column",date_column,"missing in",inputfile
                     break
-
-                date_colno = colno
 
         # Create the output file
 
@@ -385,10 +407,20 @@ try:
 
         if atpoint:
                 defm = model.calcDeformation(ptlon,ptlat,date,base_date)
-                factor = -1 if subtract else 1
-                print "{0}{1:.4f} {2:.4f} {3:.4f}".format(
-                    '' if quiet else 'Deformation at {0:.6f} {1:.6f}: '.format(ptlon,ptlat),
-                    factor*defm[0], factor*defm[1],factor*defm[2])
+                if subtract:
+                    for i in range(3):
+                        defm[i]=-defm[i]
+                if update:
+                    dedln,dndlt=grs80.metres_per_degree(ptlon,ptlat)
+                    ptlon += defm[0]/dedln
+                    ptlat += defm[1]/dndlt
+                    pthgt += defm[2]
+                    print "{0:.8f} {1:.8f} {2:.4f}".format(ptlon,ptlat,pthgt)
+                elif quiet:
+                    print "{0:.4f} {1:.4f} {2:.4f}".format(defm[0],defm[1],defm[2])
+                else:
+                    print "Deformation at {0:.6f} {1:.6f}: {2:.4f} {3:.4f} {4:.4f}".format(
+                        ptlon,ptlat,defm[0],defm[1],defm[2])
                 break
 
         try:
@@ -437,17 +469,10 @@ try:
                     date = data[date_colno]
                 defm = model.calcDeformation(lon,lat,date,base_date)
                 if subtract:
-                    for i in range[3]:
+                    for i in range(3):
                         defm[i] = -defm[i]
                 if update:
-                    from math import cos, sin, radians, hypot
-                    if lat != latcalc:
-                        latcalc=lat
-                        clt = cos(radians(lat))
-                        slt = sin(radians(lat))
-                        bsac=hypot(ell_b*slt,ell_a*clt)
-                        dedln=radians(ell_a2*clt/bsac);
-                        dndlt=radians(ell_a2*ell_b2/(bsac*bsac*bsac))
+                    dedln,dndlt=grs80.metres_per_degree(lon,lat)
                     lon += defm[0]/dedln
                     lat += defm[1]/dndlt
                     data[colnos[0]]="%.8lf"%(lon,)

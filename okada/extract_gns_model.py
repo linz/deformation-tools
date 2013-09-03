@@ -103,7 +103,7 @@ def extract_model( xls_file, outfile=None ):
     try:
         modfile = open(outfile+'.model','w')
         modfile.write("Event: "+header[0]+"\n")
-        modfile.write("Model: "+header[1]+"\n")
+        modfile.write("Source model: "+header[1]+"\n")
         modfile.write("Version: "+header[2]+"\n")
         modfile.write("Author: "+header[3]+"\n")
         modfile.write("SourceFile: "+filename+"\n")

@@ -18,31 +18,31 @@ from Cache import Cache
 def _buildHash(x,attrs):
     return ':'.join((str(getattr(x,a)) for a in attrs))
 
-class TimeComponent( object ):
+class TimeFunction( object ):
     '''
-    The time component of a deformation model.  A wrapper around a time model managing also the 
+    The time submodel of a deformation model.  A wrapper around a time model managing also the 
     range of valid values for the model and for caching the calculated value
     '''
 
-    hashattr=['temporal_model','factor0','time0','factor1','time1','decay']
+    hashattr=['time_function','factor0','time0','factor1','time1','decay']
 
     @staticmethod
     def hashKey( compdef ):
-        return _buildHash( compdef, TimeComponent.hashattr )
+        return _buildHash( compdef, TimeFunction.hashattr )
 
     @staticmethod
     def get( models, compdef ):
-        hash=TimeComponent.hashKey(compdef)
+        hash=TimeFunction.hashKey(compdef)
         if hash not in models:
-            models[hash] = TimeComponent(compdef)
+            models[hash] = TimeFunction(compdef)
         return models[hash]
 
     def __init__( self, compdef ):
         self.hash = self.hashKey(compdef)
         self.min_date = compdef.min_date
         self.max_date = compdef.max_date
-        self.temporal_model = compdef.temporal_model
-        self.temporal_complete = compdef.temporal_complete
+        self.time_function = compdef.time_function
+        self.time_complete = compdef.time_complete
         self.description = compdef.description
         self.calc_date = None
         self.base_calc_date = None
@@ -54,7 +54,7 @@ class TimeComponent( object ):
         self.factor0=compdef.factor0
         self.factor1=compdef.factor1
         self.decay=compdef.decay
-        self._model = TimeModel(compdef.temporal_model,compdef.factor0,compdef.time0,compdef.factor1,compdef.time1,compdef.decay)
+        self._model = TimeModel(compdef.time_function,compdef.factor0,compdef.time0,compdef.factor1,compdef.time1,compdef.decay)
 
     def calcFactor( self, date, baseDate=None ):
         if date != self.calc_date or baseDate != self.calc_base_date:
@@ -68,7 +68,7 @@ class TimeComponent( object ):
                 if d == None: continue
                 factor = 0.0
                 if (self.min_date and d < self.min_date) or (self.max_date and d > self.max_date):
-                    if not self.temporal_complete:
+                    if not self.time_complete:
                         ok = False
                         break
                 else:
@@ -95,19 +95,16 @@ class TimeComponent( object ):
         return str(self._model)
 
 
-class SpatialComponent( object ):
+class SpatialModel( object ):
     '''
-    Manages the spatial component, TIN or grid.
+    Manages the spatial model, TIN or grid.
     
-    A spatial component may be invoked by multiple components in the 
+    A spatial model may be invoked by multiple subcomponents in the 
     model definition component.csv file.  The hashKey function is used 
-    to determine if two components use the same spatial model.  If so 
-    then the model just adds time components.  This means the potentially
-    expensive spatial component calculation needs only be performed once
+    to determine if two subcomponents use the same spatial model.  If so 
+    then the model just adds time submodels.  This means the potentially
+    expensive spatial submodel calculation needs only be performed once
     if necessary.
-
-    Spatial and time components are added using a compdef - basically 
-    a row from the component.csv file.
 
     Spatial and time calculations are cached to make calculating a set
     of deformations at the same time or a time series at a fixed location
@@ -119,28 +116,28 @@ class SpatialComponent( object ):
                  'displacement_type']
 
     @staticmethod
-    def hashKey( component, compdef ):
-        return component+':'+_buildHash(compdef,SpatialComponent.hashattr)
+    def hashKey( submodel, compdef ):
+        return submodel+':'+_buildHash(compdef,SpatialModel.hashattr)
 
     @staticmethod
     def compatibleDefinition( compdef1, compdef2 ):
-        for attr in SpatialComponent.checkattr:
+        for attr in SpatialModel.checkattr:
             if getattr(compdef1,attr) != getattr(compdef2,attr):
                 return False
         return True
 
     @staticmethod
-    def get( model, models, component, compdef, load=False ):
-        hash = SpatialComponent.hashKey(component, compdef)
+    def get( model, models, submodel, compdef, load=False ):
+        hash = SpatialModel.hashKey(submodel, compdef)
         if hash not in models:
-            models[hash] = SpatialComponent( model, component, compdef, load )
+            models[hash] = SpatialModel( model, submodel, compdef, load )
         else:
-            if not SpatialComponent.compatibleDefinition(models[hash],compdef):
-                raise ModelDefinitionError('Inconsistent usage of grid/TIN file '+compdef.file1+' in '+component+' component.csv')
+            if not SpatialModel.compatibleDefinition(models[hash],compdef):
+                raise ModelDefinitionError('Inconsistent usage of grid/TIN file '+compdef.file1+' in '+submodel+' component.csv')
         return models[hash]
 
-    def __init__( self, model, component, compdef, load=False ):
-        self.hash = SpatialComponent.hashKey(component, compdef)
+    def __init__( self, model, submodel, compdef, load=False ):
+        self.hash = SpatialModel.hashKey(submodel, compdef)
         self.min_lon=compdef.min_lon
         self.min_lat=compdef.min_lat
         self.max_lon=compdef.max_lon
@@ -156,10 +153,10 @@ class SpatialComponent( object ):
         if self.error_type in ['horizontal','3d']: self.columns.append('eh')
         if self.error_type in ['vertical','3d']: self.columns.append('ev')
         self.spatial_model=compdef.spatial_model
-        self.file1=os.path.join(component, compdef.file1)
-        self.file2=os.path.join(component ,compdef.file2) if compdef.file2 else None
+        self.file1=os.path.join(submodel, compdef.file1)
+        self.file2=os.path.join(submodel ,compdef.file2) if compdef.file2 else None
         self._model = None
-        name = os.path.join(component,compdef.file1)
+        name = os.path.join(submodel,compdef.file1)
         self._name = name
         if compdef.spatial_model == 'llgrid':
             self._model = Grid(model,self.file1,self.min_lon,self.max_lon,self.min_lat,self.max_lat,self.npoints1,self.npoints2,self.columns,name=name)
@@ -167,7 +164,7 @@ class SpatialComponent( object ):
         elif compdef.spatial_model == 'lltin':
             if not self.file2:
                 raise ModelDefinitionError('file2 is not defined for TIN model')
-            self.file2 = os.path.join(component,compdef.file2)
+            self.file2 = os.path.join(submodel,compdef.file2)
             self._model = TIN(model,self.file1,self.file2,self.min_lon,self.max_lon,self.min_lat,self.max_lat,self.npoints1,self.npoints2,self.columns,name=name)
             self._description = "TIN model using "+self._name
         else:
@@ -188,7 +185,7 @@ class SpatialComponent( object ):
     def __str__(self):
         return self._description
 
-    # So that this can be used as a spatial component set
+    # So that this can be used as a spatial submodel set
     def models( self ):
         yield self
 
@@ -196,7 +193,7 @@ class SpatialComponent( object ):
         '''
         Spatial models are loaded on demand by default.  
         
-        The load method forces loading of the spatial component 
+        The load method forces loading of the spatial submodel 
         for validation.
         '''
         try:
@@ -239,7 +236,7 @@ class SpatialComponent( object ):
                 except UndefinedValueError:
                     self._defUndefinedError = sys.exc_info()[1]
                     raise
-                logging.info("Spatial component calculated as %s",self._xydisp)
+                logging.info("Spatial component %s calculated as %s",self._name,self._xydisp)
             elif self._xyRangeError:
                 raise OutOfRangeError( self._xyRangeError )
             elif self._defUndefinedError:
@@ -253,28 +250,28 @@ class SpatialComponent( object ):
             self._modelError = str(sys.exc_info()[1])
             raise
 
-class SpatialComponentSet( object ):
+class SpatialModelSet( object ):
     '''
     Manages a prioritised set of spatial models, such as a nested grid.  
 
-    This provides the same interface as SpatialComponent.
+    This provides the same interface as SpatialModel.
     '''
 
     checkattr = ['version_added','version_revoked','displacement_type','error_type']
 
     @staticmethod
     def compatibilityHash( compdef ):
-        return (_buildHash(compdef,SpatialComponentSet.checkattr) + ':'
-                + _buildHash(compdef,TimeComponent.hashattr))
+        return (_buildHash(compdef,SpatialModelSet.checkattr) + ':'
+                + _buildHash(compdef,TimeFunction.hashattr))
 
-    def __init__( self, component, model, compdef ):
-        self._component = component
-        self._subcomponent = compdef.subcomponent
+    def __init__( self, submodel, model, compdef ):
+        self._component = submodel
+        self._subcomponent = compdef.component
         self._models = [model]
         self._priorities = [compdef.priority]
         self._sortedModels = [model]
         self._baseModel = model
-        self._checkhash = SpatialComponentSet.compatibilityHash(compdef)
+        self._checkhash = SpatialModelSet.compatibilityHash(compdef)
         self.min_lon=model.min_lon
         self.min_lat=model.min_lat
         self.max_lon=model.max_lon
@@ -289,8 +286,9 @@ class SpatialComponentSet( object ):
         self._modelError = None
 
     def addComponent( self, model, compdef ):
-        if SpatialComponentSet.compatibilityHash(compdef) != self._checkhash:
-            raise ModelDefinitionError('Subcomponent '+str(self.subcomponent)+' of '+component+' uses inconsistent versions, time models or displacement/error components')
+        if SpatialModelSet.compatibilityHash(compdef) != self._checkhash:
+            raise ModelDefinitionError('Subcomponent '+str(self.component)+' of '
+                +submodel+' uses inconsistent versions, time models or displacement/error submodels')
 
         self.min_lon = min(self.min_lon,model.min_lon)
         self.min_lat = min(self.min_lat,model.min_lat)
@@ -320,7 +318,7 @@ class SpatialComponentSet( object ):
         '''
         Spatial models are loaded on demand by default.  
         
-        The load method forces loading of the spatial component 
+        The load method forces loading of the spatial submodel 
         for validation.
         '''
         try:
@@ -375,23 +373,23 @@ class SpatialComponentSet( object ):
             self._modelError = str(sys.exc_info()[1])
             raise
 
-class ModelComponent( object ):
+class Component( object ):
     '''
-    A model component combines a spatial and time component with a range of valid versions.
+    A model component combines a spatial and time submodel with a range of valid versions.
     The list of model components is used to compile the deformation model for any required version.
     '''
 
-    def __init__( self, component, compdesc, compdef, spatialComp, timeComp ):
-        self.component = component
+    def __init__( self, submodel, compdesc, compdef, spatialModel, timeFunc ):
+        self.submodel = submodel
         self.compdesc = compdesc
         self.description = compdef.description
         self.versionAdded = compdef.version_added
         self.versionRevoked = compdef.version_revoked
-        self.subcomponent = compdef.subcomponent
+        self.component = compdef.component
         self.priority = compdef.priority
-        self.spatialComponent = spatialComp
-        self.name = component+'/'+spatialComp.name()
-        self.timeComponent = timeComp
+        self.spatialModel = spatialModel
+        self.name = submodel+'/'+spatialModel.name()
+        self.timeFunction = timeFunc
         self.factor = 1.0
         self.timeFactor = 0.0
         self.timeErrorFactor = 0.0
@@ -413,9 +411,9 @@ class ModelComponent( object ):
         The time calculation is cached as the most common usage will be for
         many calculations at the same date.
         '''
-        logging.info("Setting component %s date %s (base date %s)",self.name,date,baseDate)
+        logging.info("Setting submodel %s date %s (base date %s)",self.name,date,baseDate)
         
-        self.timeFactor, self.timeErrorFactor = self.timeComponent.calcFactor( date, baseDate )
+        self.timeFactor, self.timeErrorFactor = self.timeFunction.calcFactor( date, baseDate )
         self.timeFactor *= self.factor
         self.timeErrorFactor *= self.factor
         logging.info("Time factor calculated as %s",self.timeFactor)
@@ -424,9 +422,9 @@ class ModelComponent( object ):
         '''
         Calculate the deformation [de,dn,du,vh,vv] at a specified location.  
         Note that vh and vv are the variances horizonal and vertical if defined
-        Assumes that the time component has already been calculated by a call to setDate
+        Assumes that the time function has already been calculated by a call to setDate
         '''
-        logging.info("Calculating component %s for location (%s,%s)",self.name,x,y)
+        logging.info("Calculating submodel %s for location (%s,%s)",self.name,x,y)
 
         # If the time factor is 0 then don't need to do any more
         t0 = self.timeFactor
@@ -435,12 +433,12 @@ class ModelComponent( object ):
             return [0.0,0.0,0.0,0.0,0.0]
 
         t1 = self.timeErrorFactor
-        value = self.spatialComponent.calcDeformation(x,y)[0]
+        value = self.spatialModel.calcDeformation(x,y)[0]
         return [value[0]*t0,value[1]*t0,value[2]*t0,value[3]*t1,value[4]*t1]
 
 class Model( object ):
     '''
-    Defines a deformation model which may have multiple versions and multiple components.  
+    Defines a deformation model which may have multiple versions and multiple submodels.  
 
     The model is loaded by specifying a base directory containing the files defining the model.  
     It can be used to calulate the deformation from any version of the model and at
@@ -457,7 +455,7 @@ class Model( object ):
         ])
 
     modelspec = CsvFile.FieldSpec('model',[
-        'component \\w+',
+        'submodel \\w+',
         'version_added \\d{8}',
         'version_revoked (\\d{8}|0)',
         'reverse_patch boolean',
@@ -469,11 +467,11 @@ class Model( object ):
         'value unicode'
         ])
 
-    componentspec = CsvFile.FieldSpec('component',[
+    componentspec = CsvFile.FieldSpec('submodel',[
         'version_added \\d{8}',
         'version_revoked (\\d{8}|0)',
         'reverse_patch boolean',
-        'subcomponent int',
+        'component int',
         'priority int',
         'min_lon float',
         'max_lon float',
@@ -482,14 +480,14 @@ class Model( object ):
         'spatial_complete boolean',
         'min_date datetime',
         'max_date datetime',
-        'temporal_complete boolean',
+        'time_complete boolean',
         'npoints1 int',
         'npoints2 int',
         'displacement_type (horizontal|vertical|3d|none)',
         'error_type (horizontal|vertical|3d|none)',
         'max_displacement float',
         'spatial_model (llgrid|lltin)',
-        'temporal_model (velocity|step|ramp|decay)',
+        'time_function (velocity|step|ramp|decay)',
         'time0 ?datetime',
         'factor0 ?float',
         'time1 ?datetime',
@@ -517,17 +515,17 @@ class Model( object ):
         source_url
         '''.split()
 
-    def __init__( self, basedir, version=None, baseVersion=None, loadComponent=None, load=False, useCache=True, clearCache=False ):
+    def __init__( self, basedir, version=None, baseVersion=None, loadSubmodel=None, loadAll=False, useCache=True, clearCache=False ):
         '''
         Loads the deformation model located at the specified base directory (the
-        directory holding the model.csv file).  If load=True then the spatial components
+        directory holding the model.csv file).  If loadAll=True then the spatial submodels
         of all models are preloaded (ie TINs and grids).  Otherwise they are loaded only
         when they are required for calculations.
 
         The version and baseVersion for deformation calculations can be specified, otherwise
         the latest version is used by default.
 
-        By default all components are loaded, but just one individual componenent can be
+        By default all submodels are loaded, but just one individual submodel can be
         selected.
         '''
         logging.info("Loading deformation model from %s",basedir)
@@ -582,12 +580,12 @@ class Model( object ):
             message = str(sys.exc_info()[1])
             raise ModelDefinitionError("Invalid datum epoch in "+mtdfile+": "+message)
 
-        # List of model components, and hash of spatial files used to identify which have
+        # List of model submodels, and hash of spatial files used to identify which have
         # already been loaded
 
         self._components = []
         self._spatial_models={}
-        self._temporal_models={}
+        self._time_functions={}
         self._cache=None
 
         cacheFile = os.path.join(self._basedir,'cache.h5')
@@ -596,23 +594,23 @@ class Model( object ):
         if useCache:
             self._cache = Cache(cacheFile)
 
-        # Components to use.  Default is all.  Specific components can be selected
-        # as "compononent+...+component", or "-component+component+....+component"
+        # Submodels to use.  Default is all.  Specific submodels can be selected
+        # as "submodel+...+submodel", or "-submodel+submodel+....+submodel"
 
-        componentList=[]
+        submodelList=[]
         useList=True
-        if loadComponent:
-            if loadComponent.startswith('-'):
+        if loadSubmodel:
+            if loadSubmodel.startswith('-'):
                 useList=False
-                loadComponent=loadComponent[1:]
-            componentList=loadComponent.lower().split('+')
+                loadSubmodel=loadSubmodel[1:]
+            submodelList=loadSubmodel.lower().split('+')
 
         for mdl in CsvFile('model',modfile,self.modelspec):
-            component = mdl.component
-            if componentList:
+            submodel = mdl.submodel
+            if submodelList:
                 matched=False
-                for c in componentList:
-                    if component.lower()==c or component.lower().startswith('patch_'+c):
+                for c in submodelList:
+                    if submodel.lower()==c or submodel.lower().startswith('patch_'+c):
                         matched=True
                         break
                 if matched:
@@ -622,43 +620,43 @@ class Model( object ):
                     continue
 
             if mdl.version_added not in versions:
-                raise ModelDefinitionError("Model component "+mdl.component+" version_added "+mdl.version_added+" is not in version.csv")
+                raise ModelDefinitionError("Submodel "+mdl.submodel+" version_added "+mdl.version_added+" is not in version.csv")
             if mdl.version_revoked != '0' and mdl.version_revoked not in versions:
-                raise ModelDefinitionError("Model component "+mdl.component+" version_revoked "+mdl.version_revoked+" is not in version.csv")
-            compbase = os.path.join(basedir,component)
+                raise ModelDefinitionError("Submodel "+mdl.submodel+" version_revoked "+mdl.version_revoked+" is not in version.csv")
+            compbase = os.path.join(basedir,submodel)
             if not os.path.isdir(compbase):
-                raise ModelDefinitionError("Model component "+mdl.component+" directory is missing")
+                raise ModelDefinitionError("Submodel "+mdl.submodel+" directory is missing")
             compfile = os.path.join(compbase,'component.csv')
             if not os.path.isfile(compfile):
-                raise ModelDefinitionError("Model component "+mdl.component+" component.csv file is missing")
-            compname = os.path.join(component,'component.csv')
+                raise ModelDefinitionError("Submodel "+mdl.submodel+" component.csv file is missing")
+            compname = os.path.join(submodel,'component.csv')
 
             filehashcheck = {}
             subcomponents = {}
             for compdef in CsvFile('component',compfile,self.componentspec):
                 if compdef.version_added not in versions:
-                    raise ModelDefinitionError("Component version_added " + compdef.version_added + " in " + compname + "is not in version.csv")
+                    raise ModelDefinitionError("Submodel version_added " + compdef.version_added + " in " + compname + "is not in version.csv")
                 if compdef.version_revoked != '0' and compdef.version_revoked not in versions:
-                    raise ModelDefinitionError("Component version_revoked "+compdef.version_revoked+" in "+compname+" is not in version.csv")
+                    raise ModelDefinitionError("Submodel version_revoked "+compdef.version_revoked+" in "+compname+" is not in version.csv")
                 if compdef.displacement_type == 'none' and compdef.error_type == 'none':
                     raise ModelDefinitionError("Component in "+compname+" has displacement_type and error_type as none")
 
-                spatial = SpatialComponent.get( self, self._spatial_models, component, compdef, load )
-                temporal = TimeComponent.get( self._temporal_models, compdef )
+                spatial = SpatialModel.get( self, self._spatial_models, submodel, compdef, loadAll )
+                temporal = TimeFunction.get( self._time_functions, compdef )
 
-                subcomponentid = compdef.subcomponent
+                componentid = compdef.component
 
-                if subcomponentid > 0:
-                    if subcomponentid in subcomponents:
-                        subcomponents[subcomponentid].addComponent(spatial,compdef)
+                if componentid > 0:
+                    if componentid in subcomponents:
+                        subcomponents[componentid].addComponent(spatial,compdef)
                         continue
                     else:
-                        subcomp = SpatialComponentSet(component,spatial,compdef)
-                        subcomponents[subcomponentid] = subcomp
+                        subcomp = SpatialModelSet(submodel,spatial,compdef)
+                        subcomponents[componentid] = subcomp
                         spatial = subcomp
 
                 self._components.append(
-                    ModelComponent(component,mdl.description,compdef,spatial,temporal ))
+                    Component(submodel,mdl.description,compdef,spatial,temporal ))
 
         self._stcomponents = []
         self._version = ''
@@ -678,7 +676,7 @@ class Model( object ):
         Release resources to avoid circular links that will prevent garbage collection.
         '''
         self._spatial_models = None
-        self._temporal_models = None
+        self._time_functions = None
         self._components = None
         self._stcomponents = None
         if self._cache:
@@ -909,13 +907,13 @@ class Model( object ):
         '''
         return self._datumsrid
 
-    def components( self, allversions=False ):
-        compkey=lambda c: (0 if c.component == 'ndm' else 1,c.versionAdded,c.component)
+    def submodels( self, allversions=False ):
+        compkey=lambda c: (0 if c.submodel == 'ndm' else 1,c.versionAdded,c.submodel)
         for c in sorted(self._components,key=compkey):
             if allversions or c.appliesForVersion(self.version()):
                 yield c
 
-    def description( self, allversions=False, components=True ):
+    def description( self, allversions=False, submodels=True ):
         '''
         Return a description of the model
         '''
@@ -936,30 +934,30 @@ class Model( object ):
                           " released "+v.release_date.strftime('%d-%b-%Y')+
                           ": "+v.reason+"\n")
 
-        if components:
+        if submodels:
             compcount = {}
-            for c in self.components(allversions): 
-                compcount[c.component] = compcount[c.component]+1 if c.component in compcount else 1
+            for c in self.submodels(allversions): 
+                compcount[c.submodel] = compcount[c.submodel]+1 if c.submodel in compcount else 1
 
-            outs.write("\nComponents:\n")
+            outs.write("\nSubmodels:\n")
             lastcomponent=None
-            for c in self.components( allversions ):
-                if c.component != lastcomponent:
+            for c in self.submodels( allversions ):
+                if c.submodel != lastcomponent:
                     description = c.compdesc.strip().replace("\n","\n        ")
-                    outs.write("\n    Component: "+c.component+": " + description +"\n")
-                    lastcomponent=c.component
+                    outs.write("\n    Submodel: "+c.submodel+": " + description +"\n")
+                    lastcomponent=c.submodel
                 prefix="    "
-                if compcount[c.component] > 1:
+                if compcount[c.submodel] > 1:
                     description = c.description.strip().replace("\n","\n            ")
-                    outs.write("        Sub-component: "+description+"\n")
+                    outs.write("        Component: "+description+"\n")
                     prefix="        "
                 if allversions:
                     outs.write(prefix+"    Version added: "+c.versionAdded)
                     if c.versionRevoked != '0':
                         outs.write(" revoked: "+c.versionRevoked)
                     outs.write("\n")
-                outs.write(prefix+"    Time model: "+str(c.timeComponent)+"\n")
-                description = str(c.spatialComponent).replace("\n","\n        "+prefix)
+                outs.write(prefix+"    Time function: "+str(c.timeFunction)+"\n")
+                description = str(c.spatialModel).replace("\n","\n        "+prefix)
                 outs.write(prefix+"    Spatial model: "+description+"\n")
 
         description = outs.getvalue()

@@ -34,15 +34,15 @@ ITRF_NZGD2000.py: program to calculate deformation at a specific time and place 
 the LINZ deformation model.
 
 Syntax:
-    python CalcDeformation.py [options] input_file output_file
-    python CalcDeformation.py [options] -a longitude latitude
+    python ITRF_NZGD2000.py [options] input_file output_file
+    python ITRF_NZGD2000.py [options] -a longitude latitude
 
 Options are:
-  -d date           The date at which to calculate the deformation 
+  -d date           The date at which to calculate the transformation 
     --date=..       (default current date), or ":col_name"
 
   -i itrf           The ITRF reference frame to transform from/to. Eg 2008,
-    --itrf=         ITRF2008, 97, etc.
+    --itrf=         ITRF2008, 97, etc. (default ITRF2008)
   -r                Reverse transformation (ie NZGD2000->ITRF)
     --reverse
   -c lon:lat:h      Column names for the longitude, latitude, and height columns           

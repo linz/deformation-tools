@@ -44,6 +44,7 @@ for c in submodels:
         version_revoked = '10000101'
         reverse_patch="N"
         description=""
+        descversion='0'
         ccsv = csv.DictReader(ccsvf)
         for item in ccsv:
             if version_added == '0' or item['version_added'] < version_added:
@@ -53,7 +54,7 @@ for c in submodels:
                 version_revoked = ivr
             if item['reverse_patch'] == 'Y':
                 reverse_patch='Y'
-            if description == '':
+            if item['version_added'] > descversion:
                 description = item['description'].strip()
         print "  Added",version_added,"revoked",version_revoked,"reverse patch",reverse_patch
         complist.append([c,version_added,version_revoked,reverse_patch,description])
