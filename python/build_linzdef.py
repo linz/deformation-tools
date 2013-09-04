@@ -57,7 +57,7 @@ END_DESCRIPTION
 '''.format(
     version=m.version(),
     versiondate=m.versionInfo(m.version()).release_date.strftime('%d-%b-%Y'),
-    description=m.description(components=False)
+    description=m.description(submodels=False)
     )
 
 # print header
@@ -86,10 +86,10 @@ class TimeEvent:
 sequences=[]
 
 for c in m.components():
-    component=c.component
+    component=c.submodel
     # print component
-    tm=c.timeComponent
-    mtype=tm.temporal_model
+    tm=c.timeFunction
+    mtype=tm.time_function
     if mtype not in ('velocity','step','ramp'):
         raise RuntimeError('Cannot handle temporal model type '+mtype)
     # print type(c.timeComponent.model())
@@ -98,7 +98,7 @@ for c in m.components():
     grids=[]
     dimension=0
     zerobeyond='no'
-    for m in c.spatialComponent.models():
+    for m in c.spatialModel.models():
         if m.spatial_model != 'llgrid':
             raise RuntimeError('Cannot handle spatial model type '+spatial_model)
         # print m.model().gridSpec()

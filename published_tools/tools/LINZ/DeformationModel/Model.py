@@ -907,7 +907,7 @@ class Model( object ):
         '''
         return self._datumsrid
 
-    def submodels( self, allversions=False ):
+    def components( self, allversions=False ):
         compkey=lambda c: (0 if c.submodel == 'ndm' else 1,c.versionAdded,c.submodel)
         for c in sorted(self._components,key=compkey):
             if allversions or c.appliesForVersion(self.version()):
