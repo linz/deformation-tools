@@ -936,12 +936,12 @@ class Model( object ):
 
         if submodels:
             compcount = {}
-            for c in self.submodels(allversions): 
+            for c in self.components(allversions): 
                 compcount[c.submodel] = compcount[c.submodel]+1 if c.submodel in compcount else 1
 
             outs.write("\nSubmodels:\n")
             lastcomponent=None
-            for c in self.submodels( allversions ):
+            for c in self.components( allversions ):
                 if c.submodel != lastcomponent:
                     description = c.compdesc.strip().replace("\n","\n        ")
                     outs.write("\n    Submodel: "+c.submodel+": " + description +"\n")

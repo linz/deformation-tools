@@ -403,7 +403,7 @@ if __name__=="__main__":
                     if len(row) < reqlen:
                         continue
                     xyz=[float(row[i]) for i in cols]
-                    xyzt=transfunc(args.xyz)
+                    xyzt=transfunc(xyz)
                     for f,c,x in zip(crdfmt,cols,xyzt):
                         row[c]=f.format(x)
                     writerow(row)

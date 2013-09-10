@@ -153,15 +153,15 @@ class ITRF_transformation( object ):
                     if self.rates and self.refdate else '') +
                 "   Translations {0:.2f}  {1:.2f}  {2:.2f} mm\n".format(*self.params[0:3])+
                 (
-                "          rates {0:.4f}  {1:.4f}  {2:.4f} mm/yr\n".format(*self.rates[0:3])
+                "          rates {0:.2f}  {1:.2f}  {2:.2f} mm/yr\n".format(*self.rates[0:3])
                     if self.rates and self.refdate else '') +
-                "      Rotations {0:.2f}  {1:.2f}  {2:.2f} mas\n".format(*self.params[4:7])+
+                "      Rotations {0:.5f}  {1:.5f}  {2:.5f} mas\n".format(*self.params[4:7])+
                 (
-                "          rates {0:.4f}  {1:.4f}  {2:.4f} mas/yr\n".format(*self.rates[4:7])
+                "          rates {0:.5f}  {1:.5f}  {2:.5f} mas/yr\n".format(*self.rates[4:7])
                     if self.rates and self.refdate else '') +
-                "          Scale {0:.2f}  ppb\n".format(self.params[3])+
+                "          Scale {0:.5f}  ppb\n".format(self.params[3])+
                 (
-                "          rates {0:.4f} ppb/yr\n".format(self.rates[3])
+                "          rates {0:.5f} ppb/yr\n".format(self.rates[3])
                     if self.rates and self.refdate else ''))
 
     def reversed( self ):
@@ -276,7 +276,7 @@ class ITRF_transformation( object ):
         from ellipsoid import grs80
         xyz=grs80.xyz(lon,lat,hgt)
         xyz=self.transform(xyz,date=date)
-        return grs80.geodetic(self._tf(xyz))
+        return grs80.geodetic(xyz)
 
 
 transformation=ITRF_transformation.transformation
@@ -288,8 +288,8 @@ if __name__=="__main__":
     import argparse
     import re
     parser=argparse.ArgumentParser(description='Convert Cartesian coordinates between ITRF systems')
-    parser.add_argument('-f','--from-itrf',default='ITRF2008',help="Source ITRF - default ITRF96")
-    parser.add_argument('-t','--to-itrf',default='ITRF96',help="Target ITRF - default ITRF2008")
+    parser.add_argument('-f','--from-itrf',default='ITRF2008',help="Source ITRF - default ITRF2008")
+    parser.add_argument('-t','--to-itrf',default='ITRF96',help="Target ITRF - default ITRF96")
     parser.add_argument('-d','--date',help="Transformation date (yyyymmdd or yyyy.yyy) - default today")
     parser.add_argument('-l','--list',action='store_true',help="List transformation parameters")
     parser.add_argument('-x','--xyz',nargs=3,type=float,metavar=('X','Y','Z'),help="XYZ coordinates to transform (input/output files ignored)")
@@ -403,7 +403,7 @@ if __name__=="__main__":
                     if len(row) < reqlen:
                         continue
                     xyz=[float(row[i]) for i in cols]
-                    xyzt=transfunc(args.xyz)
+                    xyzt=transfunc(xyz)
                     for f,c,x in zip(crdfmt,cols,xyzt):
                         row[c]=f.format(x)
                     writerow(row)
