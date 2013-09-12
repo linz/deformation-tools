@@ -116,7 +116,7 @@ optlist=None
 args=None
 try:
     optlist, args = getopt.getopt( sys.argv[1:], 'hd:b:uc:f:e:g:m:v:po:kqlxas', 
-         ['help', 'date=', 'base_date=', 'apply','subtract','columns=','format=','elements=',
+         ['help', 'date=', 'base-date=', 'apply','subtract','columns=','format=','elements=',
           'grid=','model-dir=','version=','patch','check',
           'only=','list','quiet','cache=','logging','atpoint'])
 except getopt.GetoptError:
@@ -148,7 +148,7 @@ for o,v in optlist:
             except:
                 print "Invalid date "+v+" requested, must be formatted YYYY-MM-DD"
                 sys.exit()
-    elif o in ('-b','--base_date'):
+    elif o in ('-b','--base-date'):
        try:
             base_date=Time.Parse(v) 
        except:
