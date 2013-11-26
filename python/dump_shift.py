@@ -14,11 +14,13 @@ from defgrid import defgrid
 from random import uniform, seed
 from subprocess import call
 
-ntestpergrid=5
+ntestpergrid=20
 
 land_area_tolerance=0.01
 land_areas=None
 seed('Consistent random seed')
+
+ntv2py=os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])),'make_ntv2.py')
 
 def load_land_areas( polygon_file ):
     global land_areas
@@ -191,6 +193,19 @@ def build_dump( def_file ):
                    fmt='%.5f %.5f %.3f %.4f %.4f %.4f %.8f %.8f %.4f'.split(),
                    delimiter=',',newline='\r\n')
     filelist.append(testfile)
+
+    # Build NTv2 grid files (.asc, .gsb)
+
+    ntv2base=re.sub(r'(\.def)?$','',def_file,re.I)
+    call([
+        'python',
+        ntv2py,
+        '-b',basedir,
+        '-v','20130801',
+        ntv2base
+        ])
+    filelist.append(ntv2base+'.asc')
+    filelist.append(ntv2base+'.gsb')
     
     zipfile=re.sub(r'(\.def)?$','.zip',def_file,re.I)
     zipfile=os.path.basename(zipfile)
