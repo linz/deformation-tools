@@ -82,6 +82,7 @@ parser.add_argument('-c','--created',default=date.today().strftime("%Y%m%d"),hel
 parser.add_argument('-A','--australian',action='store_true',help='Build australian format binary')
 parser.add_argument('-B','--big-endian',action='store_true',help='File is big endian (default little endian)')
 parser.add_argument('-k','--keep-files',action='store_true',help='Keep working files')
+parser.add_argument('--ogr2ogr-bug-workaround',action='store_true',help='Workaround for ogr2ogr nested grid bug (#177) - carefully ordered non-nested grids!')
 parser.add_argument('ntv2_filename',default='grid.asc',help='Base name of the NTv2 grid file')
 
 args=parser.parse_args()
@@ -141,6 +142,14 @@ for f in filenames:
         working_files.append(lgf)
     llgrid[f]=lgf
 
+# ogr2ogr nested grid bug (proj issue #177) workaround - construct the grids started with deepest 
+# level and ignoring nesting.  Looks like proj/ogr2ogr just takes the first grid that applies at 
+# a point, so this should just pick the most detailed grid.
+
+if args.ogr2ogr_bug_workaround:
+    print "Applying ogr2ogr bug (proj issue #177) bug fix"
+    filenames.reverse()
+    parent=dict()
 
 endian = '>' if args.big_endian else '<'
 sformat=endian+'8s8s'
@@ -202,8 +211,8 @@ with open(ntfile+'.asc','w') as nt,open(ntfile+'.gsb','wb') as nb:
             nlat=int(len(points)/nlon)
             if nlat*nlon != len(points):
                 raise RuntimeError("Error reading grid "+llgrid[f])
-            loninc=(lon1-lon0)/nlon
-            latinc=(lat1-lat0)/nlat
+            loninc=(lon1-lon0)/(nlon-1)
+            latinc=(lat1-lat0)/(nlat-1)
             nt.write("{0:8s}{1:8s}\n".format('SUB_NAME',name))
             nt.write("{0:8s}{1:8s}\n".format('PARENT',pname))
             nt.write("{0:8s}{1:8s}\n".format('CREATED',created))
