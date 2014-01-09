@@ -125,6 +125,7 @@ for f in filenames:
     lgf=lgf[len(basedir)+1:]
     working_files.append(lgf)
     # If there is a parent, then add the parent offsets
+    # Also ensure that the 
     # This will cumulate as we are processing files from top to bottom
     if f in parent:
         lgfp=llgrid[parent[f]]
@@ -133,6 +134,8 @@ for f in filenames:
             'gridtool',
             'read','csv',
             basedir+'/'+lgf,
+            'alignto','csv',
+            basedir+'/'+lgfp,
             'add','csv',
             basedir+'/'+lgfp,
             'write','csv',
