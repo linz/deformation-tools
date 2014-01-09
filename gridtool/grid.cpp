@@ -397,6 +397,13 @@ bool grid::nearest( const point &p, node &n )
     return result;
 }
 
+bool grid::nodexy( const point &n, point &p )
+{
+    p.x = m_x0 + m_coldx*n.x + m_rowdx*n.y;
+    p.y = m_y0 + m_coldy*n.x + m_rowdy*n.y;
+    return true;
+}
+
 bool grid::nodexy( int ir, int ic, double &x, double &y )
 {
     x = m_x0 + m_coldx*ic + m_rowdx*ir;
@@ -670,6 +677,36 @@ void grid::add( grid &g, double factor0, double factor1, bool markedonly )
                 }
             }
         }
+}
+
+void grid::alignto( grid &g )
+{
+    // Determine the grid corners in terms of the alignment grid
+    // Only really makes sense if grids have consistent x,y axes...
+    int colmin=0;
+    int colmax=m_ncol;
+    int rowmin=0;
+    int rowmax=m_nrow;
+
+    point corner;
+    point gcorner;
+    point ncorner;
+
+    nodexy(node(0,0),corner);
+    g.gridcoords(corner,gcorner);
+    g.nodexy(point(floor(gcorner.x+0.0001),floor(gcorner.y+0.0001)),corner);
+    gridcoords(corner,ncorner);
+    if(ncorner.x < -0.00001) colmin=int(floor(ncorner.x+0.0001));
+    if(ncorner.y < -0.00001) rowmin=int(floor(ncorner.y+0.0001));
+
+    nodexy(node(m_ncol,m_nrow),corner);
+    g.gridcoords(corner,gcorner);
+    g.nodexy(point(floor(gcorner.x+0.0001),floor(gcorner.y+0.0001)),corner);
+    gridcoords(corner,ncorner);
+    if(m_ncol-ncorner.x < -0.00001) colmax=int(ceil(ncorner.x-0.0001));
+    if(m_nrow-ncorner.y < -0.00001) rowmax=int(ceil(ncorner.y-0.0001));
+
+    resize(rowmin,colmin,rowmax,colmax);
 }
 
 void grid::resize( int rowmin, int colmin, int rowmax, int colmax )

@@ -196,3 +196,9 @@ Grid has 8 rows and 7 columns
 Each point has 2 data values
 Writing grid data to file out/test30a.txt
 Writing grid data to file out/test30b.txt
+test 31 - align
+Reading file from align2.grid
+Grid has 6 rows and 9 columns
+Each point has 2 data values
+Aligning grid to align1.grid
+Writing grid to file out/test31.grid

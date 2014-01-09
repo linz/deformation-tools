@@ -61,4 +61,6 @@ echo "test 29 - replace" | tee -a out/tests.log
 ../gridtool test1.grid replace test3.grid out/test29_replace.grid >> out/tests.log
 echo "test 30 - expand" | tee -a out/tests.log
 ../gridtool read test1.grid write columns none out/test30a.txt where nearest_to test30_pts.xy write columns none out/test30b.txt where nearest_to test30_pts.xy and expand 2.5 >> out/tests.log
+echo "test 31 - align" | tee -a out/tests.log
+../gridtool read align2.grid alignto align1.grid write out/test31.grid >> out/tests.log
 

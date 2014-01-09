@@ -76,6 +76,7 @@ public:
     bool nearest( const point &p, node &n );
     bool nodexy( int row, int col, double &x, double &y );
     bool nodexy( const node &n, point &p );
+    bool nodexy( const point &n, point &p );
 
     void clearMarked( markaction action = off );
     void mark( const node &n, markaction action=on );
@@ -90,6 +91,7 @@ public:
     void processMarked( void(*func)(grid &g, node &n, void *data), void *data = 0);
     bool valueAt( point &xy, std::vector<double> &values );
     void add( grid &g, double factor0=1.0, double factor1=1.0, bool markedonly=false );
+    void alignto( grid &g );
     void multiplyBy( double factor );
     void resize( int rowmin, int colmin, int rowmax, int colmax );
     void trim( int borderSize = 0 );

@@ -394,6 +394,14 @@ static void run_addgrid( grid &g, commandlist &commands, string &command )
     g.add(gadd,factor0,factor1,marked);
 }
 
+static void run_aligngrid( grid &g, commandlist &commands )
+{
+    grid galign;
+    string filename = run_read_grid( galign, commands, "align" );
+    cout <<  "Aligning grid to " << filename << endl;
+    g.alignto(galign);
+}
+
 static void run_multiply( grid &g, commandlist &commands )
 {
     string sfactor = next_command(commands,"Scale factor in multiply command");
@@ -576,6 +584,7 @@ static void run_commands( commandlist &commands )
             else if( op == "add" ) run_addgrid( g, commands, op );
             else if( op == "subtract" ) run_addgrid(g, commands, op );
             else if( op == "replace" ) run_addgrid(g, commands, op );
+            else if( op == "alignto" ) run_aligngrid( g, commands );
             else if( op == "multiply" ) run_multiply( g, commands );
             else if( op == "evaluate" ) run_evaluate( g, commands );
             else if( op == "resize" ) run_resize( g, commands );

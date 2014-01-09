@@ -41,6 +41,11 @@ smooth (linear|quadratic|cubic) selection
    with other values (minimizing single, double, or triple differences on
    rows or columns)
 
+align [csv] parent_grid_file
+   expands the grid to align with a parent file.  Just based on the parent
+   extents and resolution.  The grid will only be aligned by adding rows 
+   and columns to be as near the parent grid as it can.
+
 add [csv] [maxcols n] grid_file [where selection]
 subtract [csv] [maxcols n] grid_file [where selection]
 replace [csv] [maxcols n] grid_file [where selection]
