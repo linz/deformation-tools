@@ -136,6 +136,8 @@ for f in filenames:
             basedir+'/'+lgf,
             'alignto','csv',
             basedir+'/'+lgfp,
+            'trimto','csv',
+            basedir+'/'+lgfp,
             'add','csv',
             basedir+'/'+lgfp,
             'write','csv',
