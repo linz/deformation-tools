@@ -63,4 +63,11 @@ echo "test 30 - expand" | tee -a out/tests.log
 ../gridtool read test1.grid write columns none out/test30a.txt where nearest_to test30_pts.xy write columns none out/test30b.txt where nearest_to test30_pts.xy and expand 2.5 >> out/tests.log
 echo "test 31 - align" | tee -a out/tests.log
 ../gridtool read align2.grid alignto align1.grid write out/test31.grid >> out/tests.log
+../gridtool read out/test31.grid alignto align1.grid write out/test31a.grid >> out/tests.log
+../gridtool read out/test31.grid resize relative -1 -1 1 1 alignto align1.grid write out/test31b.grid >> out/tests.log
+../gridtool read out/test31.grid resize relative 1 1 -1 -1 alignto align1.grid write out/test31c.grid >> out/tests.log
+echo "test 32 - trim" | tee -a out/tests.log
+../gridtool read align2.grid resize relative -15 -15 45 25  trimto align1.grid write out/test32.grid >> out/tests.log
+../gridtool read out/test32.grid resize relative -1 -1 1 1 trimto align1.grid write out/test32b.grid >> out/tests.log
+../gridtool read out/test32.grid resize relative 1 1 -1 -1 trimto align1.grid write out/test32c.grid >> out/tests.log
 

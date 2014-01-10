@@ -41,10 +41,13 @@ smooth (linear|quadratic|cubic) selection
    with other values (minimizing single, double, or triple differences on
    rows or columns)
 
-align [csv] parent_grid_file
+alignto [csv] parent_grid_file
    expands the grid to align with a parent file.  Just based on the parent
    extents and resolution.  The grid will only be aligned by adding rows 
    and columns to be as near the parent grid as it can.
+
+trimto [csv] parent_grid_file
+   Trims the grid to not exceed the extents of the parent grid.
 
 add [csv] [maxcols n] grid_file [where selection]
 subtract [csv] [maxcols n] grid_file [where selection]
@@ -56,7 +59,7 @@ replace [csv] [maxcols n] grid_file [where selection]
 multiply factor
    Multiply all values in the grid by the factor
 
-resize rowmin colmin rowmax colmax
+resize [relative] rowmin colmin rowmax colmax
    Resize to only include rows between rowmin and rowmax and columns
    between colmin and colmax
 

@@ -394,12 +394,20 @@ static void run_addgrid( grid &g, commandlist &commands, string &command )
     g.add(gadd,factor0,factor1,marked);
 }
 
-static void run_aligngrid( grid &g, commandlist &commands )
+static void run_aligntogrid( grid &g, commandlist &commands )
 {
     grid galign;
     string filename = run_read_grid( galign, commands, "align" );
     cout <<  "Aligning grid to " << filename << endl;
     g.alignto(galign);
+}
+
+static void run_trimtogrid( grid &g, commandlist &commands )
+{
+    grid galign;
+    string filename = run_read_grid( galign, commands, "align" );
+    cout <<  "Trimming to grid to " << filename << endl;
+    g.trimto(galign);
 }
 
 static void run_multiply( grid &g, commandlist &commands )
@@ -420,10 +428,12 @@ static void run_multiply( grid &g, commandlist &commands )
 static void run_resize( grid &g, commandlist &commands )
 {
     int rowmin, colmin, rowmax, colmax;
+    bool relative=next_command_is(commands,"relative");
     next_command_value(commands,rowmin,"Resize minimum row");
     next_command_value(commands,colmin,"Resize minimum column");
     next_command_value(commands,rowmax,"Resize maximum row");
     next_command_value(commands,colmax,"Resize maximum column");
+    if( relative ) { rowmax += g.nrow()-1; colmax += g.ncol()-1; }
     cout << "Resizing to include rows " << rowmin << " to " << rowmax
         << " and columns " << colmin << " to " << colmax << endl;
     g.resize(rowmin,colmin,rowmax,colmax);
@@ -584,7 +594,8 @@ static void run_commands( commandlist &commands )
             else if( op == "add" ) run_addgrid( g, commands, op );
             else if( op == "subtract" ) run_addgrid(g, commands, op );
             else if( op == "replace" ) run_addgrid(g, commands, op );
-            else if( op == "alignto" ) run_aligngrid( g, commands );
+            else if( op == "alignto" ) run_aligntogrid( g, commands );
+            else if( op == "trimto" ) run_trimtogrid( g, commands );
             else if( op == "multiply" ) run_multiply( g, commands );
             else if( op == "evaluate" ) run_evaluate( g, commands );
             else if( op == "resize" ) run_resize( g, commands );

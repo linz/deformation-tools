@@ -684,9 +684,9 @@ void grid::alignto( grid &g )
     // Determine the grid corners in terms of the alignment grid
     // Only really makes sense if grids have consistent x,y axes...
     int colmin=0;
-    int colmax=m_ncol;
+    int colmax=m_ncol-1;
     int rowmin=0;
-    int rowmax=m_nrow;
+    int rowmax=m_nrow-1;
 
     point corner;
     point gcorner;
@@ -699,12 +699,47 @@ void grid::alignto( grid &g )
     if(ncorner.x < -0.00001) colmin=int(floor(ncorner.x+0.0001));
     if(ncorner.y < -0.00001) rowmin=int(floor(ncorner.y+0.0001));
 
-    nodexy(node(m_ncol,m_nrow),corner);
+    nodexy(node(rowmax,colmax),corner);
     g.gridcoords(corner,gcorner);
-    g.nodexy(point(floor(gcorner.x+0.0001),floor(gcorner.y+0.0001)),corner);
+    g.nodexy(point(ceil(gcorner.x-0.0001),ceil(gcorner.y-0.0001)),corner);
     gridcoords(corner,ncorner);
-    if(m_ncol-ncorner.x < -0.00001) colmax=int(ceil(ncorner.x-0.0001));
-    if(m_nrow-ncorner.y < -0.00001) rowmax=int(ceil(ncorner.y-0.0001));
+    if(colmax < ncorner.x-0.00001) colmax=int(ceil(ncorner.x-0.0001));
+    if(rowmax < ncorner.y-0.00001) rowmax=int(ceil(ncorner.y-0.0001));
+
+    resize(rowmin,colmin,rowmax,colmax);
+}
+
+void grid::trimto( grid&g )
+{
+    // Determine the grid corners in terms of the alignment grid
+    // Only really makes sense if grids have consistent x,y axes...
+    //
+    int colmin=0;
+    int colmax=m_ncol-1;
+    int rowmin=0;
+    int rowmax=m_nrow-1;
+
+    point corner;
+    point gcorner;
+    point ncorner;
+
+    nodexy(node(0,0),corner);
+    g.gridcoords(corner,gcorner);
+    if( gcorner.x < 0 ) gcorner.x=0;
+    if( gcorner.y < 0 ) gcorner.y=0;
+    g.nodexy(gcorner,corner);
+    gridcoords(corner,ncorner);
+    if(ncorner.x > 0.0 ) colmin=int(ceil(ncorner.x-0.0001));
+    if(ncorner.y > 0.0 ) rowmin=int(ceil(ncorner.y-0.0001));
+
+    nodexy(node(rowmax,colmax),corner);
+    g.gridcoords(corner,gcorner);
+    if( gcorner.x > g.ncol()-1 ) gcorner.x=g.ncol()-1;
+    if( gcorner.y > g.nrow()-1 ) gcorner.y=g.nrow()-1;
+    g.nodexy(gcorner,corner);
+    gridcoords(corner,ncorner);
+    if(ncorner.x < colmax) colmax=int(floor(ncorner.x+0.0001));
+    if(ncorner.y < rowmax) rowmax=int(floor(ncorner.y+0.0001));
 
     resize(rowmin,colmin,rowmax,colmax);
 }

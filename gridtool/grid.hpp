@@ -92,6 +92,7 @@ public:
     bool valueAt( point &xy, std::vector<double> &values );
     void add( grid &g, double factor0=1.0, double factor1=1.0, bool markedonly=false );
     void alignto( grid &g );
+    void trimto( grid &g );
     void multiplyBy( double factor );
     void resize( int rowmin, int colmin, int rowmax, int colmax );
     void trim( int borderSize = 0 );

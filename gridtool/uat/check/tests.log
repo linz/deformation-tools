@@ -198,7 +198,43 @@ Writing grid data to file out/test30a.txt
 Writing grid data to file out/test30b.txt
 test 31 - align
 Reading file from align2.grid
-Grid has 6 rows and 9 columns
+Grid has 6 rows and 7 columns
 Each point has 2 data values
 Aligning grid to align1.grid
 Writing grid to file out/test31.grid
+Reading file from out/test31.grid
+Grid has 11 rows and 11 columns
+Each point has 2 data values
+Aligning grid to align1.grid
+Writing grid to file out/test31a.grid
+Reading file from out/test31.grid
+Grid has 11 rows and 11 columns
+Each point has 2 data values
+Resizing to include rows -1 to 11 and columns -1 to 11
+Aligning grid to align1.grid
+Writing grid to file out/test31b.grid
+Reading file from out/test31.grid
+Grid has 11 rows and 11 columns
+Each point has 2 data values
+Resizing to include rows 1 to 9 and columns 1 to 9
+Aligning grid to align1.grid
+Writing grid to file out/test31c.grid
+test 32 - trim
+Reading file from align2.grid
+Grid has 6 rows and 7 columns
+Each point has 2 data values
+Resizing to include rows -15 to 50 and columns -15 to 31
+Trimming to grid to align1.grid
+Writing grid to file out/test32.grid
+Reading file from out/test32.grid
+Grid has 26 rows and 31 columns
+Each point has 2 data values
+Resizing to include rows -1 to 26 and columns -1 to 31
+Trimming to grid to align1.grid
+Writing grid to file out/test32b.grid
+Reading file from out/test32.grid
+Grid has 26 rows and 31 columns
+Each point has 2 data values
+Resizing to include rows 1 to 24 and columns 1 to 29
+Trimming to grid to align1.grid
+Writing grid to file out/test32c.grid
