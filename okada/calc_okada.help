@@ -73,9 +73,28 @@ fields are assumed to be in the order specified.
 
 The file may contain an arbitrary number of header lines up before the first
 line of data.  After that it should only contain data lines and blank lines.
-(The first line of data is a line from which valid values can be read). If 
-there is a header line "Origin: lon lat" then the longitude and latitude are 
-taken as the origin of the projection.
+(The first line of data is a line from which valid values can be read). 
+
+The header line can include a definition of the coordinate system of the
+fault model - this can be one of:
+
+Origin lat lon: 
+   The coordinates are latitude and longitude, and the model is the
+   specified latitude and longitude are taken as the orgin of a 
+   "Seismologists projection"!
+
+Projection: definition
+   The coordinates and model are defined in terms of a projection coordinate
+   system.  The definition can be one of UTM59, UTM60, NZTM, or a 
+   transverse mercator definition
+      TM a rf cm sf lto fe fn 
+   where the parameters are semi-major axis, reciprocal flattening, 
+   central meridian, scale factor, origin of latitude, false easting,
+   false northing.
+
+If no coordinate system is defined then the model uses the equivalent of
+a "Origin" definition based on the latitude and longitude of the first 
+fault model.
 
 The fault model file has default extension ".model".  If it is not found
 from the current directory, it will try using a directory defined by 

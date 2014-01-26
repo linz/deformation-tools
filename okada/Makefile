@@ -5,7 +5,7 @@ LDLIBS=-lboost_regex -lm
 all: calc_okada 
 #test_okada
 
-calc_okada: calc_okada.o okada.o get_image_path.o
+calc_okada: calc_okada.o okada.o get_image_path.o tmproj.o
 
 test_okada: test_okada.o okada.o
 

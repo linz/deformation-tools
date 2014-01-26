@@ -95,7 +95,7 @@ try:
     optlist, args = getopt.getopt( sys.argv[1:], 'hd:c:f:g:i:m:v:rqlx', 
          ['help', 'date=', 'columns=','format=',
           'grid=','itrf=', 'model-dir=','version=',
-          'quiet','cache=','logging','atpoint'])
+          'quiet','cache=','reverse','logging','atpoint'])
 except getopt.GetoptError:
     print str(sys.exc_info()[1])
     sys.exit()

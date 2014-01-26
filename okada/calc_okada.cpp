@@ -2,6 +2,7 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 #define DTOR (M_PI/180.0)
+#define RTOD (180.0/M_PI)
 
 #include <fstream>
 #include <string>
@@ -18,12 +19,49 @@
 #endif
 #include "okada.h"
 #include "get_image_path.h"
+extern "C" {
+#include "tmproj.h"
+}
 
 using namespace std;
 #ifdef USE_BOOST_REGEX
 using namespace boost;
 #endif
 
+// Abstract base class for projections.  
+// Three are supported, Ian Reilly's "seismologists projection", as used
+// by John Beavan, and TM projections, as used by Ian Hamling's software,
+// and a null projection for which the spatial units are the same as the 
+// model units.
+
+class Projection
+{
+    public:
+    Projection();
+    virtual ~Projection();
+    virtual Projection *clone() const=0;
+    virtual void XY( double lon, double lat, double &x, double &y )=0;
+    virtual void LatLon( double x, double y, double &lon, double &lat )=0;
+    virtual bool IsValid()=0;
+};
+
+Projection::Projection(){}
+Projection::~Projection(){}
+
+// The NullProjection is just that - lon=x, lat=y..
+
+class NullProjection : public Projection
+{
+    public:
+    NullProjection() : Projection() {}
+    ~NullProjection() {};
+    virtual Projection *clone() const{ return new NullProjection; }
+    virtual void XY( double lon, double lat, double &x, double &y ){ x=lon; y=lat; }
+    virtual void LatLon( double x, double y, double &lon, double &lat ){ lon=x; lat=y; }
+    virtual bool IsValid() { return true; }
+};
+
+// Comments from John Beavan...
 // "Seismologist's projection" as Ian Reilly disparagingly called it.
 //
 // Choose (lat0, lon0) near the centre of the area of interest.
@@ -31,67 +69,115 @@ using namespace boost;
 // y = (lat - lat0)*111.2 km
 // x = (lon - lon0)/cos(lat0)*111.2 km
 //
-// I have never carefully investigated how quickly the errors grow with distance from (lat0, lon0) compared to a standard projection.  Usually, the geodetic data are sparse enough and the fault poorly enough known that such differences are unlikely to be important.
+// I have never carefully investigated how quickly the errors grow with distance from (lat0, lon0) 
+// compared to a standard projection.  Usually, the geodetic data are sparse enough and the fault 
+// poorly enough known that such differences are unlikely to be important.
 //
-// For very big earthquakes (such as Sumatra) the half-space approximation breaks down and it is necessary to use  models of dislocations in a sphere.  Not the case for Darfield, fortunately.
+// For very big earthquakes (such as Sumatra) the half-space approximation breaks down 
+// and it is necessary to use  models of dislocations in a sphere.  Not the case for Darfield, fortunately.
 
-
-class GNSProjection
+class GNSProjection : public Projection
 {
 public:
     GNSProjection()
-        : lat0(0), lon0(0), isvalid(false), noproj(false) {}
-    GNSProjection( double lon0, double lat0 )
-        : isvalid(false), noproj(false)  { SetOrigin(lon0,lat0); }
-    GNSProjection( const GNSProjection &proj )
-        : lon0(proj.lon0), lat0(proj.lat0), clat0(proj.clat0), isvalid(proj.isvalid), noproj(proj.noproj) {}
+        : lat0(0), lon0(0), isvalid(false) {}
+    GNSProjection( double lon0, double lat0 ){ SetOrigin(lon0,lat0); }
+    virtual ~GNSProjection(){}
+    virtual Projection *clone() const;
+    virtual void XY( double lon, double lat, double &x, double &y );
+    virtual void LatLon( double x, double y, double &lon, double &lat );
+    virtual bool IsValid() { return isvalid; }
     void SetOrigin( double lon0, double lat0 )
     {
-        this->lon0 = lon0; this->lat0 = lat0; this->clat0=cos(DTOR*lat0); noproj = false; isvalid = true;
+        this->lon0 = lon0; this->lat0 = lat0; this->clat0=cos(DTOR*lat0); isvalid = true;
     }
-    void SetNoProj( bool np = true ) { noproj = np; isvalid=true; }
-    void XY( double lon, double lat, double &x, double &y );
-    void LatLon( double x, double y, double &lon, double &lat );
-    bool IsValid() { return isvalid; }
 private:
+    GNSProjection( const GNSProjection &proj )
+        : lon0(proj.lon0), lat0(proj.lat0), clat0(proj.clat0), isvalid(proj.isvalid) {}
     void setup(double lon0, double lat0);
     static const double scale;
     double lat0;
     double lon0;
     double clat0;
     bool isvalid;
-    bool noproj;
 };
 
 const double GNSProjection::scale = 111200.0;
 
+Projection *GNSProjection::clone() const
+{
+    return new GNSProjection( *this );
+}
+
 void GNSProjection::XY( double lon, double lat, double &x, double &y )
 {
-    if( noproj) { x = lon; y = lat; return; }
-
     y = (lat - lat0)*scale;
     x = (lon - lon0)*scale*clat0;
 };
 
 void GNSProjection::LatLon( double x, double y, double &lon, double &lat )
 {
-    if( noproj ) { lon = x; lat = y; return; }
     lat = y/scale + lat0;
     lon = x/(scale * cos(DTOR*lat)) + lon0;
 };
 
+class TMProjection : public Projection
+{
+public:
+    TMProjection() : isvalid(false) {}
+    TMProjection( double a, double rf, double cm, double sf, double lto, double fe, double fn ) 
+    {
+        SetParameters( a, rf, cm, sf, lto, fe, fn );
+    }
+    virtual Projection *clone() const;
+    virtual void XY( double lon, double lat, double &x, double &y );
+    virtual void LatLon( double x, double y, double &lon, double &lat );
+    virtual bool IsValid() { return isvalid; }
+    void SetParameters( double a, double rf, double cm, double sf, double lto, double fe, double fn );
+private:
+    tmprojection tm;
+    bool isvalid;
+};
+
+void TMProjection::SetParameters( double a, double rf, double cm, double sf, double lto, double fe, double fn )
+{
+    define_tmprojection( &tm, a, rf, cm*DTOR, sf, lto*DTOR, fe, fn, 1.0 );
+    isvalid=true;
+}
+
+Projection *TMProjection::clone() const
+{
+    if( isvalid ) return new TMProjection( tm.a, tm.rf, tm.meridian*RTOD, tm.scalef, tm.orglat*RTOD, tm.falsee, tm.falsen);
+    return new TMProjection();
+}
+
+void TMProjection::XY( double lon, double lat, double &x, double &y )
+{
+    geod_tm( &tm, lon*DTOR, lat*DTOR, &x, &y );
+}
+
+void TMProjection::LatLon( double x, double y, double &lon, double &lat )
+{
+    tm_geod( &tm, x, y, &lon, &lat );
+    lon *= RTOD;
+    lat *= RTOD;
+}
+
+
+// 
+
 class FaultSet
 {
 public:
-    FaultSet() : factor(1.0) {};
-    FaultSet(GNSProjection proj) : proj(proj), factor(1.0) {};
+    FaultSet() : proj(new NullProjection()), factor(1.0) {};
+    FaultSet(Projection *proj) : proj(proj ? proj->clone() : new NullProjection()), factor(1.0) {};
     ~FaultSet();
     bool ReadGNSDefinition( istream &str, int nskip = 0 );
     void setFactor( double fctr ){ factor=fctr; }
     bool AddOkada( double lon, double lat, double *dislocation, double *strain, bool reset=true );
     ostream & write( ostream &os, int style=0, bool header=true );
 private:
-    GNSProjection proj;
+    Projection *proj;
     double factor;
     list<SegmentedFault *>faults;
     list<string> names;
@@ -103,6 +189,7 @@ FaultSet::~FaultSet()
     {
         delete( *i );
     }
+    delete proj;
 }
 
 
@@ -114,6 +201,8 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
     bool have_type = false;
     bool have_open = false;
     bool started = false;
+    bool prjcrds = false;
+
     regex re = regex("^(\\w+)\\:\\s+(.*?)\\s*$");
 
     while( ok )
@@ -129,15 +218,48 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
         smatch match;
         if( regex_match(buffer,match,re))
         {
+            stringstream s(match[2].str());
             if(match[1].str() == "Origin" )
             {
                 double lon, lat;
-                stringstream s(match[2].str());
                 s >> lon >> lat;
                 if( s )
                 {
-                    proj.SetOrigin(lon,lat);
+                    if( proj ) delete proj;
+                    proj=new GNSProjection( lon, lat );
                 }
+                prjcrds=false;
+            }
+            if(match[1].str() == "Projection" )
+            {
+                string projcode;
+                stringstream s(match[2].str());
+                if( proj ) delete proj;
+                proj=0;
+                s >> projcode;
+                if( ! s ) continue;
+                if( projcode == "NZTM")
+                {
+                    proj=new TMProjection(6378137.0,298.257222101,173.0,0.9996,0.0,1600000.0,10000000.0);
+                }
+                else if( projcode == "UTM59" )
+                {
+                    proj=new TMProjection(6378137.0,298.257222101,171.0,0.9996,0.0,500000.0,10000000.0);
+                }
+                else if( projcode == "UTM60" )
+                {
+                    proj=new TMProjection(6378137.0,298.257222101,177.0,0.9996,0.0,500000.0,10000000.0);
+                }
+                else if( projcode == "TM" )
+                {
+                    double a,rf,cm,sf,lto,fe,fn;
+                    s >> a >> rf >> cm >> sf >> lto >> fe >> fn;
+                    if( s )
+                    {
+                        proj=new TMProjection(a, rf, cm,sf,lto,fe,fn);
+                    }
+                }
+                if( proj ) prjcrds=true;
             }
             continue;
         }
@@ -197,15 +319,27 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
         strike = 90 - strike;
         dip = -dip;
 
-        if( ! proj.IsValid() )
+        if( ! proj )
         {
             cerr << setiosflags( ios::fixed ) << setprecision(5);
             cerr << "Setting projection origin to " << lon << " " << lat << endl;
-            proj.SetOrigin(lon,lat);
+            proj = new GNSProjection( lon, lat );
+            prjcrds=false;
         }
 
         double x, y;
-        proj.XY(lon,lat,x,y);
+        // If input coordinate are on a projection, then assume order is east,north
+        // Otherwise convert lat/lon to x,y
+        if( prjcrds ) 
+        {
+            // Note: x=lat because lat coordinate is first in model file
+            x=lat;
+            y=lon;
+        }
+        else
+        {
+            proj->XY(lon,lat,x,y);
+        }
 
         double Uss = slip * cos(rake*DTOR);
         double Uds = slip * sin(rake*DTOR);
@@ -271,7 +405,7 @@ bool FaultSet::AddOkada( double lon, double lat, double *dislocation, double *st
     }
     double x, y;
     bool ok = true;
-    proj.XY(lon,lat,x,y);
+    proj->XY(lon,lat,x,y);
     for( list<SegmentedFault *>::const_iterator i = faults.begin(); i != faults.end(); i++ )
     {
         if( ! (*i)->AddOkada(x,y,dislocation,strain,factor)) ok = false;
@@ -333,7 +467,7 @@ ostream &FaultSet::write( ostream &os, int style, bool header )
             f->FaultLocation(is, id, x, y, z );
             z = -z;
             double lat, lon;
-            proj.LatLon(x,  y, lon, lat );
+            proj->LatLon(x,  y, lon, lat );
             if( firstpt ) firstpt = false;
             else os << ", ";
             os << lon << " " << lat;
@@ -348,12 +482,12 @@ ostream &FaultSet::write( ostream &os, int style, bool header )
             os << "),(";
             f->FaultLocation(0, -1, x, y, z );
             z = -z;
-            proj.LatLon(x,  y, lon, lat );
+            proj->LatLon(x,  y, lon, lat );
             os << lon << " " << lat;
             if( havez ) os << " " << z;
             f->FaultLocation(f->NStrikeSegments(), -1, x, y, z );
             z = -z;
-            proj.LatLon(x,  y, lon, lat );
+            proj->LatLon(x,  y, lon, lat );
             os << ", " << lon << " " << lat;
             if( havez ) os << " " << z;
         }
@@ -425,7 +559,7 @@ int main( int argc, char *argv[] )
     int llprecision = 6;
     int dxyprecision = 4;
     int strnprecision = 4;
-    GNSProjection proj;
+    Projection *proj=0;
 
     while( argc > 1 && argv[1][0] == '-' && argv[1][1] )
     {
@@ -451,7 +585,8 @@ int main( int argc, char *argv[] )
         case 'P':
             if( argc > 2 && _stricmp(argv[2],"none") == 0 )
             {
-                proj.SetNoProj();
+                if( proj ) delete proj;
+                proj=new NullProjection();
                 argv++;
                 argc--;
             }
@@ -459,7 +594,8 @@ int main( int argc, char *argv[] )
                      && sscanf(argv[2],"%lf",&lon) == 1
                      && sscanf(argv[3],"%lf",&lat) == 1  )
             {
-                proj.SetOrigin(lon,lat);
+                if( proj ) delete proj;
+                proj=new GNSProjection(lon,lat);
                 argv+=2;
                 argc-=2;
             }
