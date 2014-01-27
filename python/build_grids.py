@@ -48,7 +48,7 @@ base_size=(0.15,0.125)
 
 # Extents over which test grid is built (ie initial search for affected area,
 # and to which grids are trimmed)
-base_extents=((166,-47.5),(176,-39.5))
+base_extents=((166,-47.5),(179,-33.5))
 
 # Conversion degrees to metres
 scale_factor=(1.0e-5/math.cos(math.radians(40)),1.0e-5)
@@ -812,7 +812,10 @@ def build_published_component( gridlist, modeldef, additive, comppath, cleandir=
     '''
 
     modelname,modeldesc,modeldate,ramps = get_model_spec( modeldef )
-    patchdir='patch_'+modelname+'_'+modeldate.replace('-','')
+    patchdir='patch_'+modelname
+    # If the model date doesn't contain a date, then append it
+    if not re.search(r'[12]\d\d\d[01]\d[0123]\d',patchdir):
+        patchdir=patchdir+'_'+modeldate.replace('-','')
 
     if not gridlist or not gridlist[0].csv:
         raise RuntimeError("Cannot build shift model - haven't built grid CSV files")
@@ -907,6 +910,19 @@ def load_land_areas( polygon_file ):
     global land_areas
     areas=[]
     if polygon_file:
+        if not os.path.exists(polygon_file):
+            raise RuntimeError("Land area file "+polygon_file+" does not exists")
+        la_file=re.sub(r'\.shp$','',polygon_file)
+        la_file=la_file+'.land-areas.wkt'
+        if os.path.exists(la_file) and os.path.getmtime(la_file) > os.path.getmtime(polygon_file):
+            try:
+                from shapely.wkt import loads
+                with open(la_file) as laf:
+                    wkt=laf.read()
+                    land_areas=loads(wkt)
+                    return
+            except:
+                pass
         import fiona
         write_log( "Loading land area definition from "+polygon_file)
         with fiona.open(polygon_file) as f:
@@ -918,8 +934,14 @@ def load_land_areas( polygon_file ):
                     p=Polygon(p.exterior)
                     p=p.buffer(land_area_buffer).simplify(land_area_tolerance)
                     areas.append(p)
-    if areas:
-        land_areas=MultiPolygon(areas).buffer(0.0)
+        if areas:
+            land_areas=MultiPolygon(areas).buffer(0.0)
+            try:
+                from shapely.wkt import dumps
+                with open(la_file,"w") as laf:
+                    laf.write(dumps(land_areas))
+            except:
+                pass
 
 if __name__ == "__main__":
 
@@ -936,6 +958,7 @@ if __name__ == "__main__":
     parser.add_argument('--apply-ramp-scale',action='store_true',help="Scale the grid by the ramp final value")
     parser.add_argument('--test-settings',action='store_true',help="Configure for testing - generate lower accuracy grids")
     parser.add_argument('--max-level',type=int,help="Maximum number of split levels to generate (each level increases resolution by 4)")
+    parser.add_argument('--reverse',action='store_true',help="Published model will be a reverse patch")
     parser.add_argument('--base-tolerance',type=float,help="Base level tolerance - depends on base column")
     parser.add_argument('--split-base',action='store_true',help="Base deformation will be split into separate patches if possible")
     parser.add_argument('--no-trim-subgrids',action='store_false',help="Subgrids will not have redundant rows/columns trimmed")
@@ -949,6 +972,7 @@ if __name__ == "__main__":
     shift_path=args.shift_model_path
     comp_path=args.submodel_path
     published_version=args.submodel_version
+    publish_reverse_patch=args.reverse
     additive=args.subgrids_nest
     trimgrid=args.no_trim_subgrids
     if args.parcel_shift: 
@@ -960,12 +984,12 @@ if __name__ == "__main__":
     max_split_level=args.max_level if args.max_level else max_split_level
     base_limit_tolerance=args.base_tolerance if args.base_tolerance else base_limit_tolerance
 
-    if args.land_area:
-        load_land_areas(args.land_area)
-
     patchpath,patchname=os.path.split(args.patch_file)
     if not os.path.isdir(patchpath):
         os.makedirs(patchpath)
+
+    if args.land_area:
+        load_land_areas(args.land_area)
                 
     models=args.model_file
     moddefs=[]
