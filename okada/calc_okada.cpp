@@ -42,11 +42,18 @@ class Projection
     virtual Projection *clone() const=0;
     virtual void XY( double lon, double lat, double &x, double &y )=0;
     virtual void LatLon( double x, double y, double &lon, double &lat )=0;
+    virtual void SfConv( double x, double y, double &sf, double &cnv );
     virtual bool IsValid()=0;
+    virtual bool HasSfConv(){ return false; }
 };
 
 Projection::Projection(){}
 Projection::~Projection(){}
+void Projection::SfConv( double x, double y, double &sf, double &cnv )
+{
+    sf=1.0;
+    cnv=0.0;
+}
 
 // The NullProjection is just that - lon=x, lat=y..
 
@@ -132,7 +139,9 @@ public:
     virtual Projection *clone() const;
     virtual void XY( double lon, double lat, double &x, double &y );
     virtual void LatLon( double x, double y, double &lon, double &lat );
+    virtual void SfConv( double x, double y, double &sf, double &cnv );
     virtual bool IsValid() { return isvalid; }
+    virtual bool HasSfConv(){ return true; }
     void SetParameters( double a, double rf, double cm, double sf, double lto, double fe, double fn );
 private:
     tmprojection tm;
@@ -163,22 +172,29 @@ void TMProjection::LatLon( double x, double y, double &lon, double &lat )
     lat *= RTOD;
 }
 
+void TMProjection::SfConv( double x, double y, double &sf, double &cnv )
+{
+    tm_sf_conv( &tm, x, y, &sf, &cnv );
+    cnv *= RTOD;
+}
 
 // 
 
 class FaultSet
 {
 public:
-    FaultSet() : proj(new NullProjection()), factor(1.0) {};
-    FaultSet(Projection *proj) : proj(proj ? proj->clone() : new NullProjection()), factor(1.0) {};
+    FaultSet() : proj(new NullProjection()), factor(1.0), applyConvergence(false) {};
+    FaultSet(Projection *proj) : proj(proj ? proj->clone() : new NullProjection()), factor(1.0), applyConvergence(false) {};
     ~FaultSet();
     bool ReadGNSDefinition( istream &str, int nskip = 0 );
     void setFactor( double fctr ){ factor=fctr; }
+    void setApplyConvergence( bool apply ){ applyConvergence = apply; }
     bool AddOkada( double lon, double lat, double *dislocation, double *strain, bool reset=true );
     ostream & write( ostream &os, int style=0, bool header=true );
 private:
     Projection *proj;
     double factor;
+    bool applyConvergence;
     list<SegmentedFault *>faults;
     list<string> names;
 };
@@ -404,12 +420,31 @@ bool FaultSet::AddOkada( double lon, double lat, double *dislocation, double *st
         if( strain ) { strain[0] = strain[1] = strain[2] = strain[3] = 0.0; }
     }
     double x, y;
+    double denu[3];
     bool ok = true;
     proj->XY(lon,lat,x,y);
     for( list<SegmentedFault *>::const_iterator i = faults.begin(); i != faults.end(); i++ )
     {
-        if( ! (*i)->AddOkada(x,y,dislocation,strain,factor)) ok = false;
+        if( ! (*i)->AddOkada(x,y,denu,strain,factor)) ok = false;
     }
+    if( dislocation )
+    {
+        if( applyConvergence && proj->HasSfConv() )
+        {
+            double sf,conv;
+            proj->SfConv(x,y,sf,conv);
+            double ccnv=cos(DTOR*conv);
+            double scnv=sin(DTOR*conv);
+            double de = (denu[0]*ccnv+denu[1]*scnv)/sf;
+            double dn = (denu[1]*ccnv-denu[0]*scnv)/sf;
+            denu[0]=de;
+            denu[1]=dn;
+        }
+        dislocation[0] += denu[0];
+        dislocation[1] += denu[1];
+        dislocation[2] += denu[2];
+    }
+
     return ok;
 }
 
@@ -554,6 +589,7 @@ int main( int argc, char *argv[] )
     bool havenames = false;
     bool showlength = false;
     bool calcstrain = false;
+    bool applysfconv = false;
     char delim='\t';
     int nskip = 0;
     int llprecision = 6;
@@ -605,6 +641,10 @@ int main( int argc, char *argv[] )
                 isvalid = false;
                 break;
             }
+            break;
+        case 'f':
+        case 'F':
+            applysfconv=true;
             break;
         case 'n':
         case 'N':
@@ -731,6 +771,7 @@ int main( int argc, char *argv[] )
         FaultSet *faults = new FaultSet( proj );
         if( ! faults->ReadGNSDefinition(f, nskip) ) { return 0; }
         faults->setFactor(factor);
+        faults->setApplyConvergence(applysfconv);
         faultlist.push_back(faults);
     }
 

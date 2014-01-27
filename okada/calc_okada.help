@@ -28,10 +28,16 @@ Options can include:
                      Use "none" if the coordinates defining the
                      model are already projected.  If not specified then 
                      the first values in the fault model file are used.
+                     This may be overridden by a projection specification
+                     in the model file.
 
   -w[l|p] wktfile    Generates a WKT file defining the fault model.  This can
 		     either be formatted as a MULTILINESTRING (-wl) or 
                      POLYGON (-wp).
+
+  -f                 Apply scale factor and convergence if defined for the 
+                     projection.  Note that currently this is only applied to
+                     the dislocation components, not the strain..
 
   -n                 The first field in the test point file is a name field
 

@@ -339,3 +339,94 @@ void geod_tm( tmprojection *tm,
 
     return;
 }
+
+
+/***************************************************************************/
+/*                                                                         */
+/*   tm_sf_conv                                                            */
+/*                                                                         */
+/*   Routine to calculate the scale factor and convergence for on the      */
+/*   Transverse Mercator projection.                                       */
+/*                                                                         */
+/*   Takes parameters                                                      */
+/*      input easting (metres)                                             */
+/*      input northing (metres)                                            */
+/*      scale factor  (ratio)                                              */
+/*      convergence (radians)                                              */
+/*                                                                         */
+/***************************************************************************/
+
+
+void tm_sf_conv( tmprojection *tm,
+              double ce, double cn, double *sfct, double *cnvg)
+{
+    double fn = tm->falsen;
+    double fe = tm->falsee;
+    double sf = tm->scalef;
+    double e2 = tm->e2;
+    double a = tm->a;
+    double cm = tm->meridian;
+    double om = tm->om;
+    double utom = tm->utom;
+    double cn1;
+    double fphi;
+    double slt;
+    double clt;
+    double eslt;
+    double eta;
+    double rho;
+    double psi;
+    double E;
+    double x;
+    double x2;
+    double t;
+    double t2;
+    double trm1;
+    double trm2;
+    double trm3;
+    double trm4;
+
+    cn1  =  (cn - fn)*utom/sf + om;
+    fphi = foot_point_lat(tm, cn1);
+    slt = sin(fphi);
+    clt = cos(fphi);
+
+    eslt = (1.0-e2*slt*slt);
+    eta = a/sqrt(eslt);
+    rho = eta * (1.0-e2) / eslt;
+    psi = eta/rho;
+
+    E = (ce-fe)*utom;
+    x = E/(eta*sf);
+    x2 = x*x;
+
+    t = slt/clt;
+    t2 = t*t;
+
+    if( cnvg )
+    {
+        trm1 = 1.0;
+        trm2 = ((-2.0*psi + 3.0)*psi + t2)/3.0;
+        trm3 = (((((11.0-24.0*t2)*psi
+                      -(24.0-69.0*t2))*psi
+                      +(15.0-70.0*t2))*psi
+                      +30.0*t2)*psi
+                      +3.0*t2*t2)/15.0;
+        trm4 = (((45.0*t2+105.0)*t2+77.0)*t2+17.0)/315.0;
+       
+        (*cnvg) = - t*x*(((trm4*x2-trm3)*x2+trm2)*x2-trm1);
+    }
+
+    if( sfct )
+    {
+        double xx = x * E/(rho*sf);
+     
+        trm1 = 1.0;
+        trm2 = 0.5;
+        trm3 = (psi*(4.0-24.0*t2)-(3.0-48.0*t2)-24.0*t2/psi)/24.0;
+        trm4 = 1.0/720.0;
+     
+        (*sfct) = sf*(((trm4*xx+trm3)*xx+trm2)*xx+trm1);
+    }
+}
+

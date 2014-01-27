@@ -34,6 +34,7 @@ void define_tmprojection( tmprojection *tm, double a, double rf,
 
 void tm_geod( tmprojection *tm, double ce, double cn, double *lt, double *ln );
 void geod_tm( tmprojection *tm, double lt, double ln, double *ce, double *cn );
+void tm_sf_conv( tmprojection *tm, double ce, double cn, double *sfct, double *cnvg);
 
 #endif
 
