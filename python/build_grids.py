@@ -103,6 +103,10 @@ def configure_for_testing():
     subcell_ramp_tolerance *= 100
     max_split_level -= 2
 
+# Apply scale factor and convergence
+
+apply_sf_conv=True
+
 # Polygons defining area over which model is required to meet standards...
 # Tolerance is offset in degrees used to buffer and simplify model in order to 
 # simplify calculations
@@ -208,7 +212,9 @@ def calc_grid( modeldef, griddef, gridfile ):
     #     print "Model {0}".format(modeldef)
     #     print "Grid spec {0}".format(gridspec)
 
-    params=['calc_okada','-x','-l','-s',modeldef,gridspec,gridfile]
+    params=['calc_okada','-f','-x','-l','-s',modeldef,gridspec,gridfile]
+    if apply_sf_conv:
+        params.insert(1,'-f')
     meta='\n'.join(params)
     metafile=gridfile+'.metadata'
     built = False
@@ -920,6 +926,7 @@ def load_land_areas( polygon_file ):
                 with open(la_file) as laf:
                     wkt=laf.read()
                     land_areas=loads(wkt)
+                    write_log( "Using cached land area definition from "+polygon_file)
                     return
             except:
                 pass
@@ -956,6 +963,7 @@ if __name__ == "__main__":
     parser.add_argument('--subgrids-nest',action='store_false',help="Grid CSV files calculated to replace each other rather than total to deformation")
     parser.add_argument('--parcel-shift',action='store_true',help="Configure for calculating parcel_shift rather than rigorous deformation patch")
     parser.add_argument('--apply-ramp-scale',action='store_true',help="Scale the grid by the ramp final value")
+    parser.add_argument('--apply-sf-conv',action='store_true',help="Apply the projection scale factor and convergence to the model calculated displacements")
     parser.add_argument('--test-settings',action='store_true',help="Configure for testing - generate lower accuracy grids")
     parser.add_argument('--max-level',type=int,help="Maximum number of split levels to generate (each level increases resolution by 4)")
     parser.add_argument('--reverse',action='store_true',help="Published model will be a reverse patch")
@@ -975,6 +983,7 @@ if __name__ == "__main__":
     publish_reverse_patch=args.reverse
     additive=args.subgrids_nest
     trimgrid=args.no_trim_subgrids
+    apply_sf_conv=args.apply_sf_conv
     if args.parcel_shift: 
         write_log("Configuring model to use parcel shift parameters")
         configure_for_parcel_shift()
