@@ -86,6 +86,7 @@ class TimeEvent:
 sequences=[]
 
 for c in m.components():
+    print "Adding component:",c.name
     component=c.submodel
     # print component
     tm=c.timeFunction
