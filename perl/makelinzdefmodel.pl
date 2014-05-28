@@ -432,7 +432,7 @@ sub WriteModelBinary {
    
    my $loc = tell(OUT);
 
-   print OUT $pack->string( @{$model}{qw/name VERSION COORDSYS DESCRIPTION/});
+   print OUT $pack->string( @{$model}{qw/name VERSION_NUMBER COORDSYS DESCRIPTION/});
    print OUT &PackDate($pack,$model->{VERSION_DATE});
    print OUT &PackDate($pack,$model->{START_DATE});
    print OUT &PackDate($pack,$model->{END_DATE});

@@ -274,6 +274,12 @@ class ITRF_transformation( object ):
         Uses numpy for efficient processing of arrays of coordinates
         '''
         from ellipsoid import grs80
+        if lat is None:
+            llh = np.array(lon)
+            llh=llh.reshape((llh.size/3),3)
+            lon=llh[:,0]
+            lat=llh[:,1]
+            hgt=llh[:,2]
         xyz=grs80.xyz(lon,lat,hgt)
         xyz=self.transform(xyz,date=date)
         return grs80.geodetic(xyz)
