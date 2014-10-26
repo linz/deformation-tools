@@ -45,7 +45,7 @@ def stats( arr, noprint=False, percentiles=None):
 
 class grid( object ):
     '''
-    Base grid class, provides some plottig and analysis functions 
+    Base grid class, provides some plotting and analysis functions 
     for a grid
     '''
 
@@ -218,7 +218,7 @@ class defgrid( grid ):
     with some additional functions defining for analysing the 
     modelled deformation.
 
-    Assumes first columns are lon,lat,de,du,dn
+    Assumes first columns are lon,lat,de,dn,du
     '''
 
     def __init__( self, filename ):
@@ -245,7 +245,12 @@ class defgrid( grid ):
         self.extents=np.array([g[0,0,0:2],g[-1,-1,0:2]])
 
 
+
     def bilinear( self, x, y ):
+        '''
+        Evaluate the grid at a set of x y values where x,y can each be
+        lists of longitudes, latitudes
+        '''
         grdx=(np.array(x)-self.extents[0,0])/self.dln
         grdy=(np.array(y)-self.extents[0,1])/self.dlt
         g=self.array
@@ -277,6 +282,69 @@ class defgrid( grid ):
                         (g[ny,nx]*(1-grdx)+g[ny,nx+1]*grdx)*(1-grdy)+
                         (g[ny+1,nx]*(1-grdx)+g[ny+1,nx+1]*grdx)*grdy,
                         empty)
+
+    def strainComponents( self ):
+        '''
+        Calculate horizontal strain components: returns a with columns
+           dilatation (linear)
+           rotation 
+           shear
+           distortion
+
+        Max and min scale change are dilatation +/- shear
+        Max and min bearing change are rotation +/- shear
+        Max angle change = 2*shear
+
+        "Distortion" is the maximum length of vector change to a unit vector.
+
+        All are in units of ppm
+
+        Calculation is done at the centre of each grid cell based on the movement calculated
+        at the midpoints of each side.  
+        '''
+        from ellipsoid import grs80
+        g=self.array
+        lats=g[:,0,1]
+        midlats=(lats[:-1]+lats[1:])/2.0
+        de,dn=grs80.metres_per_degree(0,midlats)
+        de *= self.dln
+        dn *= self.dlt
+        de=de.reshape((de.size,1,1))
+        dn=dn.reshape((dn.size,1,1))
+        den=g[:,:,2:4]
+        # Values at middle of E/W sides of each grid cell, then take difference
+        # and divide by width of cell
+        ddx=(den[:-1,:,:]+den[1:,:,:])/2
+        ddx=ddx[:,1:,:]-ddx[:,:-1,:]
+        ddx /= de
+        dxx=ddx[:,:,0]
+        dyx=ddx[:,:,1]
+        # Same for latitude (N/S sides of each grid cell)
+        ddy=(den[:,:-1,:]+den[:,1:,:])/2
+        ddy=ddy[1:,:,:]-ddy[:-1,:,:]
+        ddy /= dn
+        dxy=ddy[:,:,0]
+        dyy=ddy[:,:,1]
+        dil=(dxx+dyy)/2.0
+        rot=(dxy-dyx)/2.0
+        shear=np.sqrt(((dxx-dyy)/2.0)**2 + ((dxy+dyx)/2)**2)
+        A=dxx*dxx+dyx*dyx
+        B=dxy*dxy+dyy*dyy
+        C=dxx*dxy+dyx*dyy
+        distortion=np.sqrt((A+B)/2+np.sqrt(((A-B)/2)**2+C**2))
+        newshape=(dil.shape[0],dil.shape[1],1)
+        dil=dil.reshape(newshape)
+        rot=rot.reshape(newshape)
+        shear=shear.reshape(newshape)
+        distortion=distortion.reshape(newshape)
+        dil *= 1000000.0
+        rot *= 1000000.0
+        shear *= 1000000.0
+        distortion *= 1000000.0
+
+        midltln=(g[1:,1:,:2]+g[1:,:-1,:2]+g[:-1,1:,:2]+g[:-1,:-1,:2])/4
+        result=np.concatenate((midltln,dil,rot,shear,distortion),axis=2)
+        return result
 
     def calcResolution( self, tolerance, maxsize=100000.0,precision=0.0001,margin=1 ):
         '''
