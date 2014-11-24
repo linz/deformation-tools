@@ -160,7 +160,8 @@ class SpatialModel( object ):
         self._name = name
         if compdef.spatial_model == 'llgrid':
             self._model = Grid(model,self.file1,self.min_lon,self.max_lon,self.min_lat,self.max_lat,self.npoints1,self.npoints2,self.columns,name=name)
-            self._description = "Grid model using "+self._name
+            dlon,dlat=self._model.resolution()
+            self._description = "Grid model ({0} x {1}) using {2}".format(dlon,dlat,self._name)
         elif compdef.spatial_model == 'lltin':
             if not self.file2:
                 raise ModelDefinitionError('file2 is not defined for TIN model')

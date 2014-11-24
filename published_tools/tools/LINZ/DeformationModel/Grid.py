@@ -47,7 +47,16 @@ class Grid( object ):
         self._data = DeformationList( columns, self._npt )
 
     def gridSpec( self ):
+        '''
+        Returns min lon, min lat, max lon, max lat, nlon, nlat
+        '''
         return self._minlon, self._minlat, self._maxlon, self._maxlat, self._nlon, self._nlat
+
+    def resolution( self ):
+        '''
+        Returns the longitude and latitude increments
+        '''
+        return self._dlon, self._dlat
 
     def gridFile( self ):
         return self._gridfile
