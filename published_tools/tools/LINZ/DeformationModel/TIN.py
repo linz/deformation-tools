@@ -131,9 +131,12 @@ class TIN( object ):
         if not self._valid:
             raise ModelDefinitionError("Cannot use invalid TIN component - see previous errors")
 
+        x0 = x
+        while x < self._minlon:
+            x += 360
         if (x < self._minlon or x > self._maxlon or 
             y < self._minlat or y > self._maxlat ):
-            raise OutOfRangeError(str(x)+','+str(y)+' is out of range of TIN for '+self._name)
+            raise OutOfRangeError(str(x0)+','+str(y)+' is out of range of TIN for '+self._name)
         ntrg, rows, factors = self.findTriangle(x,y)
         return self._data.calcDeformation(rows,factors)
 
