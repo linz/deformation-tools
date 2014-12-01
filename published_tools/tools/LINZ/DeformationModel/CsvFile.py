@@ -45,7 +45,7 @@ class CsvFile( object ):
                     vre = re.compile(typestr)
                     typestr = str
             def f(x):
-                if x==None or x=='':
+                if x is None or x=='':
                     if optional:
                         return None
                     else:

@@ -60,7 +60,7 @@ class Transformation( object ):
             modeldir = join(dirname(dirname(abspath(__file__))),'model')
 
         model = Model.Model(modeldir,useCache=usecache,clearCache=clearcache )
-        if version == None:
+        if version is None:
             version = model.currentVersion()
         model.setVersion( version )
             

@@ -276,21 +276,21 @@ try:
 
         # Set the model version
 
-        if version == None:
+        if version is None:
             version = model.currentVersion()
 
         if reverse_patch:
-            if base_version == None:
+            if base_version is None:
                 base_version = model.versions()[0]
             model.setVersion( base_version, version )
 
-            if date == None and date_column==None:
+            if date is None and date_column==None:
                 date = model.datumEpoch()
             else:
                 if not quiet:
                     print "Using a date or date column with a patch option - are you sure?"
         else:
-            if date == None and date_column == None:
+            if date is None and date_column is None:
                 date = Time.Now()
             model.setVersion( version, base_version )
 
@@ -465,7 +465,7 @@ try:
             try:
                 lon = float(data[colnos[0]])
                 lat = float(data[colnos[1]])
-                if date_colno != None:
+                if date_colno is not None:
                     date = data[date_colno]
                 defm = model.calcDeformation(lon,lat,date,base_date)
                 if subtract:

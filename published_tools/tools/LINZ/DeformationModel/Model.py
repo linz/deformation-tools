@@ -65,7 +65,7 @@ class TimeFunction( object ):
             ok = True
 
             for d in (baseDate, date):
-                if d == None: continue
+                if d is None: continue
                 factor = 0.0
                 if (self.min_date and d < self.min_date) or (self.max_date and d > self.max_date):
                     if not self.time_complete:
@@ -84,7 +84,7 @@ class TimeFunction( object ):
                 if self._model.squareVarianceFactor: 
                     self.calc_error_value *= self.calc_error_value
 
-        if self.calc_value == None:
+        if self.calc_value is None:
             raise OutOfRangeError('Date outside valid range')
         return (self.calc_value, self.calc_error_value)
 
@@ -546,7 +546,7 @@ class Model( object ):
             if ver.version in versions:
                 raise ModelDefinitionError('Version '+ver.version+' repeated in '+verfile)
             versions[ver.version] = ver
-            if curversion == None or ver.version > curversion:
+            if curversion is None or ver.version > curversion:
                 curversion = ver.version
         self._versions = versions
         self._curversion = curversion
@@ -693,7 +693,7 @@ class Model( object ):
         version and the baseVersion. 
         '''
         self._stcomponents = []
-        if version==None:
+        if version is None:
             version = self._curversion
         else:
             version = str(version) 
@@ -760,7 +760,7 @@ class Model( object ):
         a baseDate to calculate the difference in deformation between the date
         and baseDate.
         '''
-        if date == None:
+        if date is None:
             date = datetime.datetime.now()
         if date != self._date or baseDate != self._baseDate:
             self._date = date
@@ -778,7 +778,7 @@ class Model( object ):
         baseDate can be set at the same time if required, otherwise the 
         values set with setDate will be used.
         '''
-        if not self._date or date != None or baseDate != None:
+        if not self._date or date is not None or baseDate is not None:
             self.setDate( date, baseDate )
         if self._timeRangeError:
             raise OutOfRangeError( self._timeRangeError )

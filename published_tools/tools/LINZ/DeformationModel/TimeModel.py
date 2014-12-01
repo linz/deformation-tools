@@ -1,4 +1,3 @@
-
 import math
 import re
 from datetime import datetime, date, time
@@ -39,7 +38,7 @@ class TimeModel(object):
         self._description = None
         if mtype == 'velocity':
             self._description = "velocity model"
-            if t0 == None:
+            if t0 is None:
                 raise ModelDefinitionError("Reference time missing for velocity time model")
             def calc(t):
                 t = Time.Parse(t)
@@ -48,9 +47,9 @@ class TimeModel(object):
         
         elif mtype=='step':
             self._description = "step from "+str(f0)+" to "+str(f1)+" at "+str(t0)
-            if t0 == None:
+            if t0 is None:
                 raise ModelDefinitionError("Reference time missing for step time model")
-            if f0 == None or f1 == None:
+            if f0 is None or f1 is None:
                 raise ModelDefinitionError("Initial or final scale factor missing for step time model")
             def calc(t):
                 t = Time.Parse(t)
@@ -59,11 +58,11 @@ class TimeModel(object):
 
         elif mtype=="ramp":
             self._description = "ramp from "+str(f0)+" at "+str(t0)+" to "+str(f1)+" at "+str(t1)
-            if t0 == None or t1 == None:
+            if t0 is None or t1 is None:
                 raise ModelDefinitionError("Reference time missing for ramp time model")
             if t0 > t1:
                 raise ModelDefinitionError("End time before start time for ramp time model")
-            if f0 == None or f1 == None:
+            if f0 is None or f1 is None:
                 raise ModelDefinitionError("Initial or final scale factor missing for ramp time model")
             vel = (f1-f0)/t1.daysAfter(t0) if t1 > t0 else 0.0
             def calc(t):
@@ -78,17 +77,17 @@ class TimeModel(object):
 
         elif mtype=="decay":
             self._description = "exponential decay (rate "+str(decay)+" from "+str(f0)+" at "+str(t0)+" to "+str(f1)+" at "+str(t1)
-            if t0 == None:
+            if t0 is None:
                 raise ModelDefinitionError("Reference time missing for decay time model")
-            if t1 != None and t0 > t1:
+            if t1 is not None and t0 > t1:
                 raise ModelDefinitionError("End time before start time for decay time model")
-            if f0 == None or f1 == None:
+            if f0 is None or f1 is None:
                 raise ModelDefinitionError("Initial or final scale factor missing for decay time model")
-            if decay == None or decay <= 0:
+            if decay is None or decay <= 0:
                 raise ModelDefinitionError("Decay rate missing or not greater than 0 for decay time model")
 
             fdif = f1-f0
-            if t1 == None:
+            if t1 is None:
                 def calc(t):
                     t = Time.Parse(t)
                     return (f0 if t <= t0 else

@@ -191,7 +191,7 @@ for loop in [1]:
 
     # Set the model version
 
-    if date == None and date_column == None:
+    if date is None and date_column is None:
         date = Time.Now()
 
     # Determine the source for input
@@ -337,7 +337,7 @@ for loop in [1]:
             lon = float(data[colnos[0]])
             lat = float(data[colnos[1]])
             hgt = float(data[colnos[2]]) if ncolnos > 2 else 0.0
-            if date_colno != None:
+            if date_colno is not None:
                 date = data[date_colno]
             llh = transform(lon,lat,hgt, date)
             data[colnos[0]]="{0:.8f}".format(llh[0])

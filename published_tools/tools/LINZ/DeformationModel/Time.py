@@ -20,7 +20,7 @@ class Time( object ):
 
     def __cmp__( self, dt ):
         dt = Time.Parse(dt)
-        if dt == None:
+        if dt is None:
             return 1
         return cmp(self._dt,dt._dt)
 
@@ -64,7 +64,7 @@ class Time( object ):
             return Time(d0)
         if isinstance(t,date):
             return Time(datetime.combine(t,time(0,0,0)))
-        if t == None or t == '' or t == '0':
+        if t is None or t == '' or t == '0':
             return None
         if type(t) not in (str,unicode):
             raise InvalidValueError("Invalid date/time "+str(t))

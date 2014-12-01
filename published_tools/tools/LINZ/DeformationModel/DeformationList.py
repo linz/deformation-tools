@@ -36,7 +36,7 @@ class DeformationList( object ):
             self.setData(data)
 
     def addPoint( self, values ):
-        if self._data == None:
+        if self._data is None:
             self._data = np.empty( [self._size,self._dimension], float )
         if self._nread >= self._size:
             raise ModelDefinitionEror('Too many data points supplied')
