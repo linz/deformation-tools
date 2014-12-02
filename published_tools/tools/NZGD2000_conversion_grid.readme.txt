@@ -6,6 +6,14 @@ grid node the correction may be represented as an east, north and up correction,
 or as a geocentric X,Y,Z correction.  The script generates a comma separated
 CSV file of data.  The order of grid coordinates is configurable.
 
+The corrections as calculated should be added to ITRF coordinates to convert
+them to the equivalent NZGD2000 coordinates. (Use --reverse to determine
+correction converting NZGD2000 coordinates to the equivalent ITRF coordinates)
+
+Note that the corrections depend on the date. By default corrections are 
+calculated at the current date.  Use the --date option to calculate corrections
+for other dates.
+
 The syntax for running the program is:
 
 python NZGD2000_conversion_grid.py [options] min_lon min_lat max_lon max_lat nlon nlat output_file
