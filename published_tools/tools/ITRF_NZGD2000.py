@@ -179,6 +179,7 @@ for loop in [1]:
             itrf,
             toNZGD2000=not reverse,
             modeldir=modeldir,
+            version=version,
             usecache=usecache,
             clearcache=clearcache )
     except ModelDefinitionError:
@@ -189,7 +190,6 @@ for loop in [1]:
         print str(sys.exc_info()[1])
         break
 
-    # Set the model version
 
     if date is None and date_column is None:
         date = Time.Now()

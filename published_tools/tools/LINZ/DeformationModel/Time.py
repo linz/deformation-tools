@@ -68,6 +68,8 @@ class Time( object ):
             return None
         if type(t) not in (str,unicode):
             raise InvalidValueError("Invalid date/time "+str(t))
+        if t.lower() == 'now':
+            return Time.Now()
         m = re.match(r'^(\d\d\d\d)(\-?)(\d\d)\2(\d\d)$',t)
         if m:
             return Time(datetime(int(m.group(1)),int(m.group(3)),int(m.group(4)),0,0,0))

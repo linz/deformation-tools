@@ -1,0 +1,76 @@
+The NZGD2000_conversion_grid.py script is used to generate a grid of corrections
+to convert ITRF coordinates to the equivalent NZGD2000 coordinates.  
+
+The corrections are calculated on a regular latitude/longitude grid.  At each
+grid node the correction may be represented as an east, north and up correction,
+or as a geocentric X,Y,Z correction.  The script generates a comma separated
+CSV file of data.  The order of grid coordinates is configurable.
+
+The syntax for running the program is:
+
+python NZGD2000_conversion_grid.py [options] min_lon min_lat max_lon max_lat nlon nlat output_file
+
+The required command line arguments are:
+
+  min_lon               Minimum longitude in decimal degrees
+  min_lat               Minimum latitude in decimal degrees
+  max_lon               Maximum longitude in decimal degrees
+  max_lat               Maximum latitude in decimal degrees
+  nlon                  Number of longitude values, or the longitude grid
+                        spacing in degrees if the -s option is specified
+  nlat                  Number of latitude values, or the latitude grid
+                        spacing in degrees if the -s option is specified
+  output_file           Output file name
+
+The options can include:
+
+  -h, --help            Print brief help information
+
+  -d date, --date date  Date of transformation (default current date).  
+                        The date is in format YYYY-MM-DD (eg 2014-12-25)
+
+  -i itrf, --itrf itrf  Specifies the ITRF reference frame to convert
+                        coordinates from.  The default is ITRF2008.  
+
+  -m model_dir, --model-dir model_dir
+                        Specifies the base directory in which the deformation
+                        model has been installed.  The default is ../model
+
+  -v version, --version version
+                        Specifies the version of the deformation model to
+                        use.  The default is to use the most recent version
+                        of the deformation model.
+                        
+  -t {llh,enu,xyz}, --type {llh,enu,xyz}
+                        Specifies the type of correction to calculate. 
+			Valid values are:
+                          llh   Corrections to latitude, longitude, and height
+                                in degrees (lat/lon) and metres (height)
+                          enu   Corrections in metres in the east, north, and
+                                up direction.
+                          xyz   Corrections in metres in the geocentric
+                                X, Y, and Z direction.
+                        The default is llh.
+                                
+  -s, --size            If specified then the nlon and nlat arguments are
+                        taken as grid increments in degrees rather than as
+                        the counts of grid cells in each direction.
+
+  -r, --reverse         If specified the corrections convert NZGD2000 to 
+                        ITRF instead of the default ITRF to NZGD20000
+
+  -o {es,en,ws,wn,se,sw,ne,nw}, --order {es,en,ws,wn,se,sw,ne,nw}
+                        Specifies the order of grid cells. The e/w and n/s
+                        values defined the first point of the grid.  If e/w
+                        is first then longitudes are incremented first, 
+                        otherwise latitudes.  The default is "es"
+
+  -q, --quiet           Suppresses informational output messages
+
+  --cache {ignore,clear,reset,use}
+                        Specifies the option for caching the deformation model
+                        grid data in a binary format to speed loading the 
+                        model.  This requires the python pytable module to 
+                        have any effect.  The default is "use"
+
+  --logging             If present this enables trace logging
