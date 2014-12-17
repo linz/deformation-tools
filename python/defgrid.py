@@ -410,8 +410,14 @@ class defgrid( grid ):
     def grid_definition( self ):
         nlon,nlat=self.array.shape[0:2]
         return ("grid:"+":".join([str(x) for x in self.extents.reshape((4,))])+':'+
-                str(self.array.shape[0]-1) + ":" + str(self.array.shape[1]-1))
+                str(self.array.shape[1]-1) + ":" + str(self.array.shape[0]-1))
 
         
 
+if __name__=="__main__":
+    import sys
+    for file in sys.argv[1:]:
+        g=defgrid(file)
+        print file,g.grid_definition()
 
+    

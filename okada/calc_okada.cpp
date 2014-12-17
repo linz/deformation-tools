@@ -19,9 +19,9 @@
 #endif
 #include "okada.h"
 #include "get_image_path.h"
-extern "C" {
+// extern "C" {
 #include "tmproj.h"
-}
+// }
 
 using namespace std;
 #ifdef USE_BOOST_REGEX

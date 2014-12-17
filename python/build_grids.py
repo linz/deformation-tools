@@ -9,6 +9,7 @@
 from collections import namedtuple
 from shapely.geometry import MultiPolygon,Polygon,LineString,Point,shape
 from shapely.prepared import prep
+from shapely.ops import unary_union
 from subprocess import call
 import accuracy_standards
 import affinity
@@ -47,8 +48,10 @@ origin=(166.0,-48)
 base_size=(0.15,0.125)
 
 # Extents over which test grid is built (ie initial search for affected area,
-# and to which grids are trimmed)
-base_extents=((166,-47.5),(179,-33.5))
+# and to which grids are trimmed). 
+
+# Extents based on EEZ
+base_extents=((158,-58),(194,-25))
 
 # Conversion degrees to metres
 scale_factor=(1.0e-5/math.cos(math.radians(40)),1.0e-5)
@@ -64,18 +67,22 @@ base_limit_bounds_column='ds'
 
 # Minium value for test column within patch (note - column is in ppm)
 base_limit_tolerance=accuracy_standards.NRF.lap*tolerance_factor*1.0e6
+base_limit_sea_tolerance=accuracy_standards.BGN.lap*tolerance_factor*1.0e6
 
 # Precision for scaling down from edge of patch
 base_ramp_tolerance=accuracy_standards.NRF.lap*tolerance_factor
+base_ramp_sea_tolerance=accuracy_standards.BGN.lap*tolerance_factor
 
 # Absolute limit on extents of patch - not required where magnitude (ds)
 # less than this level.
 base_limit_bounds_tolerance=accuracy_standards.NRF.lac*tolerance_factor
+base_limit_sea_bounds_tolerance=accuracy_standards.BGN.na*tolerance_factor
 
 # Values controlling splitting cells into subgrids
 
 cell_split_factor=4
 subcell_resolution_tolerance=accuracy_standards.NRF.lac*tolerance_factor
+subcell_resolution_sea_tolerance=accuracy_standards.BGN.na*tolerance_factor
 subcell_ramp_tolerance=accuracy_standards.NRF.lap*tolerance_factor
 
 # Replace entire grid with subcells if more than this percentage 
@@ -389,6 +396,9 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
         subcell_areas=grid2r.regionsExceedingLevel('reqsize',-parentsize,multiple=-1)
 
         if land_areas:
+
+
+
             valid_areas=[]
             for sc in subcell_areas:
                 p=sc.intersection(land_areas)
@@ -399,10 +409,16 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
                         valid_areas.append(g)
             subcell_areas=valid_areas
 
+            # If limiting to land areas, then also select areas where sea resolution
+            # is to be applied.
+        
+            grid2r = grid2.calcResolution(subcell_resolution_sea_tolerance,precision=0.0000001)
+            subcell_areas.extend(grid2r.regionsExceedingLevel('reqsize',-parentsize,multiple=-1))
+
         grid2r=None
         # Expand subcell areas by parent grid size to avoid rounding issues
         if subcell_areas:
-            expanded_area=buffered_polygon(MultiPolygon(subcell_areas),parentsize)
+            expanded_area=buffered_polygon(unary_union(subcell_areas),parentsize)
             if expanded_area.type=='Polygon':
                 subcell_areas = [expanded_area]
             else:
@@ -527,6 +543,8 @@ def build_deformation_grids( patchpath, patchname, modeldef, splitbase=True ):
 
     dsmax = maxShiftOutsideAreas( trialgrid, real_extents )
     buffersize = dsmax/base_ramp_tolerance
+    write_log("Maximum shift outside patch extents {0}".format(dsmax))
+    write_log("Buffering patches by {0}".format(buffersize))
 
     buffered_extent=buffered_polygon( MultiPolygon(real_extents), buffersize )
     write_wkt("Buffered extents",0,buffered_extent.to_wkt())
@@ -537,11 +555,8 @@ def build_deformation_grids( patchpath, patchname, modeldef, splitbase=True ):
         real_extents = MultiPolygon([real_extents])
     write_wkt("Bounds before potential land intersection",0,real_extents.to_wkt())
 
-    write_log("Maximum shift outside patch extents {0}".format(dsmax))
-    write_log("Buffering patches by {0}".format(buffersize))
 
     # Test areas against land definitions, buffer, and merge overlapping grid definitions
-    # refactor so that they all        
 
     if land_areas:
         write_log("Intersecting areas with land extents".format(len(real_extents)))
@@ -555,6 +570,42 @@ def build_deformation_grids( patchpath, patchname, modeldef, splitbase=True ):
                     valid_areas.append(g)
         real_extents=MultiPolygon(valid_areas)
         write_wkt("Bounds after land area intersection",0,real_extents.to_wkt())
+
+        # If limiting to land areas then also need to calculate sea areas where
+        # lower tolerance applies
+
+        sea_extents = trialgrid.regionsExceedingLevel(base_limit_test_column,base_limit_sea_tolerance)
+        sea_extents=MultiPolygon(sea_extents)
+        write_log("{0} patch sea extents found".format(len(sea_extents)))
+        write_wkt("Sea extents requiring patch (base tolerance)",0,sea_extents.to_wkt())
+
+        # Sea bounds beyond which patch not required because guaranteed by local accuracy bounds
+        sea_bounds_extents = trialgrid.regionsExceedingLevel(
+            base_limit_bounds_column,base_limit_sea_bounds_tolerance)
+        sea_bounds_extents=MultiPolygon(sea_bounds_extents)
+
+        # Now want to find maximum shift outside extents of test.. 
+        # Prepare a multipolygon for testing containment.. add a buffer to
+        # handle points on edge of region where patch runs against base polygon
+
+        sea_dsmax = maxShiftOutsideAreas( trialgrid, sea_extents )
+        sea_buffersize = sea_dsmax/base_ramp_sea_tolerance
+        write_log("Maximum shift outside sea patch extents {0}".format(sea_dsmax))
+        write_log("Buffering sea patches by {0}".format(sea_buffersize))
+
+        sea_buffered_extent=buffered_polygon( MultiPolygon(sea_extents), sea_buffersize )
+        write_wkt("Sea buffered extents",0,buffered_extent.to_wkt())
+        write_wkt("Sea absolute bounds on patch",0,sea_bounds_extents.to_wkt())
+
+        sea_extents=sea_buffered_extent.intersection( MultiPolygon(sea_bounds_extents) )
+        if 'geoms' not in dir(sea_extents):
+            sea_extents = MultiPolygon([sea_extents])
+        write_wkt("Sea bounds before union with land extents",0,sea_extents.to_wkt())
+
+        real_extents=real_extents.union(sea_extents)
+        if 'geoms' not in dir(real_extents):
+            real_extents=MultiPolygon([real_extents])
+        write_wkt("Bounds after union with sea extents",0,real_extents.to_wkt())
 
     # Form merged buffered areas
     extent_defs=[]
@@ -938,11 +989,13 @@ def load_land_areas( polygon_file ):
                 if type(mp) != MultiPolygon:
                     mp=[mp]
                 for p in mp:
+                    write_log("Polygon: {0} points".format(len(list(p.exterior.coords))))
                     p=Polygon(p.exterior)
-                    p=p.buffer(land_area_buffer).simplify(land_area_tolerance)
+                    p=p.buffer(land_area_buffer,3).simplify(land_area_tolerance)
                     areas.append(p)
+        write_log( "Loading land areas built")
         if areas:
-            land_areas=MultiPolygon(areas).buffer(0.0)
+            land_areas=unary_union(areas)
             try:
                 from shapely.wkt import dumps
                 with open(la_file,"w") as laf:
