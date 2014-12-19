@@ -575,37 +575,43 @@ def build_deformation_grids( patchpath, patchname, modeldef, splitbase=True ):
         # lower tolerance applies
 
         sea_extents = trialgrid.regionsExceedingLevel(base_limit_test_column,base_limit_sea_tolerance)
-        sea_extents=MultiPolygon(sea_extents)
-        write_log("{0} patch sea extents found".format(len(sea_extents)))
-        write_wkt("Sea extents requiring patch (base tolerance)",0,sea_extents.to_wkt())
+        if len(sea_extents) == 0:
+            write_log("No potential sea extents found")
+        else:
+            sea_extents=MultiPolygon(sea_extents)
+            write_log("{0} patch sea extents found".format(len(sea_extents)))
+            write_wkt("Sea extents requiring patch (base tolerance)",0,sea_extents.to_wkt())
 
-        # Sea bounds beyond which patch not required because guaranteed by local accuracy bounds
-        sea_bounds_extents = trialgrid.regionsExceedingLevel(
-            base_limit_bounds_column,base_limit_sea_bounds_tolerance)
-        sea_bounds_extents=MultiPolygon(sea_bounds_extents)
+            # Sea bounds beyond which patch not required because guaranteed by local accuracy bounds
+            sea_bounds_extents = trialgrid.regionsExceedingLevel(
+                base_limit_bounds_column,base_limit_sea_bounds_tolerance)
 
-        # Now want to find maximum shift outside extents of test.. 
-        # Prepare a multipolygon for testing containment.. add a buffer to
-        # handle points on edge of region where patch runs against base polygon
 
-        sea_dsmax = maxShiftOutsideAreas( trialgrid, sea_extents )
-        sea_buffersize = sea_dsmax/base_ramp_sea_tolerance
-        write_log("Maximum shift outside sea patch extents {0}".format(sea_dsmax))
-        write_log("Buffering sea patches by {0}".format(sea_buffersize))
+            # Now want to find maximum shift outside extents of test.. 
+            # Prepare a multipolygon for testing containment.. add a buffer to
+            # handle points on edge of region where patch runs against base polygon
 
-        sea_buffered_extent=buffered_polygon( MultiPolygon(sea_extents), sea_buffersize )
-        write_wkt("Sea buffered extents",0,buffered_extent.to_wkt())
-        write_wkt("Sea absolute bounds on patch",0,sea_bounds_extents.to_wkt())
+            sea_dsmax = maxShiftOutsideAreas( trialgrid, sea_extents )
+            sea_buffersize = sea_dsmax/base_ramp_sea_tolerance
+            write_log("Maximum shift outside sea patch extents {0}".format(sea_dsmax))
+            write_log("Buffering sea patches by {0}".format(sea_buffersize))
 
-        sea_extents=sea_buffered_extent.intersection( MultiPolygon(sea_bounds_extents) )
-        if 'geoms' not in dir(sea_extents):
-            sea_extents = MultiPolygon([sea_extents])
-        write_wkt("Sea bounds before union with land extents",0,sea_extents.to_wkt())
+            sea_buffered_extent=buffered_polygon( MultiPolygon(sea_extents), sea_buffersize )
+            write_wkt("Sea buffered extents",0,buffered_extent.to_wkt())
 
-        real_extents=real_extents.union(sea_extents)
-        if 'geoms' not in dir(real_extents):
-            real_extents=MultiPolygon([real_extents])
-        write_wkt("Bounds after union with sea extents",0,real_extents.to_wkt())
+            if len(sea_bounds_extents) > 0:
+                sea_bounds_extents=MultiPolygon(sea_bounds_extents)
+                write_wkt("Sea absolute bounds on patch",0,sea_bounds_extents.to_wkt())
+                sea_extents=sea_buffered_extent.intersection( sea_bounds_extents) 
+                if 'geoms' not in dir(sea_extents):
+                    sea_extents = MultiPolygon([sea_extents])
+
+            write_wkt("Sea bounds before union with land extents",0,sea_extents.to_wkt())
+
+            real_extents=real_extents.union(sea_extents)
+            if 'geoms' not in dir(real_extents):
+                real_extents=MultiPolygon([real_extents])
+            write_wkt("Bounds after union with sea extents",0,real_extents.to_wkt())
 
     # Form merged buffered areas
     extent_defs=[]

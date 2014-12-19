@@ -297,7 +297,7 @@ for sequence in sequences:
                 name=sequence.component+sseqname+gfname,
                 dtype=sseq[0].mtype,
                 dimension=sequence.dimension,
-                zerobeyondrange=sequence.zerobeyond,
+                zerobeyondrange=sequence.zerobeyond if ngf == 0 else 'yes',
                 description=sequence.component
             ))
             for iss,seq in enumerate(sseq):
