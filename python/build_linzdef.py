@@ -45,7 +45,7 @@ m=Model.Model(joinpath(md,'model'))
 
 header= '''
 DEFORMATION_MODEL NZGD2000 deformation model
-FORMAT LINZDEF1B
+FORMAT LINZDEF2B
 VERSION_NUMBER {version}
 VERSION_DATE  {versiondate}
 START_DATE 1-Jan-1850
@@ -71,14 +71,18 @@ DefComp=namedtuple('DefComp','date factor before after')
 
 refdate=Time.Time(datetime(2000,1,1))
 class TimeEvent:
-    def __init__(self,time,f0,f1):
-        self.time=time
+    def __init__(self,time,f0,time1,f1):
+        self.time0=time
+        self.time1=time1
         self.days=time.daysAfter(refdate)
         self.f0=f0
         self.f1=f1
 
     def __str__(self):
-        return 'Time:{0} f0:{1} f1:{2}'.format(self.time,self.f0,self.f1)
+        return 'Time:{0} f0:{1} {2} f1:{3}'.format(self.time0,self.f0,self.time1,self.f1)
+
+    def __cmp__( self, other ):
+        return cmp( (self.time0,self.time1), (other.time0,other.time1) )
 
     def __repr__(self):
         return str(self)
@@ -109,6 +113,8 @@ for c in m.components():
         dimension=len(m.columns)
         zerobeyond='yes' if m.spatial_complete else 'no'
 
+    # Reverse grids so that contained grids occur before containing grids..
+    grids.reverse()
     step=TimeStep(mtype,tm.time0,tm.factor0,tm.time1,tm.factor1)
 
     found = False
@@ -128,11 +134,11 @@ for c in m.components():
 seqdef='''
 
 DEFORMATION_SEQUENCE {name}
-DATA_TYPE {dtype}
 DIMENSION {dimension}
 START_DATE 1-Jan-1850
 END_DATE 1-Jan-2100
 ZERO_BEYOND_RANGE {zerobeyondrange}
+NESTED_SEQUENCE yes
 DESCRIPTION
 {description}
 END_DESCRIPTION
@@ -143,145 +149,55 @@ griddef= '''
 DEFORMATION_COMPONENT {gridfile}
 MODEL_TYPE grid
 REF_DATE {refdate}
-BEFORE_REF_DATE {before}
-AFTER_REF_DATE {after}
+TIME_MODEL {tmodel}
 DESCRIPTION
 {description}
 END_DESCRIPTION
 '''
 
-SeqComp=namedtuple('SeqComp','mtype time factor before after')
+SeqComp=namedtuple('SeqComp','time factor before after nested')
 small=0.00001
 
 for sequence in sequences:
     compname=sequence.component
     print "Sequence:",compname
-    basegrids=[]
-    for i,g in enumerate(sequence.grids):
-        gfile=joinpath(md,'model',g)
-        bfile=joinpath(bd,'basegrid'+str(i)+'.csv')
-        cmd=['gridtool','read','csv',gfile]
-        for b in basegrids:
-            cmd.extend(['subtract','csv',b])
-        cmd.extend(['write','csv',bfile])
-        call(cmd)
-        basegrids.append(bfile)
-
-    # print "Grids\n  "+"\n  ".join(basegrids)
-
-    # Construct the time sequence... Really messy stuff as new deformation
-    # model doesn't really fit format used in Landonline and SNAP...
-    # ... for the moment!
-
-    # Build a series of time events with before and after values...
-    # Velocities are handled differently, so put in their own list
 
     subsequences = []
-
-    velocities=[]
     events=[]
     for s in sequence.steps:
         if s.mtype == 'velocity':
-            subsequences.append([SeqComp('velocity',s.t0,1.0,'interpolate','interpolate')])
-            continue
-        if s.mtype == 'step':
-            if len(events) == 0:
-                events.append(TimeEvent(s.t0,s.f0,s.f1))
-                continue
-            da=s.t0.daysAfter(refdate)
-            offset=s.f0
-            found = False
-            for i,e in enumerate(list(events)):
-                # Event before step
-                if found or e.days < da-0.5:
-                    e.f0 += offset
-                    e.f1 += offset
-                # Event coincident with step
-                elif e.days < da+0.5:
-                    e.f0 += offset
-                    offset=s.f1
-                    e.f1 += offset
-                    found = True
-                # Step before next event
-                else:
-                    if i == 0:
-                        offset=e.f0
-                    else:
-                        e0=events[i-1]
-                        offset=(e0.f1*(e.days-da)+d1.f0*(da-e0.days))/(e.days-e0.days)
-                    events.insert(i,TimeEvent(s.t0,s.f0+offset,s.f1+offset))
-                    offset=s.f1
-                    e.f0 += offset
-                    e.f1 += offset
-                    found = True
-            continue
-        if s.mtype == 'ramp':
-            if len(events) == 0:
-                events.append(TimeEvent(s.t0,s.f0,s.f0))
-                events.append(TimeEvent(s.t1,s.f1,s.f1))
-                continue
-            d0=s.t0.daysAfter(refdate)
-            d1=s.t1.daysAfter(refdate)
-            found0=False
-            found1=False
-            insert0=-1
-            insert1=-1
-            offset0=None
-            offset1=None
-            de0=events[0].days-3000.0
-            fe0=events[0].f0
+            subsequences.append([s.t0,'VELOCITY'])
+        elif s.mtype == 'step':
+            events.append(TimeEvent(s.t0,s.f0,s.t0,s.f1))
+        elif s.mtype == 'ramp':
+            events.append(TimeEvent(s.t0,s.f0,s.t1,s.f1))
+        else:
+            raise RuntimeError('Cannot handle time model type '+s.mtype)
 
-            for i, e in enumerate(events):
-                de=e.days
-                if de > d0-0.5 and not found0:
-                    if de > d0+0.5:
-                        insert0=i
-                        offset0=(fe0*(de-d0)+e.f0*(d0-de0))/(de-de0)
-                    found0=True
-                if de > d1-0.5 and not found1:
-                    if de > d1+0.5:
-                        insert1=i
-                        offset1=(fe0*(de-d1)+e.f0*(d1-de0))/(de-de0)
-                    found1=True
-                fe0=e.f1
-                de0=de
-                
-                if de < d0:
-                    offset=s.f0
-                elif de > d1:
-                    offset=s.f1
-                else:
-                    offset=(s.f0*(d1-de)+s.f1*(de-d0))/(d1-d0)
-                e.f0 += offset
-                e.f1 += offset
-            if insert1 >= 0:
-                events.insert(insert1,TimeEvent(s.t1,s.f1+offset1,s.f1+offset1))
-            if insert0 >= 0:
-                events.insert(insert0,TimeEvent(s.t0,s.f0+offset0,s.f0+offset0))
-            if not found0:
-                events.append(TimeEvent(s.t0,s.f0+fe0,s.f0+fe0))
-            if not found1:
-                events.append(TimeEvent(s.t1,s.f1+fe0,s.f1+fe0))
+    pwm=''
+    if len(events) > 0:
+        time_model=[]
+        events.sort()
+        e0=None
+        for e in events:
+            if e0 and e0.time1.datesAfter(e.time0) > 0.001:
+                raise RuntimeError('Cannot handle overlapping time events in series')
+            v0 = 0.0 if len(time_model) == 0 else time_model[-1][1]
+            for t in time_model:
+                t[1] += e.f0
+            time_model.append([e.time0,e.f0+v0])
+            time_model.append([e.time1,e.f1+v0])
+        for i in reversed(range(len(time_model)-1)):
+             t0=time_model[i]
+             t1=time_model[i+1]
+             if abs(t0[0].daysAfter(t1[0])) < 0.001 and abs(t0[1]-t1[1]) < 0.00001:
+                 time_model[i:i+1]=[]
+        pwm='PIECEWISE_LINEAR {0}'.format(time_model[0][1])
+        i0=1 if time_model[1][0].daysAfter(time_model[0][0]) < 0.001 else 0
+        for t in time_model[i0:]:
+            pwm = pwm+" {0} {1}".format( t[0].strftime('%d-%b-%Y'),t[1] )
 
-    # Define the deformation sequences for each event
-    if events:
-        lastevent=''
-        subseq=[]
-        for i,e in enumerate(events):
-            # print "Event ",e
-            split=abs(e.f0 - e.f1) > small
-            before='interpolate' if i>0 else 'zero' if abs(e.f0) < small else 'fixed'
-            after='interpolate' if i<len(events)-1 else 'zero' if abs(e.f1) < small else 'fixed'
-            if abs(e.f0 - e.f1) > small and before != 'zero' and after != 'zero':
-                subseq.append(SeqComp('deformation',e.time,e.f0,before,'zero'))
-                subsequences.append(subseq)
-                subseq=[]
-                before='zero'
-            subseq.append(SeqComp('deformation',
-                                  e.time,
-                                  e.f0 if after == 'zero' else e.f1,
-                                  before,after))
-        subsequences.append(subseq)
+        subsequences.append([refdate,pwm])
 
     # Now construct the sequences in the definition file...
 
@@ -291,65 +207,32 @@ for sequence in sequences:
     for nsseq,sseq in enumerate(subsequences):
         # print "Subsequence {0}, {1}".format(nsseq,sseq)
         sseqname='_s{0}'.format(nsseq+1) if len(subsequences) > 1 else ''
-        for ngf,gf in enumerate(basegrids):
-            gfname='_g{0}'.format(ngf+1) if len(basegrids) > 1 else ''
-            deffile.write(seqdef.format(
-                name=sequence.component+sseqname+gfname,
-                dtype=sseq[0].mtype,
-                dimension=sequence.dimension,
-                zerobeyondrange=sequence.zerobeyond if ngf == 0 else 'yes',
-                description=sequence.component
-            ))
-            for iss,seq in enumerate(sseq):
-                seqname='_ss{0}'.format(iss) if len(sseq) > 1 else ''
-                sgfname=defname+'_'+compname+sseqname+gfname+seqname+'.gdf'
-                bgrid=gf
-                if abs(seq.factor) < small:
-                    zgrid=joinpath(bd,'zerogrid'+str(ngf)+'.csv')
-                    if zgrid not in zgrids:
-                        with open(bgrid,"r") as f:
-                            hl=f.readline()
-                            l0=f.readline()
-                            l1=l0
-                            for l in f:
-                                if ',' in l:
-                                    l1 = l
-                        with open(zgrid,"w") as f:
-                            f.write(hl)
-                            parts=l0.strip().split(',')
-                            lon0,lat0=parts[:2]
-                            parts=l1.strip().split(',')
-                            lon1,lat1=parts[:2]
-                            suffix=','.join(['0.0']*(len(parts)-2))
-                            f.write('{0},{1},{2}\n'.format(lon0,lat0,suffix))
-                            f.write('{0},{1},{2}\n'.format(lon1,lat0,suffix))
-                            f.write('{0},{1},{2}\n'.format(lon0,lat1,suffix))
-                            f.write('{0},{1},{2}\n'.format(lon1,lat1,suffix))
-                        zgrids.append(zgrid)
-                    bgrid=zgrid
-                
-                cmd=['gridtool','read','csv',bgrid]
-                cmd.extend(['multiply',str(seq.factor)])
-                cmd.extend(['write_linzgrid','NZGD2000','Deformation grid',sgfname,''])
-                cmd.append(joinpath(bd,sgfname))
-                call(cmd)
-                deffile.write(griddef.format(
-                    gridfile=sgfname,
-                    refdate=seq.time.strftime('%d-%b-%Y'),
-                    before=seq.before,
-                    after=seq.after,
-                    description='Deformation grid',
-                ))
+        deffile.write(seqdef.format(
+            name=sequence.component+sseqname,
+            dimension=sequence.dimension,
+            zerobeyondrange=sequence.zerobeyond,
+            description=sequence.component
+        ))
 
-    for bg in basegrids:
-        os.remove(bg)
-    for zg in zgrids:
-        os.remove(zg)
+        for ngf,g in enumerate(sequence.grids):
+            gf=joinpath(md,'model',g)
+            gfname='_g{0}'.format(ngf+1) if len(sequence.grids) > 1 else ''
+            sgfname=defname+'_'+compname+sseqname+gfname+'.gdf'
+            cmd=['gridtool','read','csv',gf]
+            cmd.extend(['write_linzgrid','NZGD2000','Deformation grid',sgfname,''])
+            cmd.append(joinpath(bd,sgfname))
+            call(cmd)
+            deffile.write(griddef.format(
+                gridfile=sgfname,
+                refdate=sseq[0].strftime('%d-%b-%Y'),
+                description='Deformation grid',
+                tmodel=sseq[1],
+            ))
 
 deffile.close()
 
 print "Building binary deformation files"
 os.chdir(bd)
-call(['makelinzdefmodel.pl','-f','LINZDEF1B',defname+'.def',defname+'b.bin'])
-call(['makelinzdefmodel.pl','-f','LINZDEF1L',defname+'.def',defname+'l.bin'])
+call(['makelinzdefmodel.pl','-f','LINZDEF2B',defname+'.def',defname+'b.bin'])
+call(['makelinzdefmodel.pl','-f','LINZDEF2L',defname+'.def',defname+'l.bin'])
 

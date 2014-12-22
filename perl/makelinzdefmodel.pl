@@ -27,6 +27,7 @@ use strict;
 
 use FindBin;
 use lib $FindBin::RealBin.'/perllib';
+use Time::JulianDay;
 
 use Getopt::Std;
 use Packer;
@@ -40,15 +41,13 @@ my $syntax = <<EOD;
 Syntax: [options] source_file binary_file
 
 Options are:
-   -f format (either LINZDEF1B or LINZDEF1L)
+   -f format (either LINZDEF1B, LINZDEF1L, LINZDEF1B, LINZDEF2L)
 
 EOD
 
 my %opts;
 getopts('f:',\%opts);
 my $forceformat = $opts{f};
-
-@ARGV == 2 || die $syntax;
 
 my $endianness = {
    LINZDEF1B =>
@@ -63,6 +62,18 @@ my $endianness = {
        trigparam => '-f TRIG2L',
        bigendian => 0
        },
+   LINZDEF2B =>
+     { sig => "LINZ deformation model v2.0B\r\n\x1A",
+       gridparam => '-f GRID2B',
+       trigparam => '-f TRIG2B',
+       bigendian => 1
+       },
+   LINZDEF2L =>
+     { sig => "LINZ deformation model v2.0L\r\n\x1A",
+       gridparam => '-f GRID2L',
+       trigparam => '-f TRIG2L',
+       bigendian => 0
+       },
    };
 
 my @temp_files;
@@ -70,7 +81,7 @@ my $ntmpfile = 1000;
 
 
 my %model_param = qw/
-    FORMAT         (LINZDEF1B|LINZDEF1L)
+    FORMAT         (LINZDEF1B|LINZDEF1L|LINZDEF2B|LINZDEF2L)
     VERSION_NUMBER \d+(\.\d+)?
     VERSION_DATE   date
     START_DATE     date
@@ -80,7 +91,7 @@ my %model_param = qw/
     DESCRIPTION    .*
     /;
 
-my %seq_param = qw/
+my %seq_param1 = qw/
     DIMENSION          [123]
     DATA_TYPE          (velocity|deformation)?
     START_DATE         date
@@ -89,11 +100,27 @@ my %seq_param = qw/
     DESCRIPTION        .*
     /;
 
-my %comp_param = qw/
+my %seq_param2 = qw/
+    DIMENSION          [123]
+    START_DATE         date
+    END_DATE           date
+    ZERO_BEYOND_RANGE  (yes|no)?
+    NESTED_SEQUENCE    (yes|no)?
+    DESCRIPTION        .*
+    /;
+
+my %comp_param1 = qw/
     MODEL_TYPE         (trig|grid)
     REF_DATE           date
     BEFORE_REF_DATE    (fixed|zero|interpolate)?
     AFTER_REF_DATE     (fixed|zero|interpolate)?
+    DESCRIPTION        .*
+    /;
+
+my %comp_param2 = qw/
+    MODEL_TYPE         (trig|grid)
+    REF_DATE           date
+    TIME_MODEL         (PIECEWISE_LINEAR\s+float(\s+date\s+float)*|VELOCITY(\s+float(\s+date\s+float)*)?)
     DESCRIPTION        .*
     /;
 
@@ -107,8 +134,15 @@ eval {
    my $endian = $endianness->{$format};
    die "Invalid model format $format specified\n" if ! $endian;
    &BuildAllComponents($model,$endian);
-   
-   &WriteModelBinary($ARGV[1],$model,$endian);
+   if( $model->{version} eq '1' )
+   {
+      &WriteModelBinaryV1($ARGV[1],$model,$endian);
+   }
+   else
+   {
+      &WriteModelBinaryV2($ARGV[1],$model,$endian);
+   }
+    
 };
 if( $@ ) {
    print STDERR $@;
@@ -135,6 +169,8 @@ sub LoadDefinition {
       chomp;
       my ($rectype, $value ) = split(' ',$_,2);
       $rectype = uc($rectype);
+      my $seq_param=undef;
+      my $comp_param=undef;
       
       if( $rectype =~ /^(DEFORMATION_(MODEL|SEQUENCE|COMPONENT))$/ ) {
          if( $rectype eq 'DEFORMATION_MODEL' ) {
@@ -145,14 +181,16 @@ sub LoadDefinition {
             }
          elsif( $rectype eq 'DEFORMATION_SEQUENCE' ) {
             die "Must define DEFORMATION_MODEL before $rectype\n" if ! $curmod;
-            $curseq = { type=>$rectype, name=>$value, params=>\%seq_param,
+            $seq_param=$curmod->{FORMAT} =~ /2/ ? \%seq_param2 : \%seq_param1;
+            $curseq = { type=>$rectype, name=>$value, params=>$seq_param,
                         components=>[], model=>$curmod };
             push(@{$curmod->{sequences}}, $curseq );
             $curobj = $curseq;
             }
          else {
             die "Must define DEFORMATION_SEQUENCE before $rectype\n" if ! $curseq;
-            $curcomp = { type=>$rectype, source=>$value, params=>\%comp_param,
+            $comp_param=$curmod->{FORMAT} =~ /2/ ? \%comp_param2 : \%comp_param1;
+            $curcomp = { type=>$rectype, source=>$value, params=>$comp_param,
                         components=>[], sequence=>$curseq };
             push(@{$curseq->{components}}, $curcomp );
             $curobj = $curcomp;
@@ -287,33 +325,25 @@ sub BuildComponent {
       die "Invalid component MODEL_TYPE $type\n";
       }
    }
-    
    
-sub CheckDate {
-   my ($date) = @_;
-   return 0 if $date !~
-     /^([0-3]?\d)\-
-       (jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\-
-       ([12]\d\d\d)
-       (?:\s+([0-2]\d)\:([0-5]\d)\:[0-5]\d)?$/ix;
-   return 0 if $1 < 1 || $1 > 31 || $4 > 23;
-   return 1;
-   }
-
 sub CheckObject {
    my ($obj) = @_;
    my $nerror = 0;
    my $params = $obj->{params};
+   my $datere='(?:[0-2]?[1-9]|10|20|30|31)\-
+       (?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\-
+       [12]\d\d\d
+       (?:\s+(?:[0-1]\d|2[0-3])\:[0-5]\d\:[0-5]\d)?';
+   $datere=~s/\s//g;
+   my $floatre='\-?\d+(?:\.\d+)?';
+
    foreach my $k (sort keys %$params) {
       my $pattern = $params->{$k};
       my $value = $obj->{$k};
       my $result;
-      if( $pattern eq 'date' ) {
-        $result = &CheckDate($value);
-        }
-      else {
-        $result = $value =~ /^$pattern$/s;
-        }
+      $pattern =~ s/date/$datere/g;
+      $pattern =~ s/float/$floatre/g;
+      $result = $value =~ /^$pattern$/is;
       if( ! $result ) {
         print $value eq '' ? "Missing value" : "Invalid value $value",
               " for $k in ",$obj->{type},"\n";
@@ -381,8 +411,8 @@ sub CheckSyntax {
    }
 
    
-sub PackDate {
-   my ($pack,$date) = @_;
+sub ParseDate {
+   my ($date) = @_;
    
    my $month = {
        jan=>1, feb=>2, mar=>3, apr=>4, may=>5, jun=>6, 
@@ -394,10 +424,26 @@ sub PackDate {
        ([12]\d\d\d)
        (?:\s+([0-2]\d)\:([0-5]\d)\:[0-5]\d)?$/ix;
    
-   return $pack->short($3+0,$month->{lc($2)},$1+0,$4+0,$5+0,$6+0);
+   return [$3+0,$month->{lc($2)},$1+0,$4+0,$5+0,$6+0];
    }
 
-sub WriteModelBinary {
+sub DateToYear {
+   my ($date)=@_;
+   my $dateparts=ParseDate($date);
+   my ($y,$m,$d,$hr,$mn,$sc) = @$dateparts;
+   my $y0 = julian_day($y,1,1);
+   my $y1 = julian_day($y+1,1,1);
+   my $yd = julian_day($y,$m,$d)+ ($hr+$mn/60+$sc/3600)/24;
+   return $y + ($yd-$y0)/($y1-$y0);
+}
+   
+sub PackDate {
+   my ($pack,$date) = @_;
+   my $dateparts=ParseDate($date);
+   return $pack->short(@$dateparts);
+   }
+
+sub WriteModelBinaryV1 {
    my($binfile,$model,$endian) = @_;
    my $pack = new Packer( $endian->{bigendian} );
 
@@ -432,7 +478,7 @@ sub WriteModelBinary {
    
    my $loc = tell(OUT);
 
-   print OUT $pack->string( @{$model}{qw/name VERSION_NUMBER COORDSYS DESCRIPTION/});
+   print OUT $pack->string( @{$model}{qw/name VERSION COORDSYS DESCRIPTION/});
    print OUT &PackDate($pack,$model->{VERSION_DATE});
    print OUT &PackDate($pack,$model->{START_DATE});
    print OUT &PackDate($pack,$model->{END_DATE});
@@ -467,6 +513,118 @@ sub WriteModelBinary {
   close(OUT);
   }
 
+sub WriteModelBinaryV2 {
+   my($binfile,$model,$endian) = @_;
+   my $pack = new Packer( $endian->{bigendian} );
+
+   open(OUT,">$binfile") || die "Cannot create output file $binfile\n";
+   binmode(OUT);
+
+   # Print out file signature...
+
+   print OUT $endian->{sig};
+   my $indexloc = tell(OUT);
+   print OUT $pack->long(0);
+
+   # Print out component data ...
+
+   foreach my $s (@{$model->{sequences}}) {
+     foreach my $c (@{$s->{components}}) {
+       my $sf = $c->{sourcefile};
+       open(SF,"<$sf->{name}") || 
+          die "Cannot open component souce file $sf->{name}\n";
+       binmode(SF);
+       $sf->{loc} = tell(OUT);
+       my $buf;
+       sysread(SF,$buf,$sf->{size});
+       print OUT $buf;
+       close(SF);
+       }
+     }
+
+   # Print out model, sequences, components ... 
+
+   my %method = ( zero=>0, fixed=>1, interpolate=>2 );
+   
+   my $loc = tell(OUT);
+
+   print OUT $pack->string( @{$model}{qw/name VERSION COORDSYS DESCRIPTION/});
+   print OUT &PackDate($pack,$model->{VERSION_DATE});
+   print OUT &PackDate($pack,$model->{START_DATE});
+   print OUT &PackDate($pack,$model->{END_DATE});
+   print OUT $pack->double( @{$model->{range}} );
+   print OUT $pack->short( lc($model->{GEOGRAPHICAL}) eq 'no' ? 0 : 1 );
+   print OUT $pack->short( $model->{nsequences} );
+                          
+   foreach my $s (@{$model->{sequences}}) {
+     print OUT $pack->string( @{$s}{qw/name DESCRIPTION/});
+     print OUT &PackDate($pack,$s->{START_DATE});
+     print OUT &PackDate($pack,$s->{END_DATE});
+     print OUT $pack->double( @{$s->{range}} );
+     # print OUT $pack->short( lc($s->{DATA_TYPE}) eq 'velocity' ? 1 : 0 );
+     print OUT $pack->short( $s->{DIMENSION} );
+     print OUT $pack->short( lc($s->{ZERO_BEYOND_RANGE}) eq 'no' ? 0 : 1 );
+     print OUT $pack->short( lc($s->{NESTED_SEQUENCE}) eq 'no' ? 0 : 1 );
+     print OUT $pack->short( $s->{ncomponents} );
+
+     foreach my $c (@{$s->{components}}) {
+       my $tmodel=$c->{TIME_MODEL};
+       my @tmparts=split(' ',$tmodel);
+       my $tmtype=shift(@tmparts);
+       push(@tmparts,'1.0') if ! @tmparts;
+       my $nstep=int($#tmparts/2);
+       if( lc($tmtype) eq 'velocity' )
+       {
+           # Convert a velocity time sequence to a displacement time sequence
+           # that is zero at the reference epoch..
+           my $offset=0;
+           my $yref=DateToYear($c->{REF_DATE});
+           unshift(@tmparts,0.0,$s->{START_DATE});
+           push(@tmparts,$s->{END_DATE},0.0);
+           my $y0=DateToYear($tmparts[1]);
+           my $v0=$tmparts[2];
+           $tmparts[2]=0.0;
+           my $factor=0.0;
+           for( my $i=3; $i < $#tmparts; $i++ )
+           {
+               my $v1=$tmparts[$i+1];
+               my $y1=DateToYear($tmparts[$i]);
+               if( $y0 <= $yref && $y1 > $yref )
+               {
+                   $offset=$factor+($yref-$y0)*$v0;
+               }
+               $factor += ($y1-$y0)*$v0;
+               $tmparts[$i+1]=$factor;
+               $v0=$v1;
+               $y0=$y1;
+           }
+           for( my $i=0; $i <= $#tmparts; $i+=2 )
+           {
+               $tmparts[$i] -= $offset;
+           }
+       }
+       print OUT $pack->string( $c->{DESCRIPTION} );
+       print OUT &PackDate($pack,$c->{REF_DATE});
+       print OUT $pack->double( @{$c->{sourcefile}->{range}} );
+       print OUT $pack->short(1); # Time model type - always piecewise linear
+       print OUT $pack->short($nstep);
+       print OUT $pack->double( shift(@tmparts));
+       while( $nstep-- )
+       {
+           print OUT &PackDate($pack,shift(@tmparts));
+           print OUT $pack->double(shift(@tmparts));
+       }
+       print OUT $pack->short( lc($c->{MODEL_TYPE}) eq 'trig' ? 1 : 0 );
+       print OUT $pack->long( $c->{sourcefile}->{loc} );
+       }
+     }
+
+  seek(OUT,$indexloc,0);
+  print  OUT $pack->long($loc);
+
+  close(OUT);
+  }
+
 __END__
 
 # Example of an input file ...
@@ -484,13 +642,19 @@ __END__
 # date, or both.  All velocities in the sequence that are valid for the
 # evaluation date are applied.
 
-# A deformation sequence consists of one or more deformation models in order
+# A version 1 deformation sequence consists of one or more deformation models in order
 # of date.  Each model can apply as a fixed or interpolated model before its
 # reference date and after its reference date.  For dates between two models,
 # the valid options are that the deformation is interpolated between the two
 # models, or one or other model applies as a fixed model.  Times before the
 # first model or after the last can be extrapolated based upon the first or
 # last two models respectively.
+#
+# A version 2 deformation model sequence is a set of components each of which
+# has either a velocity or a deformation time model.  The sequence can be
+# nested, in which case only the first component matching the spatial location
+# of the evaluation point is used.  Otherwise all components are calculated and
+# summed to get the total deformation.
 
 # Each component in the sequence can be either a triangulated model, or 
 # a grid model.  The source file referenced can be a pre-built binary file,
@@ -501,6 +665,71 @@ __END__
 # Two example sequences follow, one with a single velocity grid, the other
 # with two triangulated deformation components.
 
+
+DEFORMATION_MODEL NZGD2000 deformation model
+# Format is LINZDEF1L or LINZDEF1B, depending upon endian-ness.  Can be
+# over-ridden by command line parameter to script.
+FORMAT LINZDEF2B
+VERSION_NUMBER 1.0
+VERSION_DATE  12-Mar-2004
+# Calculation will fail for values outside range start date to end date
+START_DATE 1-Jan-1850
+END_DATE 1-Jan-2100
+COORDSYS NZGD2000
+DESCRIPTION
+This is the description of the model
+This is a first try
+END_DESCRIPTION
+
+DEFORMATION_SEQUENCE National model
+DATA_TYPE velocity
+DIMENSION 2
+START_DATE 1-Jan-1850
+END_DATE 1-Jan-2100
+ZERO_BEYOND_RANGE no
+NESTED_SEQUENCE no
+DESCRIPTION
+The IGNS velocity model.  Based upon data from 1992 to 1997
+Report number 12345
+END_DESCRIPTION
+
+DEFORMATION_COMPONENT igns98b.dmp
+MODEL_TYPE grid
+REF_DATE 1-Jan-2000
+TIME_MODEL velocity
+DESCRIPTION
+END_DESCRIPTION
+
+# Discrete event ...
+
+DEFORMATION_SEQUENCE Patch
+DIMENSION 2
+START_DATE 30-Jun-2002
+END_DATE 1-Jan-2100
+ZERO_BEYOND_RANGE yes
+NESTED_SEQUENCE no
+DESCRIPTION
+Totally ficticious deformation model ... 
+Report number 456/7
+END_DESCRIPTION
+
+DEFORMATION_COMPONENT patch1.trg
+MODEL_TYPE trig
+REF_DATE 30-Jun-2002 13:40:00
+TIME_MODEL PIECEWISE_LINEAR 0.0 30-Jun-2002 1.0 30-Jun-2003 0.0
+DESCRIPTION
+Initial offset
+END_DESCRIPTION
+
+DEFORMATION_COMPONENT patch2.trg
+MODEL_TYPE trig
+REF_DATE 30-Jun-2003 13:40:00
+TIME_MODEL PIECEWISE_LINEAR 0.0 30-Jun-2002 0.0 30-Jun-2003 1.0
+DESCRIPTION
+Final offset
+END_DESCRIPTION
+
+# The version 1 format is as follows:
 
 DEFORMATION_MODEL NZGD2000 deformation model
 # Format is LINZDEF1L or LINZDEF1B, depending upon endian-ness.  Can be
