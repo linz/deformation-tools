@@ -45,7 +45,7 @@ void grid::initiallize()
 
 void grid::create( int nrow, int ncol, int nvalue )
 {
-    if( nrow < 2 || ncol < 2 || nvalue < 1 )
+    if( nrow < 2 || ncol < 2 || nvalue < 0 )
     {
         stringstream msg;
         msg << "Invalid parameters to grid::create - nrow: " 
@@ -56,7 +56,14 @@ void grid::create( int nrow, int ncol, int nvalue )
     m_nrow = nrow;
     m_ncol = ncol;
     m_nvalue = nvalue;
-    m_values.assign(nrow,ncol*m_nvalue,0.0);
+    if( nvalue == 0 ) 
+    {
+        m_values.resize(0);
+    }
+    else
+    {
+        m_values.assign(nrow,ncol*m_nvalue,0.0);
+    }
     m_marked.resize(nrow);
     clearMarked();
 }
@@ -91,8 +98,7 @@ bool grid::readfile( const char * filename, char delim, int maxcols )
 
         double x0 = x, y0 = y, v1;
 
-        s >> x >> y >> v1;
-        if( ! s.good() )
+        if( ! (s >> x >> y) )
         {
             if( npt > 0 ) continue;
             if( buffer.find_first_not_of(spacechar) == string::npos ) continue;
@@ -106,7 +112,7 @@ bool grid::readfile( const char * filename, char delim, int maxcols )
         if( npt == 1 )
         {
             nrow = 1;
-            nvalue = 1;
+            nvalue = 0;
             m_x0 = x;
             m_y0 = y;
             while( s >> v1 ) nvalue++;
@@ -116,8 +122,8 @@ bool grid::readfile( const char * filename, char delim, int maxcols )
         {
             dx = x-x0;
             dy = y-y0;
-			xc = x;
-			yc = y;
+	    xc = x;
+	    yc = y;
         }
         else if( (x-x0)*dx + (y-y0)*dy < 0.0 )
         {
