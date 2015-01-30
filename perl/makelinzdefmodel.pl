@@ -557,6 +557,7 @@ sub WriteModelBinaryV2 {
    print OUT $pack->short( $model->{nsequences} );
                           
    foreach my $s (@{$model->{sequences}}) {
+     print "Building sequence ",$s->{name},"\n";
      print OUT $pack->string( @{$s}{qw/name DESCRIPTION/});
      print OUT &PackDate($pack,$s->{START_DATE});
      print OUT &PackDate($pack,$s->{END_DATE});
@@ -572,7 +573,6 @@ sub WriteModelBinaryV2 {
        my @tmparts=split(' ',$tmodel);
        my $tmtype=shift(@tmparts);
        push(@tmparts,'1.0') if ! @tmparts;
-       my $nstep=int($#tmparts/2);
        if( lc($tmtype) eq 'velocity' )
        {
            # Convert a velocity time sequence to a displacement time sequence
@@ -607,6 +607,7 @@ sub WriteModelBinaryV2 {
        print OUT &PackDate($pack,$c->{REF_DATE});
        print OUT $pack->double( @{$c->{sourcefile}->{range}} );
        print OUT $pack->short(1); # Time model type - always piecewise linear
+       my $nstep=int($#tmparts/2);
        print OUT $pack->short($nstep);
        print OUT $pack->double( shift(@tmparts));
        while( $nstep-- )
@@ -667,7 +668,7 @@ __END__
 
 
 DEFORMATION_MODEL NZGD2000 deformation model
-# Format is LINZDEF1L or LINZDEF1B, depending upon endian-ness.  Can be
+# Format is LINZDEF2L or LINZDEF2B, depending upon endian-ness.  Can be
 # over-ridden by command line parameter to script.
 FORMAT LINZDEF2B
 VERSION_NUMBER 1.0

@@ -102,7 +102,7 @@ for c in m.components():
 
     grids=[]
     dimension=0
-    zerobeyond='no'
+    zerobeyond='yes'
     for m in c.spatialModel.models():
         if m.spatial_model != 'llgrid':
             raise RuntimeError('Cannot handle spatial model type '+spatial_model)
@@ -111,7 +111,8 @@ for c in m.components():
         #print '    ',m.columns
         grids.append(m.model().gridFile())
         dimension=len(m.columns)
-        zerobeyond='yes' if m.spatial_complete else 'no'
+        if not m.spatial_complete:
+            zerobeyond='no'
 
     # Reverse grids so that contained grids occur before containing grids..
     grids.reverse()
