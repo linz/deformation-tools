@@ -139,6 +139,42 @@ void mark_wkt_file( grid &g, bool outside, const char *wkt_file, grid::markactio
     }
 }
 
+void wkt_extents( const char *wkt_file, double &minx, double &maxx, double &miny, double &maxy )
+{
+    minx=maxx=miny=maxy=0.0;
+
+    ifstream f(wkt_file);
+    if( ! f )
+    {
+        throw runtime_error(string("Cannot open WKT file ")+wkt_file);
+    }
+
+    // Very crude loop to extract rings from WKT and toggle contents.
+    // Assumes anything after a '(' is potentially a WKT ring.
+
+    
+    bool first=true;
+    while( f )
+    {
+        char c;
+        while(f.get(c)) { if( c == '(' ) break; }
+        if( ! f ) break;
+        while( f )
+        {
+            double x, y;
+            f >> x >> y;
+            if (! f ) { if( ! f.eof() ) f.clear();  break; }
+            while( f.get(c)) { if( c == ')' || c == ',' ) break; }
+            if( first ){ minx = maxx = x; miny = maxy = y; first=false; }
+            else
+            {
+                if( x < minx ) minx = x; else if( x > maxx ) maxx=x;
+                if( y < miny ) miny = y; else if( y > maxy ) maxy=y;
+            }
+        }
+    }
+}
+
 // Messy function to generate WKT polygon(s) outlining cells affected by marked nodes
 // Not sorting out internal polygons - each ring is output as a separate wkt polygon.
 

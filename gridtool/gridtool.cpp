@@ -5,6 +5,7 @@
 #include <list>
 #include <algorithm>
 #include <stdexcept>
+#include <cmath>
 #include "grid.hpp"
 #include "gridutil.hpp"
 #include "smoothgrid.hpp"
@@ -73,13 +74,25 @@ int main( int argc, char *argv[] )
 
     for( int i = 1; i < argc-1; i++ ) commands.push_back(argv[i]);
     if( commands.size() == 0 ) commands.push_front("run");
-    if( commands.front() != "run" && commands.front() != "read" && commands.front() != "read_csv" )
+    if( commands.front() != "run" && commands.front() != "read" && commands.front() != "create" )
     {
         commands.push_front("read");
         commands.push_back("write");
     }
     commands.push_back(argv[argc-1]);
     run_commands(commands);
+}
+
+vector<string> split(const string &s, char delim ) 
+{
+    vector<string> elems;
+    stringstream ss(s);
+    string item;
+    while (getline(ss, item, delim)) 
+    {
+         elems.push_back(item);
+    }
+    return elems;
 }
 
 static string next_command( commandlist &commands, const string reason="" )
@@ -233,6 +246,47 @@ static string run_read_grid( grid &g, commandlist &commands, const string &opera
     if( output ) cout << "Grid has " << g.nrow() << " rows and " << g.ncol() << " columns" << endl;
     if( output ) cout << "Each point has " << g.nvalue() << " data values" << endl;
     return filename;
+}
+
+static void run_create_grid( grid &g, commandlist &commands )
+{
+    double minx, maxx, miny, maxy, incx, incy;
+    vector<string> columns;
+    if( next_command_is(commands,"extents"))
+    {
+        if( next_command_is(commands,"wkt"))
+        {
+            string filename = next_command( commands, "Extents wkt_file file for ");
+            wkt_extents(filename.c_str(),minx,maxx,miny,maxy);
+        }
+        else
+        {
+            grid gext;
+            run_read_grid( gext, commands, "create" );
+            gext.extents(minx,maxx,miny,maxy);
+        }
+        next_command_value(commands,incx,"Grid longitude spacing");
+        next_command_value(commands,incy,"Grid latitude spacing");
+        minx = incx*floor(minx/incx);
+        miny = incy*floor(miny/incy);
+    }
+    else
+    {
+        next_command_value(commands,minx,"Grid minimum longitude");
+        next_command_value(commands,maxx,"Grid maximum longitude");
+        next_command_value(commands,incx,"Grid longitude spacing");
+
+        next_command_value(commands,miny,"Grid minimum latitude");
+        next_command_value(commands,maxy,"Grid maximum latitude");
+        next_command_value(commands,incy,"Grid latitude spacing");
+    }
+
+    if( next_command_is(commands,"columns") )
+    {
+        string columndef=next_command(commands,"Grid columns to create");
+        columns=split(columndef,'+');
+    }
+    g.create( minx, maxx, incx, miny, maxy, incy, columns );
 }
 
 static void run_write_grid( grid &g, commandlist &commands )
@@ -590,6 +644,7 @@ static void run_commands( commandlist &commands )
             else if( op == "write" ) run_write_grid(g,commands);
             else if( op == "write_linzgrid" ) run_write_linzgrid(g,commands);
             else if( op == "read" ) run_read_grid(g,commands);
+            else if( op == "create" ) run_create_grid(g,commands);
             else if( op == "run" ) run_command_file(g,commands);
             else if( op == "add" ) run_addgrid( g, commands, op );
             else if( op == "subtract" ) run_addgrid(g, commands, op );

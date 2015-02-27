@@ -9,12 +9,18 @@ y value, and one or more values (the same number on each line).  Grids may be
 in row or column major order.  It is assumed (and to some extent tested) that
 the grids points are on a regular orthogonal grid.
 
-The following commands can be included on the command line, or included on the 
-command line
+The following commands can be included on the command line, or 
+included in the command file
 
 read [csv] [maxcols n] grid_file
    Loads a new grid file.  Maximum number of columns can limit the number
    of data columns read (ie count of data columns after lon/lat)
+
+create minx max xspacing miny maxy yspacing columns xxx
+create extents [csv] gridfile xspacing yspacing columns xxxx
+create extents wkt wktfile xspacing yspacing columns xxxx
+   Creates a new grid based on the extents and x/y spacing. 
+   xxx is a list of column names in the new grid, separated by +
 
 write [csv] [columns xx] _names grid_file [where selection]
    Writes the current grid to a file.  The columns value can be a list of

@@ -95,6 +95,10 @@ public:
     void trimto( grid &g );
     void multiplyBy( double factor );
     void resize( int rowmin, int colmin, int rowmax, int colmax );
+    void create( double minx, double maxx, double incx,
+            double miny, double maxy, double incy,
+            std::vector<std::string> columns );
+    void extents( double &minx, double &maxx, double &miny, double &maxy );
     void trim( int borderSize = 0 );
     std::string fieldName( int iv );
 private:

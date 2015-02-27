@@ -238,3 +238,7 @@ Each point has 2 data values
 Resizing to include rows 1 to 24 and columns 1 to 29
 Trimming to grid to align1.grid
 Writing grid to file out/test32c.grid
+test 33 - create
+Writing grid to file out/test33a.csv
+Writing grid to file out/test33b.csv
+Writing grid to file out/test33c.csv

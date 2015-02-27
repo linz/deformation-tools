@@ -68,6 +68,28 @@ void grid::create( int nrow, int ncol, int nvalue )
     clearMarked();
 }
 
+void grid::create( double minx, double maxx, double incx,
+            double miny, double maxy, double incy,
+            std::vector<std::string> columns )
+{
+    int ngrdx=(int) ceil((maxx-minx)/incx+0.999);
+    int ngrdy=(int) ceil((maxy-miny)/incy+0.999);
+
+    ngrdx++;
+    ngrdy++;
+    create( ngrdy, ngrdx, columns.size());
+    m_fields=columns;
+    m_x0=minx;
+    m_y0=miny;
+    m_rowdx=0.0;
+    m_rowdy=incy;
+    m_coldx=incx;
+    m_coldy=0.0;
+    m_rowlen = m_rowdx*m_rowdx + m_rowdy*m_rowdy;
+    m_collen = m_coldx*m_coldx + m_coldy*m_coldy;
+    m_header="header"; // Kludge to ensure headers output
+}
+
 bool grid::readfile( const char * filename, char delim, int maxcols )
 {
     initiallize();
@@ -209,6 +231,14 @@ bool grid::readfile( const char * filename, char delim, int maxcols )
     }
     setupFields();
     return true;
+}
+
+void grid::extents( double &minx, double &maxx, double &miny, double &maxy )
+{
+    nodexy(0,0,minx,miny);
+    nodexy(m_nrow-1,m_ncol-1,maxx,maxy);
+    if( minx > maxx ){ double tmp=minx; minx=maxx; maxx=tmp;}
+    if( miny > maxy ){ double tmp=miny; miny=maxy; maxy=tmp;}
 }
 
 void grid::setupFields()
