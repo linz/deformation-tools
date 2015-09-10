@@ -415,7 +415,7 @@ try:
                     ptlon += defm[0]/dedln
                     ptlat += defm[1]/dndlt
                     pthgt += defm[2]
-                    print "{0:.8f} {1:.8f} {2:.4f}".format(ptlon,ptlat,pthgt)
+                    print "{0:.9f} {1:.9f} {2:.4f}".format(ptlon,ptlat,pthgt)
                 elif quiet:
                     print "{0:.4f} {1:.4f} {2:.4f}".format(defm[0],defm[1],defm[2])
                 else:
@@ -475,8 +475,8 @@ try:
                     dedln,dndlt=grs80.metres_per_degree(lon,lat)
                     lon += defm[0]/dedln
                     lat += defm[1]/dndlt
-                    data[colnos[0]]="%.8lf"%(lon,)
-                    data[colnos[1]]="%.8lf"%(lat,)
+                    data[colnos[0]]="%.9lf"%(lon,)
+                    data[colnos[1]]="%.9lf"%(lat,)
                     if len(colnos) > 2:
                         hgt = float(data[colnos[2]])
                         hgt += defm[2]

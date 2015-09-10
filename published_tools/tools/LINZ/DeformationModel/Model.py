@@ -794,7 +794,8 @@ class Model( object ):
 
     def ellipsoid( self ):
         if self._ellipsoid is None:
-            from ..Geodetic import ellipsoid
+            # from ..Geodetic import ellipsoid
+            import ellipsoid
             a=float(self._metadata['ellipsoid_a'])
             rf=float(self._metadata['ellipsoid_rf'])
             self._ellipsoid=ellipsoid.ellipsoid(a,rf)

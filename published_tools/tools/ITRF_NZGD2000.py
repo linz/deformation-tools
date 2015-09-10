@@ -303,7 +303,7 @@ for loop in [1]:
 
     if atpoint:
             llh = transform(ptlon,ptlat,pthgt, date )
-            print "{0:.8f} {1:.8f} {2:.4f}".format(*llh)
+            print "{0:.9f} {1:.9f} {2:.4f}".format(*llh)
             break
 
     try:
@@ -340,8 +340,8 @@ for loop in [1]:
             if date_colno is not None:
                 date = data[date_colno]
             llh = transform(lon,lat,hgt, date)
-            data[colnos[0]]="{0:.8f}".format(llh[0])
-            data[colnos[1]]="{0:.8f}".format(llh[1])
+            data[colnos[0]]="{0:.9f}".format(llh[0])
+            data[colnos[1]]="{0:.9f}".format(llh[1])
             if ncolnos > 2:
                 data[colnos[2]]="{0:.4f}".format(llh[2])
             writefunc(data)
