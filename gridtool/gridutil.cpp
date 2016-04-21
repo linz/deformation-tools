@@ -381,15 +381,54 @@ void write_linz_grid_file( grid &g, string crdsys, string header1, string header
     g.nodexy(grid::node(nrow-1,0),p1y);
     g.nodexy(grid::node(0,ncol-1),p1x);
 
-    if( p0.x != p1y.x || p0.y != p1x.y )
+    bool rowfirst=fabs(p0.x-p1y.x) < fabs(p0.x-p1x.x);
+    if( ! rowfirst )
     {
-        throw runtime_error("Cannot create LINZ grid as grid not aligned with axes");
+        grid::point tmp=p1x;
+        p1x=p1y;
+        p1y=tmp;
+    }
+
+    if( p0.x != p1y.x )
+    {
+        ostringstream msg;
+        msg << "Cannot grid LINZ grid as grid not aligned with y axis (" 
+            << p0.x << " != " << p1y.x << ")";
+        throw runtime_error(msg.str());
+    }
+
+    if( p0.y != p1x.y )
+    {
+        ostringstream msg;
+        msg << "Cannot grid LINZ grid as grid not aligned with x axis (" 
+            << p0.y << " != " << p1x.y << ")";
+        throw runtime_error(msg.str());
     }
 
     ofstream os( gridfile );
     if( ! os )
     {
         throw runtime_error(string("Cannot open output wkt file ").append(gridfile));
+    }
+
+    double xmin=p0.x;
+    double xmax=p1x.x;
+    double ymin=p0.y;
+    double ymax=p1y.y;
+
+    bool reversex=false;
+    bool reversey=false;
+
+    if( xmin < xmax ) 
+    {
+        reversex=true;
+        double tmp=xmax; xmax=xmin; xmin=tmp;
+    }
+
+    if( ymin < ymax ) 
+    {
+        reversey=true;
+        double tmp=ymax; ymax=ymin; ymin=tmp;
     }
 
     os << setprecision(12);
@@ -409,17 +448,40 @@ void write_linz_grid_file( grid &g, string crdsys, string header1, string header
     os << "LATLON: 1" << endl;
     os << "VALUES: REAL" << endl;
 
-    for( int row = 0; row < nrow; row++ )
+    if( rowfirst )
+    {
+        for( int row = 0; row < nrow; row++ )
+        {
+            int rowg=reversex ? nrow-row-1 : row;
+            for( int col = 0; col < ncol; col++ )
+            {
+                int colg=reversey ? ncol-col-1 : col;
+                os << "V" << col+1 << "," << row+1 << ":";
+                vector<double>::pointer v = g.values(rowg,colg);
+                for( int i = 0; i < noutval; i++ )
+                {
+                    os << " " << v[useCols[i]];
+                }
+                os << endl;
+            }
+        }
+    }
+    else
     {
         for( int col = 0; col < ncol; col++ )
         {
-            os << "V" << col+1 << "," << row+1 << ":";
-            vector<double>::pointer v = g.values(row,col);
-            for( int i = 0; i < noutval; i++ )
+            int colg=reversex ? ncol-col-1 : col;
+            for( int row = 0; row < nrow; row++ )
             {
-                os << " " << v[useCols[i]];
+                int rowg=reversey ? nrow-row-1 : row;
+                os << "V" << col+1 << "," << row+1 << ":";
+                vector<double>::pointer v = g.values(rowg,colg);
+                for( int i = 0; i < noutval; i++ )
+                {
+                    os << " " << v[useCols[i]];
+                }
+                os << endl;
             }
-            os << endl;
         }
     }
     os.close();
