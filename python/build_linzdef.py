@@ -181,7 +181,7 @@ for sequence in sequences:
         events.sort()
         e0=None
         for e in events:
-            if e0 and e0.time1.datesAfter(e.time0) > 0.001:
+            if e0 and e0.time1.daysAfter(e.time0) > 0.001:
                 raise RuntimeError('Cannot handle overlapping time events in series')
             v0 = 0.0 if len(time_model) == 0 else time_model[-1][1]
             for t in time_model:
