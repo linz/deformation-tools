@@ -381,12 +381,14 @@ void write_linz_grid_file( grid &g, string crdsys, string header1, string header
     g.nodexy(grid::node(nrow-1,0),p1y);
     g.nodexy(grid::node(0,ncol-1),p1x);
 
+    int ngrdx=ncol;
+    int ngrdy=nrow;
+
     bool rowfirst=fabs(p0.x-p1y.x) < fabs(p0.x-p1x.x);
     if( ! rowfirst )
     {
-        grid::point tmp=p1x;
-        p1x=p1y;
-        p1y=tmp;
+        grid::point tmp=p1x; p1x=p1y; p1y=tmp;
+        int itmp=ngrdx; ngrdx=ngrdy; ngrdy=itmp;
     }
 
     if( p0.x != p1y.x )
@@ -419,13 +421,13 @@ void write_linz_grid_file( grid &g, string crdsys, string header1, string header
     bool reversex=false;
     bool reversey=false;
 
-    if( xmin < xmax ) 
+    if( xmin > xmax ) 
     {
         reversex=true;
         double tmp=xmax; xmax=xmin; xmin=tmp;
     }
 
-    if( ymin < ymax ) 
+    if( ymin > ymax ) 
     {
         reversey=true;
         double tmp=ymax; ymax=ymin; ymin=tmp;
@@ -437,12 +439,12 @@ void write_linz_grid_file( grid &g, string crdsys, string header1, string header
     os << "HEADER1: " << header2 << endl;
     os << "HEADER2: " << header3 << endl;
     os << "CRDSYS: " << crdsys << endl;
-    os << "NGRDX: " << ncol << endl;
-    os << "NGRDY: " << nrow << endl;
-    os << "XMIN: " << p0.x << endl;
-    os << "XMAX: " << p1x.x << endl;
-    os << "YMIN: " << p0.y << endl;
-    os << "YMAX: " << p1y.y << endl;
+    os << "NGRDX: " << ngrdx << endl;
+    os << "NGRDY: " << ngrdy << endl;
+    os << "XMIN: " << xmin << endl;
+    os << "XMAX: " << xmax << endl;
+    os << "YMIN: " << ymin << endl;
+    os << "YMAX: " << ymax << endl;
     os << "VRES: " << vres << endl;
     os << "NDIM: " << noutval << endl;
     os << "LATLON: 1" << endl;
@@ -452,10 +454,10 @@ void write_linz_grid_file( grid &g, string crdsys, string header1, string header
     {
         for( int row = 0; row < nrow; row++ )
         {
-            int rowg=reversex ? nrow-row-1 : row;
+            int rowg=reversey ? nrow-row-1 : row;
             for( int col = 0; col < ncol; col++ )
             {
-                int colg=reversey ? ncol-col-1 : col;
+                int colg=reversex ? ncol-col-1 : col;
                 os << "V" << col+1 << "," << row+1 << ":";
                 vector<double>::pointer v = g.values(rowg,colg);
                 for( int i = 0; i < noutval; i++ )
@@ -470,11 +472,11 @@ void write_linz_grid_file( grid &g, string crdsys, string header1, string header
     {
         for( int col = 0; col < ncol; col++ )
         {
-            int colg=reversex ? ncol-col-1 : col;
+            int colg=reversey ? ncol-col-1 : col;
             for( int row = 0; row < nrow; row++ )
             {
-                int rowg=reversey ? nrow-row-1 : row;
-                os << "V" << col+1 << "," << row+1 << ":";
+                int rowg=reversex ? nrow-row-1 : row;
+                os << "V" << row+1 << "," << col+1 << ":";
                 vector<double>::pointer v = g.values(rowg,colg);
                 for( int i = 0; i < noutval; i++ )
                 {
