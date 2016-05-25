@@ -3,6 +3,8 @@
 # Script to compile zip files of the reverse patch deformation grids applied to Landonline
 # in a format suitable for distributing to 3rd parties.
 #
+# Also compiles a list of test points for testing the grid
+#
 
 import sys
 import os
@@ -24,22 +26,14 @@ ntv2py=os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])),'make_ntv2.py
 
 def load_land_areas( polygon_file ):
     global land_areas
-    areas=[]
     if polygon_file:
-        import fiona
+        from shapely import wkt
         from shapely.geometry import shape, MultiPolygon, Polygon
+
         print "Loading land area definition from",polygon_file
-        with fiona.open(polygon_file) as f:
-            for feature in f:
-                mp=shape(feature['geometry'])
-                if type(mp) != MultiPolygon:
-                    mp=[mp]
-                for p in mp:
-                    p=Polygon(p.exterior)
-                    p=p.buffer(land_area_tolerance).simplify(land_area_tolerance)
-                    areas.append(p)
-    if areas:
-        land_areas=MultiPolygon(areas).buffer(0.0)
+        with open(polygon_file) as f:
+            pgnwkt=f.read()
+            land_areas=wkt.loads(pgnwkt)
 
 def build_dump( def_file ):
     components=[]
@@ -218,9 +212,9 @@ def build_dump( def_file ):
 if __name__=='__main__':
     from argparse import ArgumentParser
     parser=ArgumentParser('Create publishable shift zip files from reverse_patch files')
-    parser.add_argument('def_files',nargs='*',help='List of shift .def files from which to construct zip files')
+    parser.add_argument('def_files',nargs='+',help='List of shift .def files from which to construct zip files')
     parser.add_argument('--patch-dir','-p',default='reverse_patch',help='Directory to scan for .def files')
-    parser.add_argument('--land-areas','-l',help='Shape file from which to load land areas - used to restrict test points')
+    parser.add_argument('--land-areas','-l',help='File containing a WKT mutipolygon definition of the land areas - used to restrict test points')
     parser.add_argument('--n-test-points','-n',type=int,default=ntestpergrid,help='Number of test points per grid area')
 
     args=parser.parse_args()
