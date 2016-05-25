@@ -25,6 +25,14 @@ import re
 import shutil
 import sys
 
+calc_okada=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),'okada','calc_okada')
+if not os.path.exists(calc_okada):
+    raise RuntimeError('Cannot find calc_okada program at '+calc_okada)
+
+gridtool=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),'gridtool','gridtool')
+if not os.path.exists(gridtool):
+    raise RuntimeError('Cannot find gridtool program at '+gridtool)
+
 class PatchGridDef:
 
     def __init__( self, level, file, parent=None, extentfile=None ):
@@ -205,13 +213,14 @@ def grid_spec( size, extents, multiple=1 ):
     return 'grid:{0}:{1}:{2}:{3}:{4}:{5}'.format(lnmin,ltmin,lnmax,ltmax,nln,nlt)
 
 def calc_grid( modeldef, griddef, gridfile ):
+    global calc_okada
     gridspec=grid_def_spec( griddef )
     # if verbose:
     #     print "Calculating deformation on {0}".format(gridfile)
     #     print "Model {0}".format(modeldef)
     #     print "Grid spec {0}".format(gridspec)
 
-    params=['calc_okada','-f','-x','-l','-s',modeldef,gridspec,gridfile]
+    params=[calc_okada,'-f','-x','-l','-s',modeldef,gridspec,gridfile]
     if apply_sf_conv:
         params.insert(1,'-f')
     meta='\n'.join(params)
@@ -699,7 +708,7 @@ def create_patch_csv( patchlist, modelname, additive=True, trimgrid=True, linzgr
         # Build a grid tool command to process the file
         
         # Read in the existing file (only need de, dn, du components)
-        merge_commands='gridtool\nread maxcols 3 gridfile '
+        merge_commands=gridtool+'\nread maxcols 3 gridfile '
  
         # If have a parent, then subtract it as want to merge into it
         if parent: merge_commands = merge_commands + '\nsubtract maxcols 3 parentgrid'
