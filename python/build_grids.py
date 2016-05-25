@@ -114,14 +114,6 @@ def configure_for_testing():
 
 apply_sf_conv=True
 
-# Polygons defining area over which model is required to meet standards...
-# Tolerance is offset in degrees used to buffer and simplify model in order to 
-# simplify calculations
-# Land areas is a multipolygon defining the required coverage.  If it is empty then
-# land is treated as infinite!
-
-land_area_buffer=0.2
-land_area_tolerance=0.05
 land_areas=None
 
 # Outputs required ...
@@ -971,43 +963,15 @@ def build_published_component( gridlist, modeldef, additive, comppath, cleandir=
 
 def load_land_areas( polygon_file ):
     global land_areas
-    areas=[]
-    if polygon_file:
-        if not os.path.exists(polygon_file):
-            raise RuntimeError("Land area file "+polygon_file+" does not exists")
-        la_file=re.sub(r'\.shp$','',polygon_file)
-        la_file=la_file+'.land-areas.wkt'
-        if os.path.exists(la_file) and os.path.getmtime(la_file) > os.path.getmtime(polygon_file):
-            try:
-                from shapely.wkt import loads
-                with open(la_file) as laf:
-                    wkt=laf.read()
-                    land_areas=loads(wkt)
-                    write_log( "Using cached land area definition from "+polygon_file)
-                    return
-            except:
-                pass
-        import fiona
-        write_log( "Loading land area definition from "+polygon_file)
-        with fiona.open(polygon_file) as f:
-            for feature in f:
-                mp=shape(feature['geometry'])
-                if type(mp) != MultiPolygon:
-                    mp=[mp]
-                for p in mp:
-                    write_log("Polygon: {0} points".format(len(list(p.exterior.coords))))
-                    p=Polygon(p.exterior)
-                    p=p.buffer(land_area_buffer,3).simplify(land_area_tolerance)
-                    areas.append(p)
-        write_log( "Loading land areas built")
-        if areas:
-            land_areas=unary_union(areas)
-            try:
-                from shapely.wkt import dumps
-                with open(la_file,"w") as laf:
-                    laf.write(dumps(land_areas))
-            except:
-                pass
+    from shapely.wkt import loads
+    try:
+        with open(polygon_file) as laf:
+            wkt=laf.read()
+            land_areas=loads(wkt)
+        write_log( "Using land area definition from "+polygon_file)
+        return
+    except:
+        raise RuntimeError("Cannot load land area definition from "+polygon_file)
 
 if __name__ == "__main__":
 
@@ -1030,7 +994,7 @@ if __name__ == "__main__":
     parser.add_argument('--split-base',action='store_true',help="Base deformation will be split into separate patches if possible")
     parser.add_argument('--no-trim-subgrids',action='store_false',help="Subgrids will not have redundant rows/columns trimmed")
     parser.add_argument('--clean-dir',action='store_true',help="Clean publishable component subdirectory")
-    parser.add_argument('--land-area',help="Area over which model must be defined")
+    parser.add_argument('--land-area',help="WKT file containing area land area over which model must be defined")
 
     args=parser.parse_args()
         
