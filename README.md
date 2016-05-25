@@ -2,7 +2,11 @@ Tools for building the NZGD2000 deformation model
 =================================================
 
 This contains a number of programs and tools used to build the 
-NZGD2000 deformation model.  The main tools are:
+[NZGD2000 deformation model] (https://github.com/linz/nzgd2000-deformation-model).  These are used to build the deformation model, see
+the [deformation-files](https://github.com/linz/deformation-files) repository
+where the data and scripts used for building the model are held.
+
+The main tools are:
 
 * gridtool
 
@@ -11,7 +15,7 @@ NZGD2000 deformation model.  The main tools are:
 
 * okada
 
-  a program for calculating surface deformation from a rectangular
+  a program (calc_okada) for calculating surface deformation from a rectangular
   fault model (see [calc_okada.help](https://github.com/linz/deformation-tools/blob/master/okada/calc_okada.help))
 
 * gns_velocity
