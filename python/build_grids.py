@@ -661,7 +661,7 @@ def build_deformation_grids( patchpath, patchname, modeldef, splitbase=True ):
             gridlist.append(p)
     return gridlist
 
-def create_patch_csv( patchlist, modelname, additive=True, trimgrid=True, linzgrid=False ):
+def create_patch_csv( patchlist, modelname, additive=True, trimgrid=True, linzgrid=False, precision=5 ):
     '''
     Function takes a set of grids of deformation data and compiles CSV and optionally LINZ 
     ascii grid format files defining the patch.  Each grid file has associated extent and 
@@ -733,6 +733,9 @@ def create_patch_csv( patchlist, modelname, additive=True, trimgrid=True, linzgr
         # If we have a parent and are not making additive patches then add the parent back
         # on.
         if parent and not additive: merge_commands = merge_commands + '\nadd csv parentcsv'
+
+        # Set the output coordinate precision
+        merge_commands = merge_commands + '\nprecision {0}'.format(precision)
 
         # Finally write out as a CSV file
         merge_commands=merge_commands + '\nwrite csv csvfile'
@@ -1004,6 +1007,7 @@ if __name__ == "__main__":
     parser.add_argument('--no-trim-subgrids',action='store_false',help="Subgrids will not have redundant rows/columns trimmed")
     parser.add_argument('--clean-dir',action='store_true',help="Clean publishable component subdirectory")
     parser.add_argument('--land-area',help="WKT file containing area land area over which model must be defined")
+    parser.add_argument('--precision',type=int,default=5,help="Precision (ndp) of output grid displacements")
 
     args=parser.parse_args()
         
@@ -1073,7 +1077,7 @@ if __name__ == "__main__":
 
     build_linzgrid=bool(shift_path)
 
-    create_patch_csv( gridlist, modelname, linzgrid=build_linzgrid, additive=additive, trimgrid=trimgrid )
+    create_patch_csv( gridlist, modelname, linzgrid=build_linzgrid, additive=additive, trimgrid=trimgrid, precision=args.precision )
 
     if shift_path:
         build_linzshift_model( gridlist, modeldef, additive, shiftpath=shift_path, splitbase=split_base )

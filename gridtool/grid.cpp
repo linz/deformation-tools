@@ -309,7 +309,7 @@ bool grid::writefile( const char *filename, const char *delim, std::vector<int> 
         }
     }
 
-    //f << setiosflags(ios::fixed);
+    f.unsetf(std::ios_base::floatfield);   // f << setiosflags(ios::fixed);
     if( ! f )
     {
         throw runtime_error(string("Invalid grid filename specified ") + filename );
@@ -336,12 +336,21 @@ bool grid::writefile( const char *filename, const char *delim, std::vector<int> 
             f << std::setprecision(crdprec);
             f << x << delim << y;
             f << std::setprecision(dataprec);
+            f.setf(std::ios::fixed,std::ios_base::floatfield);
             for( int iv = 0; iv < nvalues; iv++ )
             {
                 double value = m_values[ir][ipt0+colids->at(iv)];
-                value = floor(value*mult+0.5)/mult;
-                f << delim << value;
+                if( value == 0.0 )
+                {
+                    f << delim << "0.0";
+                }
+                else
+                {
+                    value = floor(value*mult+0.5)/mult;
+                    f << delim << value;
+                }
             }
+            f.unsetf(std::ios::fixed);
             f << endl;
         }
     }
