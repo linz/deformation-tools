@@ -1033,6 +1033,8 @@ if __name__ == "__main__":
     if not os.path.isdir(patchpath):
         os.makedirs(patchpath)
 
+    logfile=open(patchfile+".build.log","w")
+
     if args.land_area:
         load_land_areas(args.land_area)
                 
@@ -1066,7 +1068,6 @@ if __name__ == "__main__":
     modeldef='+'.join(moddefs)
     modelname=' '.join([os.path.basename(x) for x in models])
 
-    logfile=open(patchfile+".build.log","w")
     wktfile=open(patchfile+".build.wkt","w")
     wktgridfile=open(patchfile+".grids.wkt","w")
     logfile.write("Building deformation grids for model: {0}\n".format(modeldef))
