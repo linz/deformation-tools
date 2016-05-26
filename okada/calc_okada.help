@@ -75,7 +75,13 @@ with the following fields separated by whitespace:
 
 The bracketed fields are assumed to be present only if there is a header 
 line containing the name of the field (after the nskip header lines).  The 
-fields are assumed to be in the order specified.
+fields are assumed to be in the order specified - the header line is 
+processed only to test if the optional fields are included.
+
+The line may be followed by two additional numeric fields and a name.  The 
+numeric fields are ignored (in some GNS data sets they correspond to the 
+location of the subfault on the total fault plane).  The name may be used for
+output.
 
 The file may contain an arbitrary number of header lines up before the first
 line of data.  After that it should only contain data lines and blank lines.
