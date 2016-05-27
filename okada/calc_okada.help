@@ -66,37 +66,40 @@ line.
 
 The header line can specify the following fields separated by whitespace:
 
-  *fault_num       fault plane number - each fault plane may have multiple segments
-  *fault_type      defines how the various parameters are interpreted (see below)
-  strike_deg       strike of fault in degrees east of north, measured from 
-                   (latf, lonf) towards the right as the observer looks along dip.
-  dip_deg          dip of fault in degrees measured in degrees above horizontal
-                   looking to the left of the direction of strike.
-  rake_deg         rake of slip vector, measured in fault plane in degrees; 
-                   LL=0, thrust=90, RL=180, normal=-90.
-  length_km        length of fault along strike in km.
-  width_km         width of fault measured down dip in km.
-  slip_m           magnitude of in-plane (shear) slip in m.
-  *opening_m       opening of fault in m.  (Used for modelling dykes, etc.)
-  depth_km         depth of fault in km (depends on fault_type)
-  bottom_depth_km  bottom depth of fault in km (depends on fault_type)
-  lat_deg         latitude of fault (depends on fault_type - see below)
-  lon_deg         longitude of fault (depends on fault_type)
-  *south_km       location of subfault relative to total fault plane (ignored)
-  *east_km        location of subfault relative to total fault plane (ignored)
-  *fault_descrip  name of the fault model
+  fault_num       fault plane number - each fault plane may have multiple segments
+  fault_type      defines how the various parameters are interpreted (see below)
+ *strike_deg      strike of fault in degrees east of north, measured from 
+                  (latf, lonf) towards the right as the observer looks along dip.
+ *dip_deg         dip of fault in degrees measured in degrees above horizontal
+                  looking to the left of the direction of strike.
+ *rake_deg        rake of slip vector, measured in fault plane in degrees; 
+                  LL=0, thrust=90, RL=180, normal=-90.
+ *length_km       length of fault along strike in km.
+ *width_km        width of fault measured down dip in km.
+ *slip_m          magnitude of in-plane (shear) slip in m.
+  opening_m       opening of fault in m.  (Used for modelling dykes, etc.)
+ *depth_km        depth of fault in km (depends on fault_type)
+ *bottom_depth_km bottom depth of fault in km (depends on fault_type)
+ *lat_deg         latitude of fault (depends on fault_type - see below)
+ *lon_deg         longitude of fault (depends on fault_type)
+  east_m          easting of the fault (projection coordinates only)
+  north_m         northing of the fault (projection coordinates only)
+  fault_x_km      location of subfault relative to total fault plane (ignored)
+  fault_y_km      location of subfault relative to total fault plane (ignored)
+  fault_descrip   name of the fault model
 
 If no header line is specified then the model is assumed to contain only
-the fields without asterisks in the order above.  Otherwise the fields must 
-be present, except that bottom_depth_km is only used for type 6 fault
-models, and width_km is used for all except type 6 models. 
+the fields with asterisks in the order above.  Header lines are identified 
+by containing the text "strike_deg".
 
-The south_km and east_km fields are not used by this program, they are 
-included in some GNS datasets to represent the location of the 
-subfault model on the total fault plane.
+The fault_num, fault_type, fault_x_km, fault_y_km and fault_descrip fields are
+optional.  If the coordinates are in a projection coordinate system then the
+east_m and north_m fields must be included, otherwise the lat_deg and lon_deg
+fields are required.  The width_km field must be present except for type 6
+models for which bottom_depth_km is required instead.
 
-The fault model lines contain the fields defined by the last header line, 
-or the default fields.  Fields are separated by whitespace.
+The fault model lines contain data corresponding to the fields defined by the 
+last header line, or the default fields.  Fields are separated by whitespace.
 
 The metadata lines can include a definition of the coordinate system of the
 fault model - this can be one of:

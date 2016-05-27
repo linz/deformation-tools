@@ -335,10 +335,12 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
             else if( *it == "bottom_depth_km" ) s >> bottom;
             else if( *it == "slip_m" ) s >> slip;
             else if( *it == "opening_m" ) s >> Uts;
-            else if( *it == "lat_deg" ) s >> lat;
-            else if( *it == "lon_deg" ) s >> lon;
-            else if( *it == "south_km" ) s >> dummy;
-            else if( *it == "east_km" ) s >> dummy;
+            else if( ! prjcrds && *it == "lat_deg" ) s >> lat;
+            else if( ! prjcrds && *it == "lon_deg" ) s >> lon;
+            else if( prjcrds && *it == "north_m" ) s >> lat;
+            else if( prjcrds && *it == "east_m" ) s >> lon;
+            else if( *it == "fault_x_km") s >> dummy;
+            else if( *it == "fault_y_km") s >> dummy;
             else if( *it == "fault_descrip" ) s >> name;
             else
             {
@@ -386,9 +388,8 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
         // Otherwise convert lat/lon to x,y
         if( prjcrds ) 
         {
-            // Note: x=lat because lat coordinate is first in model file
-            x=lat;
-            y=lon;
+            x=lon;
+            y=lat;
         }
         else
         {
