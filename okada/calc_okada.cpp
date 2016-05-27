@@ -286,7 +286,6 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
             fields.clear();
             while( s >> field )
             {
-                cout << "Field \"" << field << "\"\n" << endl;
                 fields.push_back(string(field));
             }
             continue;
