@@ -213,13 +213,11 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
 {
     string buffer;
     bool ok = true;
-    bool have_num = false;
-    bool have_type = false;
-    bool have_open = false;
     bool started = false;
     bool prjcrds = false;
+    list<string> fields;
 
-    regex re = regex("^(\\w+)\\:\\s+(.*?)\\s*$");
+    regex re = regex("^(\\w[\\w\\s]+):\\s+(.*?)\\s*$");
 
     while( ok )
     {
@@ -280,45 +278,84 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
             continue;
         }
 
+        // Read field header line
+        if( buffer.find("strike_deg") != string::npos )
+        {
+            string field;
+            stringstream s(buffer);
+            fields.clear();
+            while( s >> field )
+            {
+                cout << "Field \"" << field << "\"\n" << endl;
+                fields.push_back(string(field));
+            }
+            continue;
+        }
+
         // Trim comment and leading spaces
         int p = buffer.find('#');
         if( p != string::npos) { buffer.erase(p); }
+
+        // Skip empty lines
         if( buffer.find_first_not_of(' ') == string::npos ) continue;
 
-        // Check for column header, and discard
-        if( buffer.find("fault_num") != string::npos ) have_num = true;
-        if( buffer.find("fault_type") != string::npos ) have_type = true;
-        if( buffer.find("opening") != string::npos ) have_open = true;
+        // If fields not defined, then set up default values
+        if( fields.size() == 0 )
+        {
+            fields.push_back("strike_deg");
+            fields.push_back("dip_deg");
+            fields.push_back("rake_deg");
+            fields.push_back("length_km");
+            fields.push_back("width_km");
+            fields.push_back("slip_m");
+            fields.push_back("opening_m");
+            fields.push_back("depth_km");
+            fields.push_back("lat_deg");
+            fields.push_back("lon_deg");
+        }
 
         stringstream s(buffer);
 
         int type, fnum;
-        double strike,dip,rake,length,width,slip,Uts,depth,lat,lon;
+        double strike=0.0,dip=0.0,rake=0.0,length=0.0,width=0.0;
+        double slip=0.0,Uts=0.0,depth=0.0,lat=0.0,lon=0.0,bottom=0.0;
+        double dummy=0.0;
+        string name("");
         type = 3;
         fnum = 0;
-        // s >> strike >> dip >> rake >> length >> width >> slip >> Uts >> depth >> lat >> lon;
-        Uts = 0.0;
-        if( have_num ) s >> fnum;
-        if( have_type ) s >> type;
-        s >> strike >> dip >> rake >> length >> width >> slip;
-        if( have_open ) s >> Uts;
-        s >> depth >> lat >> lon;
+        for( list<string>::iterator it=fields.begin(); it != fields.end(); it++ )
+        {
+            if( *it == "fault_num" ) s >> fnum;
+            else if( *it == "fault_type" ) s >> type;
+            else if( *it == "strike_deg" ) s >> strike;
+            else if( *it == "dip_deg" ) s >> dip;
+            else if( *it == "rake_deg" ) s >> rake;
+            else if( *it == "length_km" ) s >> length;
+            else if( *it == "width_km" ) s >> width;
+            else if( *it == "depth_km" ) s >> depth;
+            else if( *it == "bottom_depth_km" ) s >> bottom;
+            else if( *it == "slip_m" ) s >> slip;
+            else if( *it == "opening_m" ) s >> Uts;
+            else if( *it == "lat_deg" ) s >> lat;
+            else if( *it == "lon_deg" ) s >> lon;
+            else if( *it == "south_km" ) s >> dummy;
+            else if( *it == "east_km" ) s >> dummy;
+            else if( *it == "fault_descrip" ) s >> name;
+            else
+            {
+                cerr << "Error reading fault definition - unrecognized field " << *it << endl;
+                ok = false;
+                continue;
+            }
+        }
+        if( ! ok ) continue;
         if( !s )
         {
-            if( started )
-            {
-                cerr << "Error reading fault definition\n"
+            cerr << "Error reading fault definition\n"
                      << buffer << endl;
-                ok = false;
-            }
-            continue;
+            ok = false;
         }
-        started = true;
 
-        double xf, yf;
-        string name("");
-        s >> xf >> yf;
-        if( s ) getline(s,name);
         string::size_type pos = name.find_first_not_of(" \t");
         if( pos == string::npos )
         {
@@ -328,10 +365,12 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
         {
             name = name.substr(pos);
         }
+
         // Convert to standard units
         length *= 1000.0;
         width *= 1000.0;
         depth *= 1000.0;
+        bottom *= 1000.0;
         strike = 90 - strike;
         dip = -dip;
 
@@ -363,6 +402,10 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
         double fs0=0, fs1=length;
         double fd0=0, fd1=width;
 
+        // Calculating the start and end locations of the fault segment in
+        // the fault plane defined by the x,y,depth (reference point) and
+        // the strike and dip.  The start and end along the strike is defined
+        // by fs[0],fs[1], and the start and end down dip are fd[0],fd[1]
         switch( type )
         {
         case 0:
@@ -391,6 +434,17 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
         case 5:
             fs1 /= 2; fs0 = -fs1;
             break;
+        case 6:
+            dip=90-dip;
+            fs1 /= 2; fs0 = -fs1;
+            fd0 = depth/sin(dip*DTOR);
+            fd1 = bottom/sin(dip*DTOR);
+            depth = 0.0;
+            break;
+        default:
+            cerr << "Invalid fault type " << type << endl;
+            ok=false;
+            continue;
         }
 
         double fs[2] = { fs0, fs1 };

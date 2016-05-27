@@ -2,9 +2,7 @@ calc_okada: Calculates surface deformation from a GNS deformation model file.
 
 The model consists of one or more rectangular fault planes on which strike slip,
 dip slip and tensile slip (opening) are defined.  The details of the format
-are defined below.  The first line in the file defines a latitude and longitude
-used as a reference point for the "projection" used to define an "infinite
-uniform elastic half space" within which the calculations are applied.
+are defined below.  
 
 The program is run using the following syntax:
 
@@ -55,39 +53,52 @@ Options can include:
   -h nskip           Skip specified number of header lines in the definition 
                      file
 
-The format of each fault in the fault_model_file contains a fault definition 
-with the following fields separated by whitespace:
+The fault model line contains metadata lines, header lines, and fault
+model lines.  Blank lines and lines starting with # are ignored.
 
-  [fault_num]   fault plane number - each fault plane may have multiple segments
-  [fault_type]  as per code below
-  strike_deg    strike of fault in degrees, measured from (latf, lonf) towards 
-                the right as the observer looks down dip.
-  dip_deg       dip of fault in degrees.
-  rake_deg      rake of slip vector, measured in fault plane in degrees; 
-                LL=0, thrust=90, RL=180, normal=-90.
-  length_km     length of fault along strike in km.
-  width_km      width of fault measured down dip in km.
-  slip_m        magnitude of in-plane (shear) slip in m.
-  [opening_m]   opening of fault in m.  (Used for modelling dykes, etc.)
-  depth_km      depth of fault in km (depends on fault_type)
-  lat_deg       latitude of fault (depends on fault_type - see below)
-  lon_deg       longitude of fault (depends on fault_type)
+Metadata lines starting with a series of non-blank characters followed 
+by a colon are ignored by this program except for "Origin" and "Projection" 
+which are described below.  
 
-The bracketed fields are assumed to be present only if there is a header 
-line containing the name of the field (after the nskip header lines).  The 
-fields are assumed to be in the order specified - the header line is 
-processed only to test if the optional fields are included.
+Header lines define the format of fault model lines (defining the fields 
+in each line).  Usually there will be only one before the first fault model
+line.
 
-The line may be followed by two additional numeric fields and a name.  The 
-numeric fields are ignored (in some GNS data sets they correspond to the 
-location of the subfault on the total fault plane).  The name may be used for
-output.
+The header line can specify the following fields separated by whitespace:
 
-The file may contain an arbitrary number of header lines up before the first
-line of data.  After that it should only contain data lines and blank lines.
-(The first line of data is a line from which valid values can be read). 
+  *fault_num       fault plane number - each fault plane may have multiple segments
+  *fault_type      defines how the various parameters are interpreted (see below)
+  strike_deg       strike of fault in degrees east of north, measured from 
+                   (latf, lonf) towards the right as the observer looks along dip.
+  dip_deg          dip of fault in degrees measured in degrees above horizontal
+                   looking to the left of the direction of strike.
+  rake_deg         rake of slip vector, measured in fault plane in degrees; 
+                   LL=0, thrust=90, RL=180, normal=-90.
+  length_km        length of fault along strike in km.
+  width_km         width of fault measured down dip in km.
+  slip_m           magnitude of in-plane (shear) slip in m.
+  *opening_m       opening of fault in m.  (Used for modelling dykes, etc.)
+  depth_km         depth of fault in km (depends on fault_type)
+  bottom_depth_km  bottom depth of fault in km (depends on fault_type)
+  lat_deg         latitude of fault (depends on fault_type - see below)
+  lon_deg         longitude of fault (depends on fault_type)
+  *south_km       location of subfault relative to total fault plane (ignored)
+  *east_km        location of subfault relative to total fault plane (ignored)
+  *fault_descrip  name of the fault model
 
-The header line can include a definition of the coordinate system of the
+If no header line is specified then the model is assumed to contain only
+the fields without asterisks in the order above.  Otherwise the fields must 
+be present, except that bottom_depth_km is only used for type 6 fault
+models, and width_km is used for all except type 6 models. 
+
+The south_km and east_km fields are not used by this program, they are 
+included in some GNS datasets to represent the location of the 
+subfault model on the total fault plane.
+
+The fault model lines contain the fields defined by the last header line, 
+or the default fields.  Fields are separated by whitespace.
+
+The metadata lines can include a definition of the coordinate system of the
 fault model - this can be one of:
 
 Origin lat lon: 
@@ -127,11 +138,8 @@ Note: nlon and nlat are the number of grid cells, so the number of points in
 each direction is one greater than this.
 
 -----------------------------
-Note: the orginal fault definition included an initial field fault_type which
-defined how the fault location related to the supplied latf, lonf, depth
-parameters.  This has been removed - it is treated as always being 3.
 
-The typef parameter defines how the location of the fault is 
+The fault_type parameter defines how the location of the fault is 
 defined in terms of the depth, latf, lonf, and so on as follows:
 
   typef  describes how the position and depth of the fault are parameterised.  
@@ -147,6 +155,11 @@ typef depth               latf, lonf
 3     to middle of fault  above middle of fault
 4     to top of fault     place where fault would outcrop; half-way along fault
 5     to top of fault     middle of surface projection of top of fault
+6     to top of fault     place where fault would outcrop; half-way along fault
+                          dip is measured relative to vertical downwards
+                          vector.
+                          width is replaced with depth of bottom of fault
+
 
 Example fault definition file:
 
