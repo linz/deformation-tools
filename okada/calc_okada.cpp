@@ -215,6 +215,7 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
     bool ok = true;
     bool started = false;
     bool prjcrds = false;
+    bool dsclast = false; // Description is last field
     list<string> fields;
 
     regex re = regex("^(\\w[\\w\\s]+):\\s+(.*?)\\s*$");
@@ -284,8 +285,10 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
             string field;
             stringstream s(buffer);
             fields.clear();
+            dsclast=false;
             while( s >> field )
             {
+                dsclast = field=="fault_description";
                 fields.push_back(string(field));
             }
             continue;
@@ -341,7 +344,19 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
             else if( prjcrds && *it == "east_m" ) s >> lon;
             else if( *it == "fault_x_km") s >> dummy;
             else if( *it == "fault_y_km") s >> dummy;
-            else if( *it == "fault_descrip" ) s >> name;
+            else if( *it == "fault_description" )
+            {
+                if( s && dsclast )
+                {
+                    getline(s,name);
+                    string::size_type pos=name.find_first_not_of(" \t");
+                    if( pos != string::npos ) name=name.substr(pos);
+                }
+                else
+                {
+                    s >> name;
+                }
+            }
             else
             {
                 cerr << "Error reading fault definition - unrecognized field " << *it << endl;

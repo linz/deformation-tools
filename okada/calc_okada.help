@@ -66,14 +66,19 @@ line.
 
 The header line can specify the following fields separated by whitespace:
 
-  fault_num       fault plane number - each fault plane may have multiple segments
+  fault_num       fault segment number - each fault plane may have multiple 
+                  segments.  This is not used in calc_okada.
   fault_type      defines how the various parameters are interpreted (see below)
  *strike_deg      strike of fault in degrees east of north, measured from 
                   (latf, lonf) towards the right as the observer looks along dip.
  *dip_deg         dip of fault in degrees measured in degrees above horizontal
-                  looking to the left of the direction of strike.
+                  looking to the left of the direction of strike (unless 
+                  specified otherwise for fault type below)
  *rake_deg        rake of slip vector, measured in fault plane in degrees; 
-                  LL=0, thrust=90, RL=180, normal=-90.
+                  From the point of view of observer standing on reference
+                  point looking down the dip vector 0=right lateral, 
+                  90=up to the right, 180=left lateral, and
+                  270=up to the left.
  *length_km       length of fault along strike in km.
  *width_km        width of fault measured down dip in km.
  *slip_m          magnitude of in-plane (shear) slip in m.
@@ -84,9 +89,9 @@ The header line can specify the following fields separated by whitespace:
  *lon_deg         longitude of fault (depends on fault_type)
   east_m          easting of the fault (projection coordinates only)
   north_m         northing of the fault (projection coordinates only)
-  fault_x_km      location of subfault relative to total fault plane (ignored)
-  fault_y_km      location of subfault relative to total fault plane (ignored)
-  fault_descrip   name of the fault model
+  fault_x_km      location of segment relative to total fault plane (ignored)
+  fault_y_km      location of segment relative to total fault plane (ignored)
+  fault_description   name of the fault model
 
 If no header line is specified then the model is assumed to contain only
 the fields with asterisks in the order above.  Header lines are identified 
@@ -100,6 +105,8 @@ models for which bottom_depth_km is required instead.
 
 The fault model lines contain data corresponding to the fields defined by the 
 last header line, or the default fields.  Fields are separated by whitespace.
+If the last field is fault_description then it will include any remaining text
+on the line, including whitespace.
 
 The metadata lines can include a definition of the coordinate system of the
 fault model - this can be one of:
