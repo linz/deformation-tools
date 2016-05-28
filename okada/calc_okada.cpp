@@ -411,9 +411,6 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
             proj->XY(lon,lat,x,y);
         }
 
-        double Uss = slip * cos(rake*DTOR);
-        double Uds = slip * sin(rake*DTOR);
-
         double fs0=0, fs1=length;
         double fd0=0, fd1=width;
 
@@ -450,17 +447,21 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
             fs1 /= 2; fs0 = -fs1;
             break;
         case 6:
-            dip=90-dip;
             fs1 /= 2; fs0 = -fs1;
+            dip=dip+180.0;
             fd0 = depth/sin(dip*DTOR);
             fd1 = bottom/sin(dip*DTOR);
             depth = 0.0;
+            rake=180.0-rake;
             break;
         default:
             cerr << "Invalid fault type " << type << endl;
             ok=false;
             continue;
         }
+
+        double Uss = slip * cos(rake*DTOR);
+        double Uds = slip * sin(rake*DTOR);
 
         double fs[2] = { fs0, fs1 };
         double fd[2] = { fd0, fd1 };

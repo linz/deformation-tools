@@ -71,8 +71,8 @@ The header line can specify the following fields separated by whitespace:
   fault_type      defines how the various parameters are interpreted (see below)
  *strike_deg      strike of fault in degrees east of north, measured from 
                   (latf, lonf) towards the right as the observer looks along dip.
- *dip_deg         dip of fault in degrees measured in degrees above horizontal
-                  looking to the left of the direction of strike (unless 
+ *dip_deg         dip of fault in degrees measured in degrees below horizontal
+                  looking to the right of the direction of strike (unless 
                   specified otherwise for fault type below)
  *rake_deg        rake of slip vector, measured in fault plane in degrees; 
                   From the point of view of observer standing on reference
@@ -166,9 +166,9 @@ typef depth               latf, lonf
 4     to top of fault     place where fault would outcrop; half-way along fault
 5     to top of fault     middle of surface projection of top of fault
 6     to top of fault     place where fault would outcrop; half-way along fault
-                          dip is measured relative to vertical downwards
-                          vector.
-                          width is replaced with depth of bottom of fault
+                          dip is down from horizontal.
+                          rake reflected so that 0 is left-lateral
+                          width_km is replaced with bottom_depth_km
 
 
 Example fault definition file:
