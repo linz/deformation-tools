@@ -76,8 +76,8 @@ The header line can specify the following fields separated by whitespace:
                   specified otherwise for fault type below)
  *rake_deg        rake of slip vector, measured in fault plane in degrees; 
                   From the point of view of observer standing on reference
-                  point looking down the dip vector 0=right lateral, 
-                  90=up to the right, 180=left lateral, and
+                  point looking down the dip vector 0=left lateral, 
+                  90=up to the right, 180=right lateral, and
                   270=up to the left.
  *length_km       length of fault along strike in km.
  *width_km        width of fault measured down dip in km.
