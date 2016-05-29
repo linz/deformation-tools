@@ -167,7 +167,7 @@ typef depth               latf, lonf
 5     to top of fault     middle of surface projection of top of fault
 6     to top of fault     place where fault would outcrop; half-way along fault
                           dip is down from horizontal.
-                          rake reflected so that 0 is left-lateral
+                          rake reflected so that 0 is right-lateral
                           width_km is replaced with bottom_depth_km
 
 

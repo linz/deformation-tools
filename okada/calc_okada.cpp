@@ -418,6 +418,10 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
         // the fault plane defined by the x,y,depth (reference point) and
         // the strike and dip.  The start and end along the strike is defined
         // by fs[0],fs[1], and the start and end down dip are fd[0],fd[1]
+        //
+        // x, y, depth defines the reference point from which the fault
+        // is defined.
+
         switch( type )
         {
         case 0:
