@@ -91,7 +91,6 @@ base_limit_sea_bounds_tolerance=accuracy_standards.BGN.na*tolerance_factor
 cell_split_factor=4
 subcell_resolution_tolerance=accuracy_standards.NRF.lac*tolerance_factor
 subcell_resolution_sea_tolerance=accuracy_standards.BGN.na*tolerance_factor
-subcell_ramp_tolerance=accuracy_standards.NRF.lap*tolerance_factor
 
 # Replace entire grid with subcells if more than this percentage 
 # of area requires splitting
@@ -112,10 +111,9 @@ def configure_for_parcel_shift():
 # Reduce the accuracies to produce smaller data sets for testing...
 def configure_for_testing():
     global base_limit_test_column, base_limit_tolerance, base_ramp_tolerance
-    global subcell_resolution_tolerance, subcell_ramp_tolerance
+    global subcell_resolution_tolerance
     global max_split_level
     subcell_resolution_tolerance *= 100
-    subcell_ramp_tolerance *= 100
     max_split_level -= 2
 
 # Apply scale factor and convergence
@@ -251,7 +249,7 @@ def calc_grid( modeldef, griddef, gridfile ):
         with open(metafile,'w') as f:
             f.write(meta)
     print "          Loading {0} ...".format(gridfile)
-    return defgrid.defgrid(gridfile)
+    return defgrid.DeformationGrid(gridfile)
 
 def bounds_grid_def( bounds, cellsize, multiple=1 ):
     '''
@@ -397,9 +395,6 @@ def create_grids( gridlist, modeldef, patchpath, name, level, grid_def, cellsize
         subcell_areas=grid2r.regionsExceedingLevel('reqsize',-parentsize,multiple=-1)
 
         if land_areas:
-
-
-
             valid_areas=[]
             for sc in subcell_areas:
                 p=sc.intersection(land_areas)
@@ -933,7 +928,7 @@ def build_published_component( gridlist, modeldef, additive, comppath, cleandir=
             description=modeldesc
         )
         for priority, grid in enumerate(gridlist):
-            gd=defgrid.defgrid(grid.csv)
+            gd=defgrid.DeformationGrid(grid.csv)
             (gridpath,csvname)=os.path.split(grid.csv)
             csvname = re.sub(r'^(grid_)?','grid_',csvname)
             compcsv=os.path.join(comppath,csvname)
@@ -1047,7 +1042,7 @@ if __name__ == "__main__":
 
     for i,f in enumerate(models):
         found = False
-        for template in ('{0}','{0}.model','model/{0}','model/{0}.model'):
+        for template in ('{0}','{0}.model','fault_models/{0}','fault_models/{0}.model'):
             mf = template.format(f) 
             if os.path.exists(mf): 
                 found = True

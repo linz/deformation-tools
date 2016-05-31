@@ -538,7 +538,7 @@ ostream &FaultSet::write( ostream &os, int style, bool header )
     int nflt = 0;
 
     // Note: this code is written for the case that every fault has just
-    // one segment - GNS fault model supplied as multiple faults rather than
+    // one segment - GNS fault model loaded as multiple faults rather than
     // single segmented fault.
 
     list<string>::const_iterator in = names.begin();

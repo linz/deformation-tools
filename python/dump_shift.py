@@ -12,7 +12,7 @@ import os.path
 import re
 import numpy as np
 import ellipsoid
-from defgrid import defgrid
+from defgrid import DeformationGrid
 from random import uniform, seed
 from subprocess import call
 
@@ -165,7 +165,7 @@ def build_dump( def_file ):
     results[:,0:3]=testpts
 
     for gfile in gridfiles:
-        g=defgrid(gfile)
+        g=DeformationGrid(gfile)
         gcomp=g.bilinear(testpts[:,0],testpts[:,1])
         ncomp=gcomp.shape[1]
         results[:,3:ncomp+1] += gcomp[:,2:ncomp]
