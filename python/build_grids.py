@@ -1008,7 +1008,6 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
     patchdir='patch_'+modelname
     modeldesc=patchversions[0].event
     modeldate=patchversions[0].date
-    reverse_patch=patchversions[0].reverse
 
     # If the model date doesn't contain a date, then append it
     if not re.search(r'[12]\d\d\d[01]\d[0123]\d',patchdir):
@@ -1065,7 +1064,8 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
         ir0=1
         for nv in range(len(patchversions)):
             versionspec=patchversions[nv]
-            csvdata['version']=versionspec.version
+            reverse_patch=versionspec.reverse
+            csvdata['version_added']=versionspec.version
             csvdata['version_revoked']=0
             if nv < len(patchversions)-1:
                 csvdata['version_revoked']=patchversions[nv+1].version
@@ -1090,11 +1090,12 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
                         gd.column('de')*gd.column('de') +
                         gd.column('dn')*gd.column('dn') +
                         gd.column('du')*gd.column('du'))),
+                    max_displacement="{0:.5f}".format(max_displacement)
                     file1=csvname,
                     )
                 rdate0=0
                 for ir,r in enumerate(versionspec.time_model):
-                    rdate=r.date.strftime("%Y-%d-%m")
+                    rdate=r.date.strftime("%Y-%m-%d")
                     rvalue=r.factor
                     if ir == 0:
                         if rvalue==0:
@@ -1209,11 +1210,9 @@ if __name__ == "__main__":
             print "Model file {0} doesn't exist".format(f)
             sys.exit()
 
-        
-
     # Model definition for calc okada
     modeldef='+'.join(moddefs)
-    modelname=' '.join([os.path.basename(x) for x in models])
+    modelname=' '.join([os.path.splitext(os.path.basename(x))[0] for x in models])
 
     if comp_path: 
         if len(moddefs) > 1:
