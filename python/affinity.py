@@ -62,19 +62,27 @@ def affine_transform(geom, matrix):
 
     def affine_pts(pts):
         """Internal function to yield affine transform of coordinate tuples"""
-        if ndim == 2:
-            for x, y in pts:
-                xp = a * x + b * y + xoff
-                yp = d * x + e * y + yoff
-                yield (xp, yp)
-        elif ndim == 3:
-            for x, y, z in pts:
-                xp = a * x + b * y + c * z + xoff
-                yp = d * x + e * y + f * z + yoff
-                zp = g * x + h * y + i * z + zoff
-                yield (xp, yp, zp)
+        try:
+            if True:
+            #if ndim == 2:
+                for xy in pts:
+                    # Kludge awaiting fixing build_grids problem for mq sea patches
+                    # which have coordinates (x,y,nan) ???
+                    x,y=xy[:2]
+                    xp = a * x + b * y + xoff
+                    yp = d * x + e * y + yoff
+                    yield (xp, yp)
+            elif ndim == 3:
+                for x, y, z in pts:
+                    xp = a * x + b * y + c * z + xoff
+                    yp = d * x + e * y + f * z + yoff
+                    zp = g * x + h * y + i * z + zoff
+                    yield (xp, yp, zp)
+        except:
+            print [c for c in pts]
+            raise
 
-    # Process coordinates from each supported geometry type
+        # Process coordinates from each supported geometry type
     if geom.type in ('Point', 'LineString'):
         return type(geom)(list(affine_pts(geom.coords)))
     elif geom.type == 'Polygon':
