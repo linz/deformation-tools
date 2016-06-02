@@ -28,6 +28,7 @@ Also some python scripts for compiling components.  The most significant are:
 
   Complicated script to generate a set of nested grids to represent deformation caused by
   a geophysical dislocation model.  Automatically handles nesting based on accuracy tolerances.
+  (see [build_grids.md](https://github.com/linz/deformation-tools/blob/master/python/build_grids.md))
 
 * python/build_model_csv.py
 
