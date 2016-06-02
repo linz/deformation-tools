@@ -44,6 +44,32 @@ class PatchGridDef:
         self.csv=None
         self.gdf=None
 
+class PatchVersionDef:
+
+    TimePoint=namedtuple('TimePoint','date factor')
+
+    def __init__( self, version, event, date, reverse=False, nested=False, time_model=None ):
+        self.version=version
+        self.event=event
+        self.date=date
+        self.reverse=reverse
+        self.nested=nested
+        if time_model is None:
+            time_model=[PatchVersionDef.TimePoint(date,1.0)]
+        self.time_model=time_model
+
+    def __str__( self ):
+        return "\n".join((
+            "Version: {0}".format(self.version),
+            "Event: {0}".format(self.event),
+            "Date: {0}".format(self.date.strftime('%Y-%m-%d')),
+            "Reverse: {0}".format(self.reverse),
+            "Nested: {0}".format(self.nested),
+            "TimeModel: {0}\n  ".format(
+                "\n  ".join(("{0} {1:.2f}".format(x[0].strftime('%Y-%m-%d'),x[1]) 
+                             for x in self.time_model)))
+            ))
+
 verbose=True
     
 # Grids will be calculated using integer representation based origin.
@@ -116,9 +142,6 @@ def configure_for_testing():
     subcell_resolution_tolerance *= 100
     max_split_level -= 2
 
-# Apply scale factor and convergence
-
-apply_sf_conv=True
 
 land_areas=None
 
@@ -151,8 +174,6 @@ END_DESCRIPTION
 
 build_published=True
 
-published_version=1
-publish_reverse_patch=True
 published_component_columns='''
     version_added
     version_revoked
@@ -180,7 +201,6 @@ published_component_columns='''
     factor1
     decay
     file1
-    file2
     description
     '''.split()
 
@@ -219,8 +239,6 @@ def calc_grid( modeldef, griddef, gridfile ):
     #     print "Grid spec {0}".format(gridspec)
 
     params=[calc_okada,'-f','-x','-l','-s',modeldef,gridspec,gridfile]
-    if apply_sf_conv:
-        params.insert(1,'-f')
     meta='\n'.join(params)
     metafile=gridfile+'.metadata'
     built = False
@@ -831,7 +849,40 @@ def build_linzshift_model( gridlist, modeldef, additive, shiftpath, splitbase=Fa
                 ))
         call(['makelinzshiftmodel.pl',shiftdef,shiftbin],cwd=shiftpath)
 
-def get_model_spec( modelfile ):
+def _parseDate( datestr ):
+    datestr=datestr.strip()
+    for format in ('%d %b %Y','%d %B %Y','%Y-%m-%d'):
+        try:
+            return datetime.datetime.strptime(datestr,format)
+        except:
+            pass
+    raise ValueError("Cannot parse date {0}".format(datestr))
+
+def _buildTimeModel(time_model,modeldate):
+    if time_model is None:
+        return [PatchVersionDef.TimePoint(_parseDate(modeldate),1.0)]
+    model=[]
+    ntime=len(time_model)
+    if ntime < 2:
+        raise RuntimeError("Invalid or empty TimeModel")
+    if ntime % 2 != 0:
+        raise RuntimeError("TimeModel must consist of paired date and value")
+    for i in range(0,ntime,2):
+        fdate=_parseDate(time_model[i])
+        try:
+            factor=float(time_model[i+1])
+        except:
+            raise RuntimeError("Invalid scale factor {0} in TimeModel"
+                               .format(time_model[i+1]))
+        model.append(PatchVersionDef.TimePoint(fdate,factor))
+
+    for i in range(len(model)-1):
+        if model[i].date > model[i+1].date:
+            raise RuntimeError("Dates out of order in TimeModel")
+    return model
+
+
+def get_patch_spec( modelfile ):
     modelname=os.path.basename(modelfile)
     modelname=re.sub(r'\..*','',modelname)
     with open(modelfile) as f:
@@ -850,34 +901,118 @@ def get_model_spec( modelfile ):
         if not modeldate:
             raise RuntimeError("Event record at start of {0} does not end with a valid date".format(modelfile))
         modeldate=modeldate.strftime('%Y-%m-%d')
-    ramp=[]
-    rampfile=os.path.splitext(modelfile)[0]+'.ramp'
-    if os.path.exists(rampfile):
-        ramp=[]
-        with open(rampfile) as f:
-            for l in f:
-                if re.match(r'^\s*\#\s*$',l):
-                    continue
-                m = re.match(r'^\s*(\d\d\d\d\-\d\d\-\d\d)\s+(\d+(?:\.\d*))\s*$',l)
-                if m:
-                    ramp.append((m.group(1),float(m.group(2))))
-                else:
-                    raise ValueError("Invalid record "+l+" in ramp file "+rampfile)
-    if not ramp:
-        ramp=[(modeldate,1.0)]
-    return modelname, description, modeldate, ramp
+    
+    patchfile=os.path.splitext(modelfile)[0]+'.patch'
+    patchversions=[]
+    if os.path.exists(patchfile):
+        version=None
+        reverse=False
+        nested=False
+        time_model=None
+        in_model=False
 
-def build_published_component( gridlist, modeldef, additive, comppath, cleandir=False ):
+        with open(patchfile) as f:
+            for l in f:
+                # Ignore comments and blank lines
+                if re.match(r'^\s*(\#|$)',l):
+                    continue
+                cmdmatch=re.match(r'^\s*(\w+)\s*\:\s*(.*?)\s*$',l)
+                if cmdmatch:
+                    in_model=False
+                    command=cmdmatch.group(1).lower()
+                    value=cmdmatch.group(2)
+                    if command == 'version':
+                        if version is not None:
+                            try:
+                                patchversions.append(PatchVersionDef(
+                                    version,
+                                    event,
+                                    _parseDate(modeldate),
+                                    reverse=reverse,
+                                    nested=nested,
+                                    time_model=_buildTimeModel(time_model,modeldate)))
+                            except Exception as ex:
+                                raise RuntimeError("Error in {0}: {1}"
+                                                   .format(patchfile,ex.message))
+                        version=value
+                        if not re.match(r'^[12]\d\d\d[01]\d[0123]\d$',version):
+                            raise RuntimeError("Invalid deformation model version {0} in {1}"
+                                               .format(version,patchfile))
+                        continue
+                    if not version:
+                        raise RuntimeError("Version must be the first item in patch file {0}"
+                                           .format(patchfile))
+                    if command == 'event':
+                        event=value
+                    elif command == 'date':
+                        modeldate=value
+                    elif command == 'type':
+                        if value.lower() == 'forward':
+                            reverse=False
+                        elif value.lower() == 'reverse':
+                            reverse=True
+                        else:
+                            raise RuntimeError("Invalid Type - must be forward or reverse in {0}"
+                                               .format(patchfile))
+                    elif command == 'subgridmethod':
+                        if value.lower() == 'nested':
+                            nested=True
+                        elif value.lower() == 'indpendent':
+                            nested=False
+                        else:
+                            raise RuntimeError("Invalid SubgridMethod - must be nested or independent in {0}"
+                                               .format(patchfile))
+                    elif command == 'timemodel':
+                        time_model=value.split()
+                        in_model=True
+                    else:
+                        raise RuntimeError("Unrecognized command {0} in {1}".format(strip(),patchfile))
+
+                elif in_model: # Not a command line
+                    time_model.extend(l.split())
+                else:
+                    raise RuntimeError("Invalid data \"{0}\" in {1}".format(l,patchfile))
+                
+        if version is None:
+            raise RuntimeError("No version specified in {0}".format(patchfile))
+
+        try:
+            patchversions.append(PatchVersionDef(
+                version,
+                event,
+                _parseDate(modeldate),
+                reverse=reverse,
+                nested=nested,
+                time_model=_buildTimeModel(time_model,modeldate)))
+        except Exception as ex:
+            raise RuntimeError("Error in {0}: {1}"
+                               .format(patchfile,ex.message))
+
+        for i in range(len(patchversions)-1):
+            if patchversions[i].version >= patchversions[i+1].version:
+                raise RuntimeError("Deformation model versions out of order in {0}".format(patchfile))
+            if patchversions[i].nested != patchversions[i+1].nested:
+                raise RuntimeError("Inconsistent SubgridMethod option in {0}".format(patchfile))
+
+    return patchversions
+
+def build_published_component( gridlist, modeldef, modelname, additive, comppath, cleandir=False ):
     '''
     Creates the component.csv file and grid components used as a published
     component of a LINZ published deformation model
     '''
 
-    modelname,modeldesc,modeldate,ramps = get_model_spec( modeldef )
+    patchversions=get_patch_spec( modeldef )
+    if not patchversions:
+        raise RuntimeError("Patch definition file missing for {0}".format(modeldef))
     patchdir='patch_'+modelname
+    modeldesc=patchversions[0].event
+    modeldate=patchversions[0].date
+    reverse_patch=patchversions[0].reverse
+
     # If the model date doesn't contain a date, then append it
     if not re.search(r'[12]\d\d\d[01]\d[0123]\d',patchdir):
-        patchdir=patchdir+'_'+modeldate.replace('-','')
+        patchdir=patchdir+'_'+modeldate.strftime('%Y%m%d')
 
     if not gridlist or not gridlist[0].csv:
         raise RuntimeError("Cannot build shift model - haven't built grid CSV files")
@@ -892,15 +1027,15 @@ def build_published_component( gridlist, modeldef, additive, comppath, cleandir=
 
     write_log("Writing published model submodel {0}".format(comppath))
 
-    finalramp=ramps[-1][1]
     compcsv=os.path.join(comppath,'component.csv')
+
     with open(compcsv,"w") as ccsvf:
         ccsv=csv.writer(ccsvf)
         ccsv.writerow(published_component_columns)
         csvdata=dict(
-            version_added=published_version,
+            version_added=0,
             version_revoked=0,
-            reverse_patch='Y' if publish_reverse_patch else 'N',
+            reverse_patch='Y' if reverse_patch else 'N',
             component=0,
             priority=0,
             min_lon=0,
@@ -919,54 +1054,67 @@ def build_published_component( gridlist, modeldef, additive, comppath, cleandir=
             spatial_model='llgrid',
             time_function='step',
             time0=modeldate,
-            factor0=-1 if publish_reverse_patch else 0,
+            factor0=-1 if reverse_patch else 0,
             time1=modeldate,
-            factor1=0 if publish_reverse_patch else 1,
+            factor1=0 if reverse_patch else 1,
             decay=0,
             file1='',
-            file2='',
             description=modeldesc
         )
-        for priority, grid in enumerate(gridlist):
-            gd=defgrid.DeformationGrid(grid.csv)
-            (gridpath,csvname)=os.path.split(grid.csv)
-            csvname = re.sub(r'^(grid_)?','grid_',csvname)
-            compcsv=os.path.join(comppath,csvname)
-            if compcsv != grid.csv:
-                shutil.copyfile(grid.csv,compcsv)
-            compdata=dict(
-                min_lon=np.min(gd.column('lon')),
-                max_lon=np.max(gd.column('lon')),
-                min_lat=np.min(gd.column('lat')),
-                max_lat=np.max(gd.column('lat')),
-                npoints1=gd.array.shape[1],
-                npoints2=gd.array.shape[0],
-                max_displacement=math.sqrt(np.max(
-                    gd.column('de')*gd.column('de') +
-                    gd.column('dn')*gd.column('dn') +
-                    gd.column('du')*gd.column('du'))),
-                file1=csvname,
-                )
-            for ir,r in enumerate(ramps):
-                rdate=r[0]
-                rvalue=r[1]
-                if ir == 0:
-                    if rvalue==0:
-                        continue
-                    compdata['time_function']='step'
-                    compdata['time0']=rdate
-                else:
-                    compdata['time_function']='ramp'
-                    compdata['time0']=ramps[ir-1][0]
-                    rvalue -= ramps[ir-1][1]
-                compdata['time1']=rdate
-                compdata['factor0']=-rvalue if publish_reverse_patch else 0
-                compdata['factor1']=0 if publish_reverse_patch else rvalue
-                if not additive:
-                    compdata['component']=ir+1
-                    compdata['priority']=priority
-                csvdata.update(compdata)
-                ccsv.writerow([csvdata[c] for c in published_component_columns])
+        
+        ir0=1
+        for nv in range(len(patchversions)):
+            versionspec=patchversions[nv]
+            csvdata['version']=versionspec.version
+            csvdata['version_revoked']=0
+            if nv < len(patchversions)-1:
+                csvdata['version_revoked']=patchversions[nv+1].version
+            ir1 = ir0
+            ir0 += len(versionspec.time_model)
+
+            for priority, grid in enumerate(gridlist):
+                gd=defgrid.DeformationGrid(grid.csv)
+                (gridpath,csvname)=os.path.split(grid.csv)
+                csvname = re.sub(r'^(grid_)?','grid_',csvname)
+                compcsv=os.path.join(comppath,csvname)
+                if compcsv != grid.csv:
+                    shutil.copyfile(grid.csv,compcsv)
+                compdata=dict(
+                    min_lon=np.min(gd.column('lon')),
+                    max_lon=np.max(gd.column('lon')),
+                    min_lat=np.min(gd.column('lat')),
+                    max_lat=np.max(gd.column('lat')),
+                    npoints1=gd.array.shape[1],
+                    npoints2=gd.array.shape[0],
+                    max_displacement=math.sqrt(np.max(
+                        gd.column('de')*gd.column('de') +
+                        gd.column('dn')*gd.column('dn') +
+                        gd.column('du')*gd.column('du'))),
+                    file1=csvname,
+                    )
+                rdate0=0
+                for ir,r in enumerate(versionspec.time_model):
+                    rdate=r.date.strftime("%Y-%d-%m")
+                    rvalue=r.factor
+                    if ir == 0:
+                        if rvalue==0:
+                            continue
+                        compdata['time_function']='step'
+                        compdata['time0']=rdate
+                        compdata['time1']=rdate
+                    else:
+                        compdata['time_function']='ramp'
+                        compdata['time0']=rdate0
+                        compdata['time1']=rdate
+                        rvalue -= version.time_model[ir-1].factor
+                    rdate0=rdate
+                    compdata['factor0']=-rvalue if reverse_patch else 0
+                    compdata['factor1']=0 if reverse_patch else rvalue
+                    if not additive:
+                        compdata['component']=ir+ir1
+                        compdata['priority']=priority
+                    csvdata.update(compdata)
+                    ccsv.writerow([csvdata[c] for c in published_component_columns])
 
 def load_land_areas( polygon_file ):
     global land_areas
@@ -989,20 +1137,17 @@ if __name__ == "__main__":
     parser.add_argument('model_file',help='Model file(s) used to calculate deformation, passed to calc_okada',nargs='+')
     parser.add_argument('--shift-model-path',help="Create a linzshiftmodel in the specified directory")
     parser.add_argument('--submodel-path',help="Create publishable component in the specified directory")
-    parser.add_argument('--submodel-version',default=runtime_version,help="Deformation model version for which submodel first applies")
+    parser.add_argument('--clean-dir',action='store_true',help="Clean publishable component subdirectory")
     parser.add_argument('--subgrids-nest',action='store_false',help="Grid CSV files calculated to replace each other rather than total to deformation")
-    parser.add_argument('--parcel-shift',action='store_true',help="Configure for calculating parcel_shift rather than rigorous deformation patch")
-    parser.add_argument('--apply-ramp-scale',action='store_true',help="Scale the grid by the ramp final value")
-    parser.add_argument('--apply-sf-conv',action='store_true',help="Apply the projection scale factor and convergence to the model calculated displacements")
-    parser.add_argument('--test-settings',action='store_true',help="Configure for testing - generate lower accuracy grids")
+    parser.add_argument('--apply-time-model-scale',action='store_true',help="Scale by the time model final value")
     parser.add_argument('--max-level',type=int,help="Maximum number of split levels to generate (each level increases resolution by 4)")
-    parser.add_argument('--reverse',action='store_true',help="Published model will be a reverse patch")
     parser.add_argument('--base-tolerance',type=float,help="Base level tolerance - depends on base column")
     parser.add_argument('--split-base',action='store_true',help="Base deformation will be split into separate patches if possible")
     parser.add_argument('--no-trim-subgrids',action='store_false',help="Subgrids will not have redundant rows/columns trimmed")
-    parser.add_argument('--clean-dir',action='store_true',help="Clean publishable component subdirectory")
-    parser.add_argument('--land-area',help="WKT file containing area land area over which model must be defined")
     parser.add_argument('--precision',type=int,default=5,help="Precision (ndp) of output grid displacements")
+    parser.add_argument('--land-area',help="WKT file containing area land area over which model must be defined")
+    parser.add_argument('--parcel-shift',action='store_true',help="Configure for calculating parcel_shift rather than rigorous deformation patch")
+    parser.add_argument('--test-settings',action='store_true',help="Configure for testing - generate lower accuracy grids")
 
     args=parser.parse_args()
         
@@ -1010,17 +1155,19 @@ if __name__ == "__main__":
     split_base=args.split_base
     shift_path=args.shift_model_path
     comp_path=args.submodel_path
-    published_version=args.submodel_version
-    publish_reverse_patch=args.reverse
+    if comp_path and shift_path:
+        raise RuntimeError("Cannot create published patch and shift model")
     additive=args.subgrids_nest
     trimgrid=args.no_trim_subgrids
-    apply_sf_conv=args.apply_sf_conv
     if args.parcel_shift: 
         write_log("Configuring model to use parcel shift parameters")
         configure_for_parcel_shift()
     if args.test_settings: 
         write_log("Configuring model with low accuracy testing settings")
         configure_for_testing()
+    if comp_path: 
+        args.apply_time_model_scale=False
+
     max_split_level=args.max_level if args.max_level else max_split_level
     base_limit_tolerance=args.base_tolerance if args.base_tolerance else base_limit_tolerance
 
@@ -1035,6 +1182,7 @@ if __name__ == "__main__":
                 
     models=args.model_file
     moddefs=[]
+    patchspec={}
     if not models:
         models.append(patchname)
 
@@ -1047,11 +1195,13 @@ if __name__ == "__main__":
             if os.path.exists(mf): 
                 found = True
                 models[i]=mf
-                if args.apply_ramp_scale:
-                    modelname,modeldesc,modeldate,ramps = get_model_spec( mf )
-                    rampscale=ramps[-1][1]
-                    if rampscale != 1.0:
-                        mf=str(rampscale)+'*'+mf
+                if args.apply_time_model_scale:
+                    scale=1.0
+                    patchversions=get_patch_spec( mf )
+                    if patchversions:
+                        scale=patchversions[-1].time_model[-1].factor
+                    if scale != 1.0:
+                        mf=str(scale)+'*'+mf
                 moddefs.append(mf)
                 break
                 
@@ -1059,10 +1209,19 @@ if __name__ == "__main__":
             print "Model file {0} doesn't exist".format(f)
             sys.exit()
 
+        
+
     # Model definition for calc okada
     modeldef='+'.join(moddefs)
     modelname=' '.join([os.path.basename(x) for x in models])
 
+    if comp_path: 
+        if len(moddefs) > 1:
+            raise RuntimeError("Cannot create published patch with more than one fault model")
+        patchversions=get_patch_spec( mf )
+        additive=not patchversions[0].nested
+
+    # Initiallize 
     wktfile=open(patchfile+".build.wkt","w")
     wktgridfile=open(patchfile+".grids.wkt","w")
     logfile.write("Building deformation grids for model: {0}\n".format(modeldef))
@@ -1079,4 +1238,4 @@ if __name__ == "__main__":
         build_linzshift_model( gridlist, modeldef, additive, shiftpath=shift_path, splitbase=split_base )
 
     if comp_path:
-        build_published_component( gridlist, modeldef, additive, comp_path, args.clean_dir )
+        build_published_component( gridlist, modeldef, modelname, additive, comp_path, args.clean_dir )

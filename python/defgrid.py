@@ -239,7 +239,7 @@ class DeformationGrid( Grid ):
         rows = ml.find(g[:,0]==g[0,0])
         cols = g.shape[1]
         g.shape=(rows.shape[0],rows[1],cols)
-        grid.__init__(self,g,columns=columns,source=filename)
+        Grid.__init__(self,g,columns=columns,source=filename)
         self.dln=(g[0,-1,0]-g[0,0,0])/(g.shape[1]-1)
         self.dlt=(g[-1,0,1]-g[0,0,1])/(g.shape[0]-1)
         self.extents=np.array([g[0,0,0:2],g[-1,-1,0:2]])
@@ -405,7 +405,7 @@ class DeformationGrid( Grid ):
                 gse[:] = np.where(error < gsif,error,gse)
                 gsr[:] = np.where(error < gsif,res,gsr)
             gsif=precision*5/(ofs*ofs)
-        return grid(gsgrid,columns=('lon','lat','error','reqsize'),
+        return Grid(gsgrid,columns=('lon','lat','error','reqsize'),
             source='Grid size to achieve tolerance '+str(tolerance))
 
     def grid_definition( self ):

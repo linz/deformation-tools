@@ -24,55 +24,52 @@ The software attempts to build objects with
 
 Syntax:
 
-        usage: build_grids.py [-h] [--shift-model-path SHIFT_MODEL_PATH]
-                              [--submodel-path SUBMODEL_PATH]
-                              [--submodel-version SUBMODEL_VERSION] [--subgrids-nest]
-                              [--parcel-shift] [--apply-ramp-scale] [--apply-sf-conv]
-                              [--test-settings] [--max-level MAX_LEVEL] [--reverse]
-                              [--base-tolerance BASE_TOLERANCE] [--split-base]
-                              [--no-trim-subgrids] [--clean-dir]
-                              [--land-area LAND_AREA] [--precision PRECISION]
-                              patch_file model_file [model_file ...]
+	usage: build_grids.py [-h] [--shift-model-path SHIFT_MODEL_PATH]
+			      [--submodel-path SUBMODEL_PATH] [--clean-dir]
+			      [--subgrids-nest] [--apply-time-model-scale]
+			      [--max-level MAX_LEVEL]
+			      [--base-tolerance BASE_TOLERANCE] [--split-base]
+			      [--no-trim-subgrids] [--precision PRECISION]
+			      [--land-area LAND_AREA] [--parcel-shift]
+			      [--test-settings]
+			      patch_file model_file [model_file ...]
 
-        Build set of grids for deformation patch
+	Build set of grids for deformation patch
 
-        positional arguments:
-          patch_file            Base name used for output files
-          model_file            Model file(s) used to calculate deformation, passed to
-                                calc_okada
+	positional arguments:
+	  patch_file            Base name used for output files
+	  model_file            Model file(s) used to calculate deformation, passed to
+				calc_okada
 
-        optional arguments:
-          -h, --help            show this help message and exit
-          --shift-model-path SHIFT_MODEL_PATH
-                                Create a linzshiftmodel in the specified directory
-          --submodel-path SUBMODEL_PATH
-                                Create publishable component in the specified
-                                directory
-          --submodel-version SUBMODEL_VERSION
-                                Deformation model version for which submodel first
-                                applies
-          --subgrids-nest       Grid CSV files calculated to replace each other rather
-                                than total to deformation
-          --parcel-shift        Configure for calculating parcel_shift rather than
-                                rigorous deformation patch
-          --apply-ramp-scale    Scale the grid by the ramp final value
-          --apply-sf-conv       Apply the projection scale factor and convergence to
-                                the model calculated displacements
-          --test-settings       Configure for testing - generate lower accuracy grids
-          --max-level MAX_LEVEL
-                                Maximum number of split levels to generate (each level
-                                increases resolution by 4)
-          --reverse             Published model will be a reverse patch
-          --base-tolerance BASE_TOLERANCE
-                                Base level tolerance - depends on base column
-          --split-base          Base deformation will be split into separate patches
-                                if possible
-          --no-trim-subgrids    Subgrids will not have redundant rows/columns trimmed
-          --clean-dir           Clean publishable component subdirectory
-          --land-area LAND_AREA
-                                WKT file containing area land area over which model
-                                must be defined
-          --precision PRECISION
+	optional arguments:
+	  -h, --help            show this help message and exit
+	  --shift-model-path SHIFT_MODEL_PATH
+				Create a linzshiftmodel in the specified directory
+	  --submodel-path SUBMODEL_PATH
+				Create publishable component in the specified
+				directory
+	  --clean-dir           Clean publishable component subdirectory
+	  --subgrids-nest       Grid CSV files calculated to replace each other rather
+				than total to deformation
+	  --apply-time-model-scale
+				Scale by the time model final value
+	  --max-level MAX_LEVEL
+				Maximum number of split levels to generate (each level
+				increases resolution by 4)
+	  --base-tolerance BASE_TOLERANCE
+				Base level tolerance - depends on base column
+	  --split-base          Base deformation will be split into separate patches
+				if possible
+	  --no-trim-subgrids    Subgrids will not have redundant rows/columns trimmed
+	  --precision PRECISION
+				Precision (ndp) of output grid displacements
+	  --land-area LAND_AREA
+				WKT file containing area land area over which model
+				must be defined
+	  --parcel-shift        Configure for calculating parcel_shift rather than
+				rigorous deformation patch
+	  --test-settings       Configure for testing - generate lower accuracy grids
+
 
 Fault model file format
 =======================
@@ -91,18 +88,47 @@ by default is a step from 0 to 1 at the specified time.  Note that the version i
 model (generally based on the calculation date).  This is not the same as the version of the
 NZGD2000 deformation model in which it is published.
 
-The fault model is expected to have extension .model.  It may be associated with a file .ramp which
-defines one or more ramp time models.  Each line in the ramp file is formatted as
+The fault model is expected to have extension .model.  It may be associated with a file .patch which
+defines how the fault model is implemented into a deformation model patch. The .patch file looks like:
+
 
 ```
-   yyyy-mm-dd #.###
+	Version: 20130801
+	Event: Dusky Sound (Fiordland) earthquake
+	Date: 15 July 2009
+	Type: Reverse
+        SubgridMethod: Nested
+	TimeModel:
+	  2009-07-15 1.05
+	  2011-09-01 1.34
 ```
 
-which specifies the factor by which the fault model is multiplied at a specific
-date.  The scale factor is assumed to be 0 before the first date.  (If a reverse
-patch is being generated this will be automatically shifted to set the factor to
-zero after the last date.
+The version specifies the first version for which the model applies. Event is used for descriptive 
+information.  Date is used for descriptive information, and also defines the date at which the model
+applies.  Type can be "Forward" or "Reverse".  SubgridMethod can be "Nested" or "Independent".  If 
+it is nested then each subgrid supercedes its parent grid.  If it is "Independent" then the subgrids 
+are independent components of the deformation model and get added together.
+If TimeModel is specified then it defines a set of times and multiplication factors.  
+It overrides the Date specification for implementing the record.
+The model is a piecewise linear function that is 0 up till the first date, then linear between each 
+date specified, and fixed at the final multiplication factor after the last date.  If the patch is a 
+reverse patch then the final value is subtracted from this model.
 
+The .patch file may specify more than one version, for example:
+
+```
+Version: 20140201
+Event: Mw 6.6 Cook Strait earthquake
+Date: 21 July 2013
+Type: Forward
+SubgridMethod: Nested
+
+Version: 20160701
+Type: Reverse
+```
+
+The settings from the each version are the default for subsequent versions unless they are
+overridden.
 
 Operation of the build_grids program
 ====================================
