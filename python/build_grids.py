@@ -10,9 +10,9 @@ from collections import namedtuple
 from shapely.geometry import MultiPolygon,Polygon,LineString,Point,shape
 from shapely.prepared import prep
 from shapely.ops import unary_union
+from shapely import affinity
 from subprocess import call
 import accuracy_standards
-import affinity
 import argparse
 import csv
 import datetime
@@ -1034,7 +1034,7 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
         csvdata=dict(
             version_added=0,
             version_revoked=0,
-            reverse_patch='Y' if reverse_patch else 'N',
+            reverse_patch='N',
             component=0,
             priority=0,
             min_lon=0,
@@ -1053,9 +1053,9 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
             spatial_model='llgrid',
             time_function='step',
             time0=modeldate,
-            factor0=-1 if reverse_patch else 0,
+            factor0=0,
             time1=modeldate,
-            factor1=0 if reverse_patch else 1,
+            factor1=1,
             decay=0,
             file1='',
             description=modeldesc
@@ -1069,6 +1069,7 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
             csvdata['version_revoked']=0
             if nv < len(patchversions)-1:
                 csvdata['version_revoked']=patchversions[nv+1].version
+            csvdata['reverse_patch']='Y' if reverse_patch else 'N'
             ir1 = ir0
             ir0 += len(versionspec.time_model)
 
@@ -1086,11 +1087,10 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
                     max_lat=np.max(gd.column('lat')),
                     npoints1=gd.array.shape[1],
                     npoints2=gd.array.shape[0],
-                    max_displacement=math.sqrt(np.max(
+                    max_displacement=round(math.sqrt(np.max(
                         gd.column('de')*gd.column('de') +
                         gd.column('dn')*gd.column('dn') +
-                        gd.column('du')*gd.column('du'))),
-                    max_displacement="{0:.5f}".format(max_displacement)
+                        gd.column('du')*gd.column('du'))),5),
                     file1=csvname,
                     )
                 rdate0=0
@@ -1107,7 +1107,7 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
                         compdata['time_function']='ramp'
                         compdata['time0']=rdate0
                         compdata['time1']=rdate
-                        rvalue -= version.time_model[ir-1].factor
+                        rvalue -= versionspec.time_model[ir-1].factor
                     rdate0=rdate
                     compdata['factor0']=-rvalue if reverse_patch else 0
                     compdata['factor1']=0 if reverse_patch else rvalue
