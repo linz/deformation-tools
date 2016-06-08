@@ -921,8 +921,10 @@ int main( int argc, char *argv[] )
     out << endl;
     out << setiosflags( ios::fixed );
     string buffer;
+    int lineno=0;
     while( getline(*in, buffer) )
     {
+        lineno++;
         // Skip comments
         int p = buffer.find('#');
         if( p != string::npos) { buffer.erase(p); }
@@ -959,7 +961,8 @@ int main( int argc, char *argv[] )
             }
             if( s.fail() )
             {
-                cerr << "Invalid test point: " << buffer << endl;
+                if( lineno > 1 ) cerr << "Invalid test point at line " 
+                                      << lineno << ": " << buffer << endl;
                 continue;
             }
             bool reset = true;
@@ -976,7 +979,7 @@ int main( int argc, char *argv[] )
             if( showlength )
             {
                 double us = sqrt(ux*ux+uy*uy);
-                out << "\t" << us;
+                out << delim << us;
             }
             if( calcstrain )
             {
