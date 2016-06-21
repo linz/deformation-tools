@@ -759,32 +759,37 @@ void grid::trimto( grid&g )
     // Determine the grid corners in terms of the alignment grid
     // Only really makes sense if grids have consistent x,y axes...
     //
-    int colmin=0;
-    int colmax=m_ncol-1;
-    int rowmin=0;
-    int rowmax=m_nrow-1;
+    int colmax=0;
+    int colmin=m_ncol-1;
+    int rowmax=0;
+    int rowmin=m_nrow-1;
 
     point corner;
     point gcorner;
     point ncorner;
 
-    nodexy(node(0,0),corner);
-    g.gridcoords(corner,gcorner);
-    if( gcorner.x < 0 ) gcorner.x=0;
-    if( gcorner.y < 0 ) gcorner.y=0;
-    g.nodexy(gcorner,corner);
-    gridcoords(corner,ncorner);
-    if(ncorner.x > 0.0 ) colmin=int(ceil(ncorner.x-0.0001));
-    if(ncorner.y > 0.0 ) rowmin=int(ceil(ncorner.y-0.0001));
+    int grow;
 
-    nodexy(node(rowmax,colmax),corner);
-    g.gridcoords(corner,gcorner);
-    if( gcorner.x > g.ncol()-1 ) gcorner.x=g.ncol()-1;
-    if( gcorner.y > g.nrow()-1 ) gcorner.y=g.nrow()-1;
-    g.nodexy(gcorner,corner);
-    gridcoords(corner,ncorner);
-    if(ncorner.x < colmax) colmax=int(floor(ncorner.x+0.0001));
-    if(ncorner.y < rowmax) rowmax=int(floor(ncorner.y+0.0001));
+    for( int icol=0; icol<2; icol++ ) 
+    {
+        int gcol=icol ? 0 : g.ncol()-1;
+        for( int irow=0; irow<2; irow++ )
+        {
+            double gx,gy;
+            int grow=irow ? 0 : g.nrow()-1;
+            g.nodexy( grow, gcol, gx, gy);
+            gridcoords(point(gx,gy),corner);
+            if( corner.y-0.0001 < rowmin ) rowmin=int(ceil(corner.y-0.0001));
+            if( corner.y+0.0001 > rowmax ) rowmax=int(floor(corner.y+0.0001));
+            if( corner.x-0.0001 < colmin ) colmin=int(ceil(corner.x-0.0001));
+            if( corner.x+0.0001 > colmax ) colmax=int(floor(corner.x+0.0001));
+        }
+    }
+
+    if( rowmin < 0 ) rowmin=0;
+    if( rowmax >= m_nrow ) rowmax=m_nrow-1;
+    if( colmin < 0 ) colmin=0;
+    if( colmax >= m_ncol ) colmax=m_ncol-1;
 
     resize(rowmin,colmin,rowmax,colmax);
 }

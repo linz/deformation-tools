@@ -506,7 +506,11 @@ static double percentile( vector<double> sorted, double percentile )
 
 void print_grid_stats( grid &g )
 {
+    double minx, maxx, miny, maxy;
     cout << "Grid statistics" << endl;
+    g.extents( minx, maxx, miny, maxy );
+    cout << "X extents: " << minx << " - " << maxx << endl;
+    cout << "Y extents: " << miny << " - " << maxy << endl;
     cout << "Rows: " << g.nrow() << endl;
     cout << "Cols: " << g.ncol() << endl;
     cout << "Values per node: " << g.nvalue() << endl;
