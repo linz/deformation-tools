@@ -56,13 +56,14 @@ Options can include:
 The fault model line contains metadata lines, header lines, and fault
 model lines.  Blank lines and lines starting with # are ignored.
 
-Metadata lines starting with a series of non-blank characters followed 
-by a colon are ignored by this program except for "Origin" and "Projection" 
-which are described below.  
+Metadata lines start with a series of alphanumeric or blank characters followed 
+by a colon.  These are ignored by this program except for "Origin", "Projection",
+"Columns", and "Additional data" which are described below.  
 
 Header lines define the format of fault model lines (defining the fields 
 in each line).  Usually there will be only one before the first fault model
-line.
+line. They are identified by containing the string "slip_m". The header
+line is equivalent to the "Columns" metadata line.
 
 The header line can specify the following fields separated by whitespace:
 
@@ -84,6 +85,7 @@ The header line can specify the following fields separated by whitespace:
  *slip_m          magnitude of in-plane (shear) slip in m.
   opening_m       opening of fault in m.  (Used for modelling dykes, etc.)
  *depth_km        depth of fault in km (depends on fault_type)
+  top_depth_km    synonym for depth_km 
  *bottom_depth_km bottom depth of fault in km (depends on fault_type)
  *lat_deg         latitude of fault (depends on fault_type - see below)
  *lon_deg         longitude of fault (depends on fault_type)
@@ -107,6 +109,10 @@ The fault model lines contain data corresponding to the fields defined by the
 last header line, or the default fields.  Fields are separated by whitespace.
 If the last field is fault_description then it will include any remaining text
 on the line, including whitespace.
+
+The "Additional data" metadata line(s) can include strings formatted as 
+fieldname=value, which define the default value for fields not included in 
+the data lines, for example fault_type.
 
 The metadata lines can include a definition of the coordinate system of the
 fault model - this can be one of:

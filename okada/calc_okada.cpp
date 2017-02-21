@@ -17,6 +17,7 @@
 #else
 #include <regex>
 #endif
+#include <boost/algorithm/string.hpp>
 #include "okada.h"
 #include "get_image_path.h"
 // extern "C" {
@@ -219,6 +220,16 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
     list<string> fields;
 
     regex re = regex("^(\\w[\\w\\s]+):\\s+(.*?)\\s*$");
+    regex fieldre = regex("^(\\w+)\\=(.*?)$");
+
+    int type, fnum;
+    double strike=0.0,dip=0.0,rake=0.0,length=0.0,width=0.0;
+    double slip=0.0,Uts=0.0,depth=0.0,lat=0.0,lon=0.0,bottom=0.0;
+    double dummy=0.0;
+    string name("");
+    string fieldlist("");
+    type = 3;
+    fnum = 0;
 
     while( ok )
     {
@@ -233,8 +244,10 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
         smatch match;
         if( regex_match(buffer,match,re))
         {
+            string command(match[1].str());
+            boost::algorithm::to_lower(command);
             stringstream s(match[2].str());
-            if(match[1].str() == "Origin" )
+            if(command == "origin" )
             {
                 double lon, lat;
                 s >> lon >> lat;
@@ -245,10 +258,9 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
                 }
                 prjcrds=false;
             }
-            if(match[1].str() == "Projection" )
+            if(command == "projection" )
             {
                 string projcode;
-                stringstream s(match[2].str());
                 if( proj ) delete proj;
                 proj=0;
                 s >> projcode;
@@ -276,14 +288,63 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
                 }
                 if( proj ) prjcrds=true;
             }
+            if(command == "columns" )
+            {
+                fieldlist=match[2].str();
+            }
+            if(command == "additional data" )
+            {
+                string fielddata;
+                while( s >> fielddata )
+                {
+                    smatch fieldmatch;
+                    if( ! regex_match(fielddata,fieldmatch,fieldre))
+                    {
+                        cerr << "Cannot interpret additional data " << fielddata << endl;
+                        ok=false;
+                        continue;
+                    }
+                    string fieldname(fieldmatch[1].str());
+                    boost::algorithm::to_lower(fieldname);
+                    stringstream fieldvalstr(fieldmatch[2].str());
+
+                    if( fieldname == "fault_num" ) fieldvalstr >> fnum;
+                    else if( fieldname == "fault_type" ) fieldvalstr >> type;
+                    else if( fieldname == "strike_deg" ) fieldvalstr >> strike;
+                    else if( fieldname == "dip_deg" ) fieldvalstr >> dip;
+                    else if( fieldname == "rake_deg" ) fieldvalstr >> rake;
+                    else if( fieldname == "length_km" ) fieldvalstr >> length;
+                    else if( fieldname == "width_km" ) fieldvalstr >> width;
+                    else if( fieldname == "depth_km" ) fieldvalstr >> depth;
+                    else if( fieldname == "top_depth_km" ) fieldvalstr >> depth;
+                    else if( fieldname == "bottom_depth_km" ) fieldvalstr >> bottom;
+                    else if( fieldname == "slip_m" ) fieldvalstr >> slip;
+                    else if( fieldname == "opening_m" ) fieldvalstr >> Uts;
+                    else if( ! prjcrds && fieldname == "lat_deg" ) fieldvalstr >> lat;
+                    else if( ! prjcrds && fieldname == "lon_deg" ) fieldvalstr >> lon;
+                    else if( prjcrds && fieldname == "north_m" ) fieldvalstr >> lat;
+                    else if( prjcrds && fieldname == "east_m" ) fieldvalstr >> lon;
+                    else
+                    {
+                        cerr << "Invalid field name " << fieldname << " in additional data " << fielddata << endl;
+                    }
+
+                }
+            }
             continue;
         }
 
         // Read field header line
-        if( buffer.find("strike_deg") != string::npos )
+        if( buffer.find("slip_m") != string::npos )
+        {
+            fieldlist=buffer;
+            continue;
+        }
+
+        if( fieldlist != "" )
         {
             string field;
-            stringstream s(buffer);
+            stringstream s(fieldlist);
             fields.clear();
             dsclast=false;
             while( s >> field )
@@ -291,7 +352,6 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
                 dsclast = field=="fault_description";
                 fields.push_back(string(field));
             }
-            continue;
         }
 
         // Trim comment and leading spaces
@@ -317,14 +377,8 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
         }
 
         stringstream s(buffer);
+        fnum += 1;
 
-        int type, fnum;
-        double strike=0.0,dip=0.0,rake=0.0,length=0.0,width=0.0;
-        double slip=0.0,Uts=0.0,depth=0.0,lat=0.0,lon=0.0,bottom=0.0;
-        double dummy=0.0;
-        string name("");
-        type = 3;
-        fnum = 0;
         for( list<string>::iterator it=fields.begin(); it != fields.end(); it++ )
         {
             if( *it == "fault_num" ) s >> fnum;
@@ -335,6 +389,7 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
             else if( *it == "length_km" ) s >> length;
             else if( *it == "width_km" ) s >> width;
             else if( *it == "depth_km" ) s >> depth;
+            else if( *it == "top_depth_km" ) s >> depth;
             else if( *it == "bottom_depth_km" ) s >> bottom;
             else if( *it == "slip_m" ) s >> slip;
             else if( *it == "opening_m" ) s >> Uts;
