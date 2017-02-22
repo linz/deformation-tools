@@ -17,7 +17,12 @@
 #else
 #include <regex>
 #endif
+#ifdef USE_BOOST_STRINGS
 #include <boost/algorithm/string.hpp>
+#define lower_case boost::algorithm::to_lower
+#else
+#define lower_case(x) std::transform((x).begin(), (x).end(), (x).begin(), ::tolower);
+#endif
 #include "okada.h"
 #include "get_image_path.h"
 // extern "C" {
@@ -245,7 +250,7 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
         if( regex_match(buffer,match,re))
         {
             string command(match[1].str());
-            boost::algorithm::to_lower(command);
+            lower_case(command);
             stringstream s(match[2].str());
             if(command == "origin" )
             {
@@ -305,7 +310,7 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
                         continue;
                     }
                     string fieldname(fieldmatch[1].str());
-                    boost::algorithm::to_lower(fieldname);
+                    lower_case(fieldname);
                     stringstream fieldvalstr(fieldmatch[2].str());
 
                     if( fieldname == "fault_num" ) fieldvalstr >> fnum;
