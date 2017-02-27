@@ -127,6 +127,10 @@ max_subcell_ratio=0.5
 
 max_split_level=5
 
+# Hybrid patch grid maximum ppm distortion in forward patch
+
+forward_patch_max_distortion=10
+
 # Alternative values for creating a Landonline parcel shifting patch
 def configure_for_parcel_shift():
     global base_limit_test_column, base_limit_tolerance, base_ramp_tolerance
@@ -907,6 +911,7 @@ def get_patch_spec( modelfile ):
     if os.path.exists(patchfile):
         version=None
         reverse=False
+        hybrid=False
         nested=False
         time_model=None
         in_model=False
@@ -951,9 +956,14 @@ def get_patch_spec( modelfile ):
                             reverse=False
                         elif value.lower() == 'reverse':
                             reverse=True
+                        elif value.lower() == 'hybrid':
+                            reverse=True
+                            hybrid=True
                         else:
                             raise RuntimeError("Invalid Type - must be forward or reverse in {0}"
                                                .format(patchfile))
+                    elif command == 'forwardpatchdistortionppmlimit':
+                        forward_patch_max_distortion=float(value)
                     elif command == 'subgridmethod':
                         if value.lower() == 'nested':
                             nested=True

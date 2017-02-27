@@ -59,6 +59,8 @@ class SegmentedFault
                 double x0, double y0, double d0, 
                 double strike, double dip );
         SegmentedFault( const FaultRefSys &fsys );
+        // Set an id to identify the particular fault
+        void SetId( int id ){ this->id=id; }
         // Set the fault reference system
         void SetFaultRefSys( const FaultRefSys &fsys ){ this->fsys = fsys; }
         // Set number of segments along the fault and offsets of segment
@@ -102,6 +104,7 @@ class SegmentedFault
 
         int NStrikeSegments(){ return nsegs; }
         int NDipSegments() { return nsegd; }
+        int Id() { return id; }
 
         // Get the coordinates of a point defined  by distance along and across fault
         // Note: use isegd=-1 for surface projection of fault
@@ -117,6 +120,7 @@ class SegmentedFault
         void FreeSlipComponents();
         void FreeAll();
         FaultRefSys fsys;
+        int id;
         int nsegs;
         int nsegd;
         double *offsets;

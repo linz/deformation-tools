@@ -377,8 +377,22 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
             fields.push_back("slip_m");
             fields.push_back("opening_m");
             fields.push_back("depth_km");
-            fields.push_back("lat_deg");
-            fields.push_back("lon_deg");
+            if( prjcrds )
+            {
+                fields.push_back("east_m");
+                fields.push_back("north_m");
+            }
+            else
+            {
+                fields.push_back("lat_deg");
+                fields.push_back("lon_deg");
+            }
+        }
+        if( prjcrds &&
+                find( fields.begin(), fields.end(), "lat_deg" ) != fields.end() &&
+                find( fields.begin(), fields.end(), "east_m" ) == fields.end() )
+        {
+            prjcrds=false;
         }
 
         stringstream s(buffer);
@@ -531,6 +545,7 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
         double fd[2] = { fd0, fd1 };
 
         SegmentedFault *f = new SegmentedFault( x, y, depth, strike, dip );
+        f->SetId( fnum );
         f->SetStrikeSegBreaks( 1, fs );
         f->SetDipSegBreaks( 1, fd );
         f->SetFaultSlip( 0, 0, Uss, Uds, Uts );
