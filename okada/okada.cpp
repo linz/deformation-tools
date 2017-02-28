@@ -7,6 +7,9 @@
 
 #include "okada.h"
 
+// Added for using cout << ...
+#include <iomanip>
+using namespace std;
 
 const double SMALLCOS = 0.000001;
 const double SMALLSLIP = 0.000001;
@@ -166,6 +169,11 @@ void OkadaPoint::AddOkada( double U1, double U2, double U3,
     double Reta = R+eta;
     double RReta = R*Reta;
     double RRxi = R*(R+xi);
+    // Handle potential numerical instability in calculated R+xi
+    if( xi < 0.0 && RRxi < R*0.000001 )
+    {
+        RRxi=R*(eta*eta+q*q)/(-2.0*xi);
+    }
     double R3 = R*R*R;
     double lnReta = log(Reta);
 
@@ -274,6 +282,7 @@ void OkadaPoint::AddOkada( double U1, double U2, double U3,
 
     if( calcStrains )
     {
+
         double cs=coss*sins;
         double c2=coss*coss;
         double s2=sins*sins;
