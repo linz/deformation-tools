@@ -165,7 +165,7 @@ class Grid( object ):
             cmax=np.max(data*multiple)
         else:
             cmax=np.max(data)
-        cmax = cmax*2
+        cmax = cmax+abs(limit-cmax)*2+1000
         print 'defgrid',col,limit,cmax
         contours = self.contourf(col,levels=[limit,cmax],multiple=multiple, returnContours=True)
         result = []
@@ -173,6 +173,9 @@ class Grid( object ):
             if c.level == limit:
                 result.append(Polygon(c.poly[0],[]))
         return result
+
+    def regionsLessThanLevel( self, col, limit ):
+        return self.regionsExceedingLevel( col, -limit, -1.0 )
 
     def column( self,col ):
         '''
@@ -196,7 +199,7 @@ class Grid( object ):
             print "Statistics for "+label 
             stats(self.array[:,:,index],**params)
 
-    def writecsv( self, filename, delim=',' ):
+    def writecsv( self, filename, delim=',',format='{0}' ):
         '''
         Dump the grid as a CSV file
         '''
@@ -205,12 +208,16 @@ class Grid( object ):
             f.write('\n');
             for r in self.array:
                 for c in r:
-                    f.write(delim.join((str(v) for v in c)))
+                    f.write(delim.join((format.format(v) for v in c)))
                     f.write('\n')
 
     def nodes( self ):
         shape=self.array.shape
         return self.array.reshape(shape[0]*shape[1],shape[2])
+
+    def dataframe( self ):
+        import pandas as pd
+        return pd.DataFrame(self.nodes(), columns=self.columns )
 
 
 class DeformationGrid( Grid ):
@@ -286,7 +293,9 @@ class DeformationGrid( Grid ):
 
     def strainComponents( self ):
         '''
-        Calculate horizontal strain components: returns a with columns
+        Calculate horizontal strain components: returns a grid with columns
+           lon
+           lat
            dilatation (linear)
            rotation 
            shear
@@ -343,9 +352,15 @@ class DeformationGrid( Grid ):
         shear *= 1000000.0
         distortion *= 1000000.0
 
-        midltln=(g[1:,1:,:2]+g[1:,:-1,:2]+g[:-1,1:,:2]+g[:-1,:-1,:2])/4
-        result=np.concatenate((midltln,dil,rot,shear,distortion),axis=2)
-        return result
+        ncol=4
+        if g.shape[2] > 4 and self.columns[4] == 'du':
+            ncol=5
+        midlnlt=(g[1:,1:,:ncol]+g[1:,:-1,:ncol]+g[:-1,1:,:ncol]+g[:-1,:-1,:ncol])/4
+        ds=np.hypot(midlnlt[:,:,2:3],midlnlt[:,:,3:4])
+        result=np.concatenate((midlnlt,dil,ds,rot,shear,distortion),axis=2)
+        columns=self.columns[:ncol]
+        columns.extend("ds dil rot shear err".split())
+        return Grid(result,columns=columns)
 
     def calcResolution( self, tolerance, maxsize=100000.0,precision=0.0001,margin=1 ):
         '''
