@@ -296,10 +296,14 @@ class DeformationGrid( Grid ):
         Calculate horizontal strain components: returns a grid with columns
            lon
            lat
-           dilatation (linear)
-           rotation 
+           ..
+           ..
+           ..
+           ds
+           dil -  dilatation (linear)
+           rot -  rotation 
            shear
-           distortion
+           err -  distortion
 
         Max and min scale change are dilatation +/- shear
         Max and min bearing change are rotation +/- shear
