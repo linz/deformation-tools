@@ -35,6 +35,284 @@ gridtool=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))
 if not os.path.exists(gridtool):
     raise RuntimeError('Cannot find gridtool program at '+gridtool)
 
+# Log file ...
+
+runtime=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+runtime_version=datetime.datetime.now().strftime("%Y%m%d")
+logfile=None
+wktfile=None
+wktgridfile=None
+wktgridlines=False
+
+class Config( object ):
+
+    def __init__( self ):
+        self.verbose=True
+            
+        # Grids will be calculated using integer representation based origin.
+        # Subgrids will be obtained by dividing basesize by 4
+
+        # Origin for calculating grids (integer offsets from this)
+        self.origin=(166.0,-48)
+
+        # Base size for grids, grids are built to this size and smaller
+        self.base_size=(0.15,0.125)
+
+        # Extents over which test grid is built (ie initial search for affected area,
+        # and to which grids are trimmed). 
+
+        # Extents based on EEZ
+        self.base_extents=((158,-58),(194,-25))
+
+        # Conversion degrees to metres
+        self.scale_factor=(1.0e-5/math.cos(math.radians(40)),1.0e-5)
+
+        # Factor by which accuracy specs are multiplied to provide grid tolerances
+        self.tolerance_factor=0.4
+
+        # Values for deformation patch generation
+
+        # Test column for determining extents of patch
+        self.base_limit_test_column='err'
+        self.base_limit_bounds_column='ds'
+
+        # Minium value for test column within patch (note - column is in ppm)
+        self.base_limit_tolerance=accuracy_standards.NRF.lap*tolerance_factor*1.0e6
+        self.base_limit_sea_tolerance=accuracy_standards.BGN.lap*tolerance_factor*1.0e6
+
+        # Precision for scaling down from edge of patch
+        self.base_ramp_tolerance=accuracy_standards.NRF.lap*tolerance_factor
+        self.base_ramp_sea_tolerance=accuracy_standards.BGN.lap*tolerance_factor
+
+        # Absolute limit on extents of patch - not required where magnitude (ds)
+        # less than this level.
+        self.base_limit_bounds_tolerance=accuracy_standards.NRF.lac*tolerance_factor
+        self.base_limit_sea_bounds_tolerance=accuracy_standards.BGN.na*tolerance_factor
+
+        # Values controlling splitting cells into subgrids
+
+        self.cell_split_factor=4
+        self.subcell_resolution_tolerance=accuracy_standards.NRF.lac*tolerance_factor
+        self.subcell_resolution_sea_tolerance=accuracy_standards.BGN.na*tolerance_factor
+
+        # Replace entire grid with subcells if more than this percentage 
+        # of area requires splitting
+
+        self.max_subcell_ratio=0.5
+
+        # Maximum split level
+
+        self.max_split_level=5
+
+        # Hybrid patch grid maximum ppm distortion in forward patch
+
+        self.forward_patch_test_column='err'
+        self.default_forward_patch_max_distortion=10
+        self.forward_patch_max_level=2
+
+        self.land_areas=None
+
+# Outputs required ...
+
+        # Shift model component (for updating Landonline)
+        self.build_shift_model=True
+
+        self.shift_model_header='''
+SHIFT_MODEL_MODEL Shift model {name}
+FORMAT LINZSHIFT1B
+VERSION_NUMBER 1.0
+COORDSYS NZGD2000
+DESCRIPTION
+Model built on {runtime}
+Source files: {modelname}
+END_DESCRIPTION
+'''
+
+        self.shift_model_component='''
+SHIFT_MODEL_COMPONENT {gridfile}
+MODEL_TYPE grid
+NEGATIVE no
+DESCRIPTION
+{component}
+END_DESCRIPTION
+'''
+
+        # LINZ published deformation model
+
+        self.build_published=True
+
+        self.published_component_columns='''
+            version_added
+            version_revoked
+            reverse_patch
+            component
+            priority
+            min_lon
+            max_lon
+            min_lat
+            max_lat
+            spatial_complete
+            min_date
+            max_date
+            time_complete
+            npoints1
+            npoints2
+            displacement_type
+            error_type
+            max_displacement
+            spatial_model
+            time_function
+            time0
+            factor0
+            time1
+            factor1
+            decay
+            file1
+            description
+            '''.split()
+
+    # Alternative values for creating a Landonline parcel shifting patch
+    def configureForParcelShift():
+        self.base_limit_test_column='ds'
+        self.base_limit_tolerance= 0.05   
+        self.tolerance=accuracy_standards.BGN.lap*tolerance_factor
+
+    # Reduce the accuracies to produce smaller data sets for testing...
+    def configureForTesting():
+        self.subcell_resolution_tolerance *= 100
+        self.max_split_level -= 2
+
+
+    def writeTo( log ):
+        if callable(log):
+            write_log=log
+        else:
+            write_log=lambda x: log.write(x+"\n")
+        write_log("Patch grid calculation parameters:")
+        write_log("    Grid origin: {0} {1}".format(*origin))
+        write_log("    Base grid cell size: {0} {1}".format(*base_size))
+        write_log("    Base extents: {0} {1} to {2} {3}".format(
+            base_extents[0][0], base_extents[0][1], base_extents[1][0], base_extents[1][1]))
+        write_log("    Approx degrees to metres factor: {0} {1}".format(*scale_factor))
+
+        write_log("    Tolerated distortion outside patch (ppm): land {0} sea {1}".format( 
+            base_limit_tolerance, base_limit_sea_tolerance))
+        write_log("    Tolerated dislocation outside patch (mm): land {0} sea {1}".format( 
+            base_limit_bounds_tolerance*1000, base_limit_sea_bounds_tolerance*1000))
+        write_log("    Patch ramp tolerance (ppm): land {0} sea {1}".format(
+            base_ramp_tolerance,base_ramp_sea_tolerance))
+        write_log("    Tolerated gridding error before splitting (mm)".format(
+            subcell_resolution_tolerance*1000, subcell_resolution_sea_tolerance*1000))
+        write_log("    Grid cell split factor: {0}".format(cell_split_factor))
+        write_log("    Maximum split level: {0}".format(max_split_level))
+        write_log("    Maximum percent coverage of level with nested grid: {0}".format(max_subcell_ratio*100)) 
+        write_log("")
+
+class GridSpec( object ):
+    '''
+    Class representing a basic grid definition - min and max coordinates and number of 
+    grid cells in each direction.  Note: the number of grid values in each direction is
+    one greater than the number of cells.
+    '''
+
+    def __init__( self, xmin, ymin, xmax, ymax, ngx=1, ngy=1 ):
+        self.griddef=((xmin,ymin),(xmax,ymax),(ngx,ngy))
+
+    def __str__( self ):
+        griddef=self.griddef
+        return 'grid:{0}:{1}:{2}:{3}:{4}:{5}'.format(
+            griddef[0][0], griddef[0][1],
+            griddef[1][0], griddef[1][1],
+            griddef[2][0], griddef[2][1],
+            )
+
+    def lines( griddef ):
+        '''
+        Iterator returning lines (as coordinate pairs) forming the internal and
+        external edges of the grid.
+        '''
+        griddef=self.griddef
+        lonv = list(griddef[0][0]+(griddef[1][0]-griddef[0][0])*float(x)/griddef[2][0]
+                for x in range(griddef[2][0]+1))
+        latv = list(griddef[0][1]+(griddef[1][1]-griddef[0][1])*float(x)/griddef[2][1]
+                for x in range(griddef[2][1]+1))
+        for lat in latv:
+            for ln0,ln1 in zip(lonv[:-1],lonv[1:]):
+                yield ((ln0,lat),(ln1,lat))
+        for lon in lonv:
+            for lt0,lt1 in zip(latv[:-1],latv[1:]):
+                yield ((lon,latv[i]),(lon,latv[i+1]))
+
+    def mergeWith( self, other ):
+        def1=self.griddef
+        def2=other.griddef
+        pt0 = (min(def1[0][0],def2[0][0]),min(def1[0][1],def2[0][1]))
+        pt1 = (max(def1[1][0],def2[1][0]),max(def1[1][1],def2[1][1]))
+        dln = ((def1[1][0]-def1[0][0])+(def2[1][0]-def2[0][0]))/(def1[2][0]+def2[2][0])
+        dlt = ((def1[1][1]-def1[0][1])+(def2[1][1]-def2[0][1]))/(def1[2][1]+def2[2][1])
+        nln= int(math.floor(0.5+(pt1[0]-pt0[0])/dln))
+        nlt= int(math.floor(0.5+(pt1[1]-pt0[1])/dlt))
+        return GridSpec(pt0[0],pt0[1],pt1[0],pt1[1],nln,nlt)
+
+    def expanded_bounds( polygon, buffer=0, cellbuffer=(0,0), trim=base_extents ):
+        '''
+        Generate bounded extents around a polygon.
+        buffer is buffer extents in metres
+        cellbuffer is (lon,lat) buffer size 
+        trim is region to which buffered extents are trimmed
+        '''
+        bounds=buffered_polygon(polygon,buffer).bounds
+        return (
+            (
+                max(bounds[0]-cellbuffer[0],trim[0][0]),
+                max(bounds[1]-cellbuffer[1],trim[0][1])
+            ),
+            (
+                min(bounds[2]+cellbuffer[0],trim[1][0]),
+                min(bounds[3]+cellbuffer[1],trim[1][1])
+            )
+        )
+
+    def boundingPolygon( self ):
+        griddef=self.griddef
+        bl=griddef[0]
+        br=(griddef[0][0],griddef[1][1])
+        tr=griddef[1]
+        tl=(griddef[1][0],griddef[0][1])
+        return Polygon((bl,br,tr,tl,bl))
+
+    def boundingPolygonWkt( self ):
+        griddef=self.griddef
+        return self.boundingPolygon.to_wkt()
+
+    def area( self ):
+        griddef=self.griddef
+        return (griddef[1][0]-griddef[0][0])*(griddef[1][1]-griddef[0][1])
+
+    def overlaps( self, other ):
+        griddef1=self.griddef
+        griddef2=other.griddef
+        return not (
+            griddef1[0][0] > griddef2[1][0] or
+            griddef2[0][0] > griddef1[1][0] or
+            griddef1[0][1] > griddef2[1][1] or
+            griddef2[0][1] > griddef1[1][1])
+
+    def mergeIntoList( self, deflist ):
+        griddef=self
+        while True:
+            overlap = None
+            for def1 in deflist:
+                if griddef.overlaps(def1):
+                    overlap=def1
+                    break
+            if overlap:
+                deflist.remove(overlap)
+                griddef=griddef.mergeWith(overlap)
+            else:
+                break
+        deflist.append(griddef)
+
 class PatchGridDef:
 
     def __init__( self, level=0, file=None, parent=None, extentfile=None ):
@@ -58,12 +336,20 @@ class PatchGridDef:
             extentfile=extentfile if extentfile is not None else self.extentfile,
             parent=parent)
         pgd.isforward=isforward
+        pgd.base=self.base
+        pgd.basename=self.basename
         return pgd
 
     def grid( self ):
         return defgrid.DeformationGrid(self.file)
 
     def extents( self ):
+        ''' 
+        Returns the required extents of the patch (as in where it is needed, 
+        not the actual extents of the grid.
+
+        Extents returned as a list of Polygon objects
+        '''
         if self.extentfile is None:
             return None
         if self._extents is None:
@@ -76,6 +362,12 @@ class PatchGridDef:
         return self._extents
 
     def bufferedExtents( self ):
+        '''
+        Return the buffered extents over which the grid may differ from its
+        parent.
+
+        Returned as a single MultiPolygon
+        '''
         if self.extentfile is None:
             return None
         if self._buffered_extents is None:
@@ -83,11 +375,34 @@ class PatchGridDef:
                 self._buffered_extents=wkt_load(wktf.read())
         return self._buffered_extents
 
+    def fitToParent( self ):
+        '''
+        Modify the grid to match transition to the parent grid between
+        its extents and its buffered extents
+        '''
+
+
     def isTopLevelGrid( self ):
         return self.parent is None
 
     def topLevelGrid( self ):
         return self if self.isTopLevelGrid() else self.parent.topLevelGrid()
+
+    def owns( self, other ):
+        ''' 
+        True if other belongs to this grid (as child or if it is this grid
+        '''
+        if other == self:
+            return True
+        elif other is None:
+            return False
+        else:
+            return self.owns(other.parent)
+
+    def family( self, gridlist ):
+        family=[g for g in gridlist if self.owns(g)]
+        family.sort( key=lambda x: (x.level,x.file) )
+        return family
 
     def __str__( self ):
         return "\n".join((
@@ -133,175 +448,6 @@ class PatchVersionDef:
                 "\n  ".join(("{0} {1:.2f}".format(x[0].strftime('%Y-%m-%d'),x[1]) 
                              for x in self.time_model)))
             ))
-
-verbose=True
-    
-# Grids will be calculated using integer representation based origin.
-# Subgrids will be obtained by dividing basesize by 4
-
-# Origin for calculating grids (integer offsets from this)
-origin=(166.0,-48)
-
-# Base size for grids, grids are built to this size and smaller
-base_size=(0.15,0.125)
-
-# Extents over which test grid is built (ie initial search for affected area,
-# and to which grids are trimmed). 
-
-# Extents based on EEZ
-base_extents=((158,-58),(194,-25))
-
-# Conversion degrees to metres
-scale_factor=(1.0e-5/math.cos(math.radians(40)),1.0e-5)
-
-# Factor by which accuracy specs are multiplied to provide grid tolerances
-tolerance_factor=0.4
-
-# Values for deformation patch generation
-
-# Test column for determining extents of patch
-base_limit_test_column='err'
-base_limit_bounds_column='ds'
-
-# Minium value for test column within patch (note - column is in ppm)
-base_limit_tolerance=accuracy_standards.NRF.lap*tolerance_factor*1.0e6
-base_limit_sea_tolerance=accuracy_standards.BGN.lap*tolerance_factor*1.0e6
-
-# Precision for scaling down from edge of patch
-base_ramp_tolerance=accuracy_standards.NRF.lap*tolerance_factor
-base_ramp_sea_tolerance=accuracy_standards.BGN.lap*tolerance_factor
-
-# Absolute limit on extents of patch - not required where magnitude (ds)
-# less than this level.
-base_limit_bounds_tolerance=accuracy_standards.NRF.lac*tolerance_factor
-base_limit_sea_bounds_tolerance=accuracy_standards.BGN.na*tolerance_factor
-
-# Values controlling splitting cells into subgrids
-
-cell_split_factor=4
-subcell_resolution_tolerance=accuracy_standards.NRF.lac*tolerance_factor
-subcell_resolution_sea_tolerance=accuracy_standards.BGN.na*tolerance_factor
-
-# Replace entire grid with subcells if more than this percentage 
-# of area requires splitting
-
-max_subcell_ratio=0.5
-
-# Maximum split level
-
-max_split_level=5
-
-# Hybrid patch grid maximum ppm distortion in forward patch
-
-forward_patch_test_column='err'
-default_forward_patch_max_distortion=10
-
-# Alternative values for creating a Landonline parcel shifting patch
-def configure_for_parcel_shift():
-    global base_limit_test_column, base_limit_tolerance, base_ramp_tolerance
-    base_limit_test_column='ds'
-    base_limit_tolerance= 0.05   
-    base_ramp_tolerance=accuracy_standards.BGN.lap*tolerance_factor
-
-# Reduce the accuracies to produce smaller data sets for testing...
-def configure_for_testing():
-    global base_limit_test_column, base_limit_tolerance, base_ramp_tolerance
-    global subcell_resolution_tolerance
-    global max_split_level
-    subcell_resolution_tolerance *= 100
-    max_split_level -= 2
-
-
-def log_configuration():
-    write_log("Patch grid calculation parameters:")
-    write_log("    Grid origin: {0} {1}".format(*origin))
-    write_log("    Base grid cell size: {0} {1}".format(*base_size))
-    write_log("    Base extents: {0} {1} to {2} {3}".format(
-        base_extents[0][0], base_extents[0][1], base_extents[1][0], base_extents[1][1]))
-    write_log("    Approx degrees to metres factor: {0} {1}".format(*scale_factor))
-
-    write_log("    Tolerated distortion outside patch (ppm): land {0} sea {1}".format( 
-        base_limit_tolerance, base_limit_sea_tolerance))
-    write_log("    Tolerated dislocation outside patch (mm): land {0} sea {1}".format( 
-        base_limit_bounds_tolerance*1000, base_limit_sea_bounds_tolerance*1000))
-    write_log("    Patch ramp tolerance (ppm): land {0} sea {1}".format(
-        base_ramp_tolerance,base_ramp_sea_tolerance))
-    write_log("    Tolerated gridding error before splitting (mm)".format(
-        subcell_resolution_tolerance*1000, subcell_resolution_sea_tolerance*1000))
-    write_log("    Grid cell split factor: {0}".format(cell_split_factor))
-    write_log("    Maximum split level: {0}".format(max_split_level))
-    write_log("    Maximum percent coverage of level with nested grid: {0}".format(max_subcell_ratio*100)) 
-    write_log("")
-
-land_areas=None
-
-# Outputs required ...
-
-# Shift model component (for updating Landonline)
-build_shift_model=True
-
-shift_model_header='''
-SHIFT_MODEL_MODEL Shift model {name}
-FORMAT LINZSHIFT1B
-VERSION_NUMBER 1.0
-COORDSYS NZGD2000
-DESCRIPTION
-Model built on {runtime}
-Source files: {modelname}
-END_DESCRIPTION
-'''
-
-shift_model_component='''
-SHIFT_MODEL_COMPONENT {gridfile}
-MODEL_TYPE grid
-NEGATIVE no
-DESCRIPTION
-{component}
-END_DESCRIPTION
-'''
-
-# LINZ published deformation model
-
-build_published=True
-
-published_component_columns='''
-    version_added
-    version_revoked
-    reverse_patch
-    component
-    priority
-    min_lon
-    max_lon
-    min_lat
-    max_lat
-    spatial_complete
-    min_date
-    max_date
-    time_complete
-    npoints1
-    npoints2
-    displacement_type
-    error_type
-    max_displacement
-    spatial_model
-    time_function
-    time0
-    factor0
-    time1
-    factor1
-    decay
-    file1
-    description
-    '''.split()
-
-# Log file ...
-
-runtime=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-runtime_version=datetime.datetime.now().strftime("%Y%m%d")
-logfile=None
-wktfile=None
-wktgridfile=None
-wktgridlines=False
 
 def grid_spec( size, extents, multiple=1 ):
     '''
@@ -381,48 +527,6 @@ def bounds_grid_def( bounds, cellsize, multiple=1 ):
     ltmin,ltmax,nlt=calc_min_max(origin[1],bounds[0][1],bounds[1][1],cellsize[1])
     return ((lnmin,ltmin),(lnmax,ltmax),(nln,nlt))
 
-def grid_def_spec( griddef ):
-    return 'grid:{0}:{1}:{2}:{3}:{4}:{5}'.format(
-        griddef[0][0], griddef[0][1],
-        griddef[1][0], griddef[1][1],
-        griddef[2][0], griddef[2][1],
-        )
-
-def grid_def_lines( griddef ):
-    lonv = list(griddef[0][0]+(griddef[1][0]-griddef[0][0])*float(x)/griddef[2][0]
-            for x in range(griddef[2][0]+1))
-    latv = list(griddef[0][1]+(griddef[1][1]-griddef[0][1])*float(x)/griddef[2][1]
-            for x in range(griddef[2][1]+1))
-    for lat in latv:
-        for i in range(len(lonv)-1):
-            yield ((lonv[i],lat),(lonv[i+1],lat))
-    for lon in lonv:
-        for i in range(len(latv)-1):
-            yield ((lon,latv[i]),(lon,latv[i+1]))
-
-def grid_def_merge( def1, def2 ):
-    pt0 = (min(def1[0][0],def2[0][0]),min(def1[0][1],def2[0][1]))
-    pt1 = (max(def1[1][0],def2[1][0]),max(def1[1][1],def2[1][1]))
-    dln = ((def1[1][0]-def1[0][0])+(def2[1][0]-def2[0][0]))/(def1[2][0]+def2[2][0])
-    dlt = ((def1[1][1]-def1[0][1])+(def2[1][1]-def2[0][1]))/(def1[2][1]+def2[2][1])
-    nln= int(math.floor(0.5+(pt1[0]-pt0[0])/dln))
-    nlt= int(math.floor(0.5+(pt1[1]-pt0[1])/dlt))
-    return (pt0,pt1,(nln,nlt))
-
-def grid_def_list_merge( deflist, griddef ):
-    while True:
-        overlap = None
-        for def1 in deflist:
-            if bounds_overlap(def1,griddef):
-                overlap=def1
-                break
-        if overlap:
-            deflist.remove(overlap)
-            griddef=grid_def_merge(griddef,overlap)
-        else:
-            break
-    deflist.append(griddef)
-
 def buffered_polygon( polygon, buffer ):
     '''
     Buffer a polygon by an extents in metres.  Approximately scales to metres, applies buffer,
@@ -435,46 +539,6 @@ def buffered_polygon( polygon, buffer ):
     if 'geoms' not in dir(polygon):
         polygon=MultiPolygon([polygon])
     return polygon
-
-def expanded_bounds( polygon, buffer=0, cellbuffer=(0,0), trim=base_extents ):
-    '''
-    Generate bounded extents around a polygon.
-    buffer is buffer extents in metres
-    cellbuffer is (lon,lat) buffer size 
-    trim is region to which buffered extents are trimmed
-    '''
-    bounds=buffered_polygon(polygon,buffer).bounds
-    return (
-        (
-            max(bounds[0]-cellbuffer[0],trim[0][0]),
-            max(bounds[1]-cellbuffer[1],trim[0][1])
-        ),
-        (
-            min(bounds[2]+cellbuffer[0],trim[1][0]),
-            min(bounds[3]+cellbuffer[1],trim[1][1])
-        )
-    )
-
-def bounds_poly( bounds ):
-    bl=bounds[0]
-    br=(bounds[0][0],bounds[1][1])
-    tr=bounds[1]
-    tl=(bounds[1][0],bounds[0][1])
-    return Polygon((bl,br,tr,tl,bl))
-
-def bounds_wkt( bounds ):
-    return bounds_poly( bounds ).to_wkt()
-
-def bounds_area( bounds ):
-    return (bounds[1][0]-bounds[0][0])*(bounds[1][1]-bounds[0][1])
-
-def bounds_overlap( bounds1, bounds2 ):
-    return not (
-        bounds1[0][0] > bounds2[1][0] or
-        bounds2[0][0] > bounds1[1][0] or
-        bounds1[0][1] > bounds2[1][1] or
-        bounds2[0][1] > bounds1[1][1])
-
 
 def maxShiftOutsideAreas( grid, areas ):
     total_area = prep(MultiPolygon(areas).buffer(0.0001))
@@ -634,15 +698,15 @@ def grid_file_version( gridfile, version ):
     path,ext=os.path.splitext(gridfile)
     return path+version+ext
 
-def split_forward_reverse_patches( patchpath, trialgrid, hybrid_tol, gridlist ):
+def split_forward_reverse_patches( patchpath, patchname, trialgrid, hybrid_tol, gridlist ):
     write_log("Splitting patch grids into forward/reverse patches")
     write_log("Forward patch tolerated distortion (ppm): {0}".format(hybrid_tol))
-
     reverse_extents = regionsExceedingLevel(trialgrid, forward_patch_test_column,hybrid_tol)
-    reverse_extents=MultiPolygon(reverse_extents)
     write_log("{0} regions found".format(len(reverse_extents)))
     write_wkt("Extents requiring reverse patch (base tolerance)",0,reverse_extents.to_wkt())
-    reversewkt=os.path.join(patchpath,'reverse_patch_extents.wkt')
+    reverse_grid_extents=[g.extents() for g in gridlist if g.level >= forward_patch_max_level]
+    reverse_extents=MultiPolygon(reverse_extents)
+    reversewkt=os.path.join(patchpath,patchname+'ereverse_patch_extents.wkt')
     with open(reversewkt,'w') as f:
         f.write(reverse_extents.to_wkt())
 
@@ -650,16 +714,37 @@ def split_forward_reverse_patches( patchpath, trialgrid, hybrid_tol, gridlist ):
     #for g in gridlist:
     #    write_log("{0}".format(g),prefix="    ")
 
-    # First create forward patches. Current implementation will only use top
-    # level grid for forward patch.
+    # Find grids are fully forward patches, and calculate forward
+    # patches for those which are not.
+    # 
+    # For patches up the forward_patch_max_level the significant part 
+    # of the patch (defined by extents) is either completely outside the 
+    # reverse patch area, in which case the grid gets directly copied,
+    # or it overlaps it, in which case a forward patch and reverse patch
+    # is constructed from it.
 
+    forward_patches={}
+    hybrid_patches={}
+    
     splitgrids=[]
     
-    for g in gridlist:
-        if not g.isTopLevelGrid():
-            continue
-        family=[gc for gc in gridlist if gc.topLevelGrid() == g]
-        family.sort(key=lambda x: (x.level, x.file))
+    for g in sorted(gridlist, key=lambda x: x.level):
+
+        # Identify grids which require a reverse patch
+        forwardpatch=(g.parent in forward_patches 
+                   or not g.extents().intersects(reverse_extents))
+        if forwardpatch and g.level > forward_patch_max_level:
+            raise RuntimeError('Forward patch required for 
+        reversepatch=g.level > forward_patch_max_level and 
+
+        # If they are also to be implemented as a forward patch then
+        # they become a hybrid patch, so need to create the forward patch
+        # component
+
+        fgrid=None
+
+        if not reversepatch:
+
 
         # If the grid does not intersect the reverse extents then it and
         # all its children belong in the forward patch
@@ -678,6 +763,11 @@ def split_forward_reverse_patches( patchpath, trialgrid, hybrid_tol, gridlist ):
         # Have tried different smoothing options (including datumgrid), but
         # none seems to offer particular advantage.  Could be an area for more
         # research
+
+        forward_grids={}
+        for gc in family:
+            if gc.level > forward_patch_max_level:
+                continue
 
         fgridfile=grid_file_version(g.file,'_F')
         write_log('Creating smoothed forward patch grid for {0}'.format(g.name))
@@ -714,12 +804,11 @@ def split_forward_reverse_patches( patchpath, trialgrid, hybrid_tol, gridlist ):
             rgrids[gc]=rgrid
             splitgrids.append(rgrid)
 
-    #write_log("\nSplit grids")
-    #for g in splitgrids:
-    #    write_log("-------------------\n{0}".format(g))
+    write_log("\nSplit grids")
+    for g in splitgrids:
+        write_log("-------------------\n{0}".format(g))
     
     return splitgrids
-    #raise NotImplementedError('split_forward_reverse_patches not implemented yet')
 
 def build_deformation_grids( patchpath, patchname, modeldef, splitbase=True, hybrid_tol=None ):
     '''
@@ -871,13 +960,13 @@ def build_deformation_grids( patchpath, patchname, modeldef, splitbase=True, hyb
             f.write("\n")
 
         patchgrids=[]
-        create_grids(patchgrids, modeldef,patchpath,name,1,griddef,base_size,extentfile=extfile)
-        if hybrid_tol:
-            patchgrids=split_forward_reverse_patches( patchpath, trialgrid, hybrid_tol, patchgrids )
+        create_grids(patchgrids,extents,buffersize,modeldef,patchpath,name,1,griddef,base_size,extentfile=extfile)
         for p in patchgrids:
             p.base=name if splitbase else patchname
             p.basename=patchname
             gridlist.append(p)
+    if hybrid_tol:
+        gridlist=split_forward_reverse_patches( patchpath, patchname, trialgrid, hybrid_tol, gridlist )
     return gridlist
 
 def create_patch_csv( patchlist, modelname, additive=True, trimgrid=True, linzgrid=False, precision=5 ):
@@ -1315,11 +1404,15 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
                     compcsv=os.path.join(comppath,csvname)
                     if compcsv != grid.csv:
                         shutil.copyfile(grid.csv,compcsv)
+                    min_lon=round(np.min(gd.column('lon')),10)
+                    max_lon=round(np.max(gd.column('lon')),10)
+                    min_lat=round(np.min(gd.column('lat')),10)
+                    max_lat=round(np.max(gd.column('lat')),10)
                     compdata=dict(
-                        min_lon=round(np.min(gd.column('lon')),10),
-                        max_lon=round(np.max(gd.column('lon')),10),
-                        min_lat=round(np.min(gd.column('lat')),10),
-                        max_lat=round(np.max(gd.column('lat')),10),
+                        min_lon=min_lon,
+                        max_lon=max_lon,
+                        min_lat=min_lat,
+                        max_lat=max_lat,
                         npoints1=gd.array.shape[1],
                         npoints2=gd.array.shape[0],
                         max_displacement=round(math.sqrt(np.max(
@@ -1328,6 +1421,9 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
                             gd.column('du')*gd.column('du'))),5),
                         file1=csvname,
                         )
+                    write_wkt('Published '+csvname,grid.level,
+                              bounds_poly(((min_lon,min_lat),(max_lon,max_lat))).to_wkt())
+                    
                     rdate0=0
                     for ir,r in enumerate(versionspec.time_model):
                         rdate=r.date.strftime("%Y-%m-%d")
@@ -1351,6 +1447,7 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
                             compdata['priority']=priority
                         csvdata.update(compdata)
                         ccsv.writerow([csvdata[c] for c in published_component_columns])
+
 
 def load_land_areas( polygon_file ):
     global land_areas
