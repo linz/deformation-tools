@@ -144,72 +144,6 @@ template<class T> bool next_command_value( commandlist &commands, T &value, cons
     return result;
 }
 
-static void mark_grid( grid &g, commandlist &commands, string markcommand )
-{
-    grid::markaction action = grid::on;
-    g.clearMarked();
-
-
-    while( true )
-    {
-        string command = next_command( commands, string("Selection action for ") + markcommand);
-        if( command == "nearest_to" )
-        {
-            string filename = next_command( commands, string("Points file for ") + markcommand);
-            mark_xy_file( g, filename.c_str(), action );
-        }
-        else if( command == "inside" )
-        {
-            string filename = next_command( commands, string("Inside wkt_file file for ") + markcommand);
-            mark_wkt_file( g, false, filename.c_str(), action );
-        }
-        else if( command == "outside" )
-        {
-            string filename = next_command( commands, string("Outside wkt_file file for ") + markcommand);
-            mark_wkt_file( g, true, filename.c_str(), action );
-        }
-        else if( command == "edge" )
-        {
-            int nedge = 1;
-            next_command_value(commands,nedge,string("Width of edge for ")+markcommand);
-            g.markEdge(nedge,false,action);
-        }
-        else if( command == "inside_edge" )
-        {
-            int nedge = 1;
-            next_command_value(commands,nedge,string("Width of inside_edge for ")+markcommand);
-            g.markEdge(nedge,true,action);
-        }
-        else if( command == "expand" && action == grid::on )
-        {
-            double distance = 0.0;
-            next_command_value(commands,distance,string("Distance for expand for ")+markcommand);
-            expand_marked(g,distance,true);
-        }
-        else 
-        {
-           string field = command;
-           if( field == "where" ) field = next_command( commands, string("Field name for ")+markcommand);
-           string op = next_command( commands, string("Operation type for ")+markcommand);
-           double value;
-           next_command_value(commands,value,string("Field value for ")+markcommand);
-           g.markWhere(field,op,value,action);
-        }
-        if( next_command_is(commands, "not") )
-        {
-            action = grid::off;
-        }
-        else if( next_command_is(commands,"and"))
-        {
-            action = grid::on;
-        }
-        else
-        {
-            break;
-        }
-    }
-}
-
 static string run_read_grid( grid &g, commandlist &commands, const string &operation="read" )
 {
     int maxcols = 99;
@@ -287,6 +221,98 @@ static void run_create_grid( grid &g, commandlist &commands )
         columns=split(columndef,'+');
     }
     g.create( minx, maxx, incx, miny, maxy, incy, columns );
+}
+
+static void mark_grid( grid &g, commandlist &commands, string markcommand, grid *refgrid=0 )
+{
+    grid::markaction action = grid::on;
+    g.clearMarked();
+
+
+    while( true )
+    {
+        string command = next_command( commands, string("Selection action for ") + markcommand);
+        if( command == "nearest_to" )
+        {
+            string filename = next_command( commands, string("Points file for ") + markcommand);
+            mark_xy_file( g, filename.c_str(), action );
+        }
+        else if( command == "on_grid" )
+        {
+            grid *rgrid;
+            grid ongrid;
+            if( refgrid && next_command_is(commands,refgrid->filename()))
+            {
+                rgrid=refgrid;
+            }
+            else
+            {
+                string filename = run_read_grid( ongrid, commands, markcommand+" on_grid" );
+                rgrid=&ongrid;
+            }
+            grid::point xy;
+            for( int row = 0; row < rgrid->nrow(); row++ ) 
+                for( int col = 0; col < rgrid->ncol(); col++ )
+                {
+                    rgrid->nodexy(row,col,xy.x,xy.y);
+                    g.markNearest(xy,action,0.0001);
+                }
+        }
+        else if( command == "inside" )
+        {
+            string filename = next_command( commands, string("Inside wkt_file file for ") + markcommand);
+            mark_wkt_file( g, false, filename.c_str(), action );
+        }
+        else if( command == "outside" )
+        {
+            string filename = next_command( commands, string("Outside wkt_file file for ") + markcommand);
+            mark_wkt_file( g, true, filename.c_str(), action );
+        }
+        else if( command == "edge" )
+        {
+            int nedge = 1;
+            next_command_value(commands,nedge,string("Width of edge for ")+markcommand);
+            g.markEdge(nedge,false,action);
+        }
+        else if( command == "inside_edge" )
+        {
+            int nedge = 1;
+            next_command_value(commands,nedge,string("Width of inside_edge for ")+markcommand);
+            g.markEdge(nedge,true,action);
+        }
+        else if( command == "expand" && action == grid::on )
+        {
+            double distance = 0.0;
+            next_command_value(commands,distance,string("Distance for expand for ")+markcommand);
+            expand_marked(g,distance,true);
+        }
+        else 
+        {
+           string field = command;
+           if( field == "where" ) field = next_command( commands, string("Field name for ")+markcommand);
+           string op = next_command( commands, string("Operation type for ")+markcommand);
+           double value;
+           next_command_value(commands,value,string("Field value for ")+markcommand);
+           g.markWhere(field,op,value,action);
+        }
+        if( next_command_is(commands, "not") )
+        {
+            action = grid::off;
+        }
+        else if( next_command_is(commands,"and"))
+        {
+            action = grid::on;
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+
+static void mark_grid( grid &g, commandlist &commands, string markcommand, grid &refgrid )
+{
+    mark_grid( g, commands, markcommand, &refgrid );
 }
 
 static void run_write_grid( grid &g, commandlist &commands )

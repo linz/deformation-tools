@@ -57,6 +57,10 @@ echo "test 27 - write with selection" | tee -a out/tests.log
 ../gridtool read csv test1.csv  write out/test27.out where v1 gt 20 >> out/tests.log
 echo "test 28 - add with selection" | tee -a out/tests.log
 ../gridtool test1.grid add test3.grid where v1 ">" 30 out/test28_add.grid >> out/tests.log
+echo "test 28a - add with on_grid selection" | tee -a out/tests.log
+../gridtool test1.grid add add1.grid where on_grid add1.grid out/test28a_add.grid >> out/tests.log
+echo "test 28b - add with on_grid selection" | tee -a out/tests.log
+../gridtool test1.grid add test3.grid where on_grid maxcols 1 add1.grid out/test28b_add.grid >> out/tests.log
 echo "test 29 - replace" | tee -a out/tests.log
 ../gridtool test1.grid replace test3.grid out/test29_replace.grid >> out/tests.log
 echo "test 30 - expand" | tee -a out/tests.log

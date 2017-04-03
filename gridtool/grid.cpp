@@ -99,6 +99,7 @@ bool grid::readfile( const char * filename, char delim, int maxcols )
     {
         throw runtime_error(string("Invalid grid filename specified ") + filename );
     }
+    m_filename=std::string(filename);
     delim;
     string buffer;
     string spacechar(" \n");
@@ -287,6 +288,7 @@ bool grid::writefile( const char *filename, const char *delim, std::vector<int> 
     if( ! delim ) delim = "\t";
 
     ofstream f(filename);
+    m_filename=std::string(filename);
     int crdprec = 12;
     int dataprec = m_dataprec > 0 ? m_dataprec : crdprec;
     double mult=0.5;
@@ -395,24 +397,32 @@ void grid::gridcoords( const point &wxy, point &gxy )
     gxy.y = (x*m_rowdx + y*m_rowdy)/m_rowlen; 
 }
 
-bool grid::nearest( double x, double y, int &row, int &col )
+bool grid::nearest( double x, double y, int &row, int &col, double tolerance )
 {
     node n;
-    bool result = nearest(point(x,y), n );
+    bool result = nearest(point(x,y), n, tolerance );
     row = n.row;
     col = n.col;
     return result;
 }
 
-bool grid::nearest( const point &p, node &n )
+bool grid::nearest( const point &p, node &n, double tolerance )
 {
     point gxy;
     gridcoords(p,gxy);
 
-    int ic = (int) floor( gxy.x + 0.5 );
-    int ir = (int) floor( gxy.y + 0.5 );
+    double gc=floor( gxy.x + 0.5 );
+    double gr=floor( gxy.y + 0.5 );
+    int ic = (int) gc;
+    int ir = (int) gr;
 
     bool result = true;
+    if( tolerance > 0.0 && 
+            (fabs(gc-ic) > tolerance || fabs(gr-ir) > tolerance) )
+    {
+        result=false;
+    }
+
 
     if( ic < 0 )
     {
@@ -541,10 +551,10 @@ int grid::markCount()
     return count;
 }
 
-bool grid::markNearest( const point &p, markaction action )
+bool grid::markNearest( const point &p, markaction action, double tolerance )
 {
     node n;
-    bool result = nearest(p,n);
+    bool result = nearest(p,n,tolerance);
     if( result ) mark(n,action);
     return result;
 }
@@ -698,8 +708,6 @@ void grid::multiplyBy( double factor )
 
 void grid::add( grid &g, double factor0, double factor1, bool markedonly )
 {
-    // For the moment choose to add as many values as are available.
-    // May be better to throw 
     int nv = nvalue();
     if( g.nvalue() != nv)
     {

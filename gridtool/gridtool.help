@@ -107,3 +107,8 @@ where condition: A condition is entered as "where field (<|<=|==|!=|>=|>) value"
 
 expand distance: Expands (or contracts) the currently marked area by the specified
    number of grid cells
+
+on_grid [csv] grid_file: Marks points that are on another grid.  For add, subtract,
+   and replace commands the [csv] option is not required if the grid file is the
+   same as that being added, subtracted, or replaced.
+

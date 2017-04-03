@@ -63,6 +63,7 @@ public:
     ~grid();
     bool readfile( const char * filename, char delim=' ', int maxcols=99 );
     bool writefile( const char * filename, const char *delim = 0, std::vector<int> *colids=0, bool markedonly=false );
+    std::string filename(){ return m_filename; }
     void setprecision( int dataprec ){ m_dataprec = dataprec; }
     int nrow() { return m_nrow; }
     int ncol() { return m_ncol; }
@@ -72,15 +73,19 @@ public:
     std::vector<double>::pointer values( const node &n );
     int columnid( const std::string &colname );
     void colstats( int icol, double *mean, double *min, double *max );
-    bool nearest( double x, double y, int &row, int &col );
-    bool nearest( const point &p, node &n );
+    // tolerance is the fraction of a grid cell away from xy that 
+    // x,y can be to return a value of true.  If 0 then just require that
+    // the nearest node on the grid coordinate system is a valid node
+    // for the grid.
+    bool nearest( double x, double y, int &row, int &col, double tolerance=0.0 );
+    bool nearest( const point &p, node &n, double tolerance=0.0 );
     bool nodexy( int row, int col, double &x, double &y );
     bool nodexy( const node &n, point &p );
     bool nodexy( const point &n, point &p );
 
     void clearMarked( markaction action = off );
     void mark( const node &n, markaction action=on );
-    bool markNearest( const point &p, markaction action=on );
+    bool markNearest( const point &p, markaction action=on, double tolerance=0.0 );
     void markEdge( int width, bool inside, markaction action=on);
     void toggleWithin( std::vector<point> &polygon, vector2<bool> &markBuffer );
     void markWhere( std::string field, std::string op, double value, markaction action=on );
@@ -127,6 +132,7 @@ private:
     vector2<double> m_values;
     std::string m_lon;
     std::string m_lat;
+    std::string m_filename;
     std::vector<std::string> m_fields;
 };
 
