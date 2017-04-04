@@ -217,35 +217,93 @@ END_DESCRIPTION
             with open(polygon_file) as laf:
                 wkt=laf.read()
                 Config.land_areas=loads(wkt)
-            write_log( "Using land area definition from "+polygon_file)
+            Logger.write( "Using land area definition from "+polygon_file)
             return
         except:
             raise RuntimeError("Cannot load land area definition from "+polygon_file)
 
     @staticmethod
     def writeTo( log ):
-        if not callable(log):
-            log=lambda x: log.write(x+"\n")
-        log("Patch grid calculation parameters:")
-        log("    Grid origin: {0} {1}".format(*Config.origin))
-        log("    Base grid cell size: {0} {1}".format(*Config.base_size))
-        log("    Base extents: {0} {1} to {2} {3}".format(
+        if callable(log):
+            writelog=log
+        else:
+            writelog=lambda x: log.write(x+"\n")
+        writelog("Patch grid calculation parameters:")
+        writelog("    Grid origin: {0} {1}".format(*Config.origin))
+        writelog("    Base grid cell size: {0} {1}".format(*Config.base_size))
+        writelog("    Base extents: {0} {1} to {2} {3}".format(
             Config.base_extents[0][0], Config.base_extents[0][1], 
             Config.base_extents[1][0], Config.base_extents[1][1]))
-        log("    Approx degrees to metres factor: {0} {1}".format(*Config.scale_factor))
+        writelog("    Approx degrees to metres factor: {0} {1}".format(*Config.scale_factor))
 
-        log("    Tolerated distortion outside patch (ppm): land {0} sea {1}".format( 
+        writelog("    Tolerated distortion outside patch (ppm): land {0} sea {1}".format( 
             Config.base_limit_tolerance, Config.base_limit_sea_tolerance))
-        log("    Tolerated dislocation outside patch (mm): land {0} sea {1}".format( 
+        writelog("    Tolerated dislocation outside patch (mm): land {0} sea {1}".format( 
             Config.base_limit_bounds_tolerance*1000, Config.base_limit_sea_bounds_tolerance*1000))
-        log("    Patch ramp tolerance (ppm): land {0} sea {1}".format(
+        writelog("    Patch ramp tolerance (ppm): land {0} sea {1}".format(
             Config.base_ramp_tolerance,Config.base_ramp_sea_tolerance))
-        log("    Tolerated gridding error before splitting (mm)".format(
+        writelog("    Tolerated gridding error before splitting (mm)".format(
             Config.subcell_resolution_tolerance*1000, Config.subcell_resolution_sea_tolerance*1000))
-        log("    Grid cell split factor: {0}".format(Config.cell_split_factor))
-        log("    Maximum split level: {0}".format(Config.max_split_level))
-        log("    Maximum percent coverage of level with nested grid: {0}".format(Config.max_subcell_ratio*100)) 
-        log("")
+        writelog("    Grid cell split factor: {0}".format(Config.cell_split_factor))
+        writelog("    Maximum split level: {0}".format(Config.max_split_level))
+        writelog("    Maximum percent coverage of level with nested grid: {0}".format(Config.max_subcell_ratio*100)) 
+        writelog("")
+
+class Logger( object ):
+
+    logfile=None
+    wktfile=None
+    wktgridfile=None
+    wktgridlines=False
+    
+    verbose=False
+
+    def createLog( logfile=None, wktfile=None, gridwkt=None, showgridlines=None ):
+        if logfile:
+            Logger.logfile=open(logfile,'w')
+        if wktfile:
+            Logger.wktfile=open(wktfile,'w')
+        if gridwkt:
+            Logger.wktgridfile=open(gridwkt,'w')
+        if showgridlines is not None:
+            Logger.wktgridlines=showgridlines
+
+    def setVerbose( verbose=True ):
+        Logger.verbose=verbose
+
+    def write( message, level=0, prefix="" ):
+        prefix='  '*level+prefix
+        message="\n".join([prefix+m for m in message.split("\n")])
+        if Logger.logfile:
+            Logger.logfile.write(message)
+            Logger.logfile.write("\n")
+            Logger.logfile.flush()
+        if Logger.verbose or level < 0:
+            print message
+            sys.stdout.flush()
+
+    def writeGridDefWkt( name, level, griddef ):
+        if not Logger.wktgridfile:
+            return
+        gridspec=griddef.spec
+        name=griddef.name
+        level=griddef.level
+        ncol=gridspec.ncol
+        nrow=gridspec.nrow
+        if Logger.wktgridlines:
+            for l in spec.lines():
+                Logger.wktgridfile.write("{0}|{1}|{2}|{3}|{4}\n".format(
+                    name,level,ncol,nrow,l.to_wkt()))
+        else:
+            Logger.wktgridfile.write("{0}|{1}|{2}|{3}|{4}\n".format(
+                name,level,ncol,nrow,spec.boundingPolygonWkt()))
+
+
+    def writeWkt( item, level, wkt ):
+        if not Logger.wktfile:
+            return
+        Logger.wktfile.write("{0}|{1}|{2}\n".format(item,level,wkt))
+
 
 class Util( object ):
 
@@ -262,6 +320,60 @@ class Util( object ):
         if 'geoms' not in dir(polygon):
             polygon=MultiPolygon([polygon])
         return polygon
+
+class OkadaModelFile( object ):
+        moddefs=[]
+        patchspec={}
+        if not models:
+            models.append(patchname)
+
+        # Check model files are valid
+
+        for i,f in enumerate(models):
+            found = False
+            for template in ('{0}','{0}.model','fault_models/{0}','fault_models/{0}.model'):
+                mf = template.format(f) 
+                if os.path.exists(mf): 
+                    found = True
+                    models[i]=mf
+                    if args.apply_time_model_scale:
+                        scale=1.0
+                        patchversions=get_patch_spec( mf )
+                        if patchversions:
+                            scale=patchversions[-1].time_model[-1].factor
+                        if scale != 1.0:
+                            mf=str(scale)+'*'+mf
+                    moddefs.append(mf)
+                    break
+                    
+            if not found:
+                print "Model file {0} doesn't exist".format(f)
+                sys.exit()
+
+        # Model definition for calc okada
+        Config.setFaultModel( models, moddefs )
+
+        hybrid_tol=None
+        hybrid_ver=None
+        if comp_path: 
+            if len(models) > 1:
+                raise RuntimeError("Cannot create published patch with more than one fault model")
+            patchversions=get_patch_spec( mf )
+            isnested=patchversions[0].nested
+            additive=not patchversions[0].nested
+            for pv in patchversions:
+                if pv.nested != isnested:
+                    raise RuntimeError(
+                        "Inconsistent submodel method in patch versions\n{0}\n-------\n{1}"
+                        .format(patchversions[0],pv))
+                if pv.hybrid:
+                    if hybrid_tol is None:
+                        hybrid_tol=pv.hybrid_tol
+                        hybrid_ver=pv
+                    elif pv.hybrid_tol != hybrid_tol:
+                        raise RuntimeError(
+                            "Inconsistent hybrid grid tolerance in patch definitions\n{0}\n------\n{1}"
+                            .format(hybrid_ver,pv))
 
 class GridSpec( object ):
     '''
@@ -397,10 +509,10 @@ class GridSpec( object ):
                 for x in range(self.ngy+1))
         for lat in latv:
             for ln0,ln1 in zip(lonv[:-1],lonv[1:]):
-                yield ((ln0,lat),(ln1,lat))
+                yield LineString((ln0,lat),(ln1,lat))
         for lon in lonv:
             for lt0,lt1 in zip(latv[:-1],latv[1:]):
-                yield ((lon,latv[i]),(lon,latv[i+1]))
+                yield LineString((lon,latv[i]),(lon,latv[i+1]))
 
     def area( self ):
         return (self.xmax-self.xmin)*(self.ymax-self.ymin)
@@ -419,43 +531,220 @@ class GridSpec( object ):
                 break
         deflist.append(self)
 
-class PatchVersionDef:
+class FaultModel( object ):
 
-    TimePoint=namedtuple('TimePoint','date factor')
+    filename_templates=('{0}','{0}.model','fault_models/{0}','fault_models/{0}.model'):
 
-    def __init__( self, version, event, date, reverse=False, nested=False, time_model=None, hybrid=False, hybrid_tol=10.0 ):
-        self.version=version
-        self.event=event
-        self.date=date
-        self.reverse=reverse
-        self.nested=nested
-        self.hybrid=hybrid
-        self.hybrid_tol=hybrid_tol
-        if time_model is None:
-            time_model=[PatchVersionDef.TimePoint(date,1.0)]
-        self.time_model=time_model
+    class PatchVersion( object ) :
 
-    
-    def __str__( self ):
-        return "\n".join((
-            "Version: {0}".format(self.version),
-            "Event: {0}".format(self.event),
-            "Date: {0}".format(self.date.strftime('%Y-%m-%d')),
-            "Reverse: {0}".format(self.reverse),
-            "Nested: {0}".format(self.nested),
-            "Hybrid: {0}".format(self.hybrid),
-            "Forward patch max distortion: {0} ppm".format(self.hybrid_tol),
-            "TimeModel: {0}\n  ".format(
-                "\n  ".join(("{0} {1:.2f}".format(x[0].strftime('%Y-%m-%d'),x[1]) 
-                             for x in self.time_model)))
-            ))
+        TimePoint=namedtuple('TimePoint','date factor')
 
-class PatchVersionList( list ):
+        def __init__( self, version, event, date, reverse=False, time_model=None, hybrid=False ):
+            self.version=version
+            self.event=event
+            self.date=date
+            self.reverse=reverse
+            self.hybrid=hybrid
+            if time_model is None:
+                time_model=[FaultModel.PatchVersion.TimePoint(date,1.0)]
+            self.time_model=time_model
 
-    def __init__( self, modelfile=None ):
-        list.__init__( self )
-        if modelfile is not None:
-            self.loadModelFile( modelfile )
+        
+        def __str__( self ):
+            return "\n".join((
+                "Version: {0}".format(self.version),
+                "Event: {0}".format(self.event),
+                "Date: {0}".format(self.date.strftime('%Y-%m-%d')),
+                "Reverse: {0}".format(self.reverse),
+                "Hybrid: {0}".format(self.hybrid),
+                "TimeModel: {0}\n  ".format(
+                    "\n  ".join(("{0} {1:.2f}".format(x[0].strftime('%Y-%m-%d'),x[1]) 
+                                 for x in self.time_model)))
+                ))
+
+    def __init__( self, modelfile ):
+        self.patchversions=[]
+        self.modelpath=None
+        self.modelname=None
+        self.modeldate=None
+        self.hybridTolerance=None
+        for template in ('{0}','{0}.model','fault_models/{0}','fault_models/{0}.model'):
+            mf=template.format(modelfile)
+            if os.path.exists(mf):
+                self.modelpath=mf
+                break
+        if self.modelpath is None:
+            raise RuntimeError('Cannot find fault model file {0}'.format(modelfile))
+
+         self.loadPatchSpecs()
+
+
+    def loadModelFile( self ):
+        '''
+        Loads a patch model file, and returns a list of patch versions associated with it.
+        '''
+        
+        modelname=os.path.basename(modelpath)
+        modelname=re.sub(r'\..*','',modelname)
+        self.modelname=modelname
+        with open(modelpath) as f:
+            event = f.readline()
+            model = f.readline()
+            version = f.readline()
+            description = event+model+version
+            match=re.search(r'(\d{1,2})\s+(\w{3})\w*\s+(\d{4})\s*$',event)
+            modeldate = None
+            if match:
+                try:
+                    datestr=match.group(1)+' '+match.group(2)+' '+match.group(3)
+                    modeldate = datetime.datetime.strptime(datestr,'%d %b %Y')
+                except:
+                    pass
+            if not modeldate:
+                raise RuntimeError("Event record at start of {0} does not end with a valid date".format(modelfile))
+            self.modeldate=modeldate.strftime('%Y-%m-%d')
+
+    def loadPatchSpecs( self ):
+        patchfile=os.path.splitext(self.modelpath)[0]+'.patch'
+        if not os.path.exists(patchfile):
+            raise RuntimeError('Cannot find fault model patch version file {0}'.format(patchfile))
+
+        patchversions=[]
+        version=None
+        reverse=False
+        hybrid=False
+        hybrid_tol=None
+        nested=None
+        time_model=None
+        in_model=False
+
+        with open(patchfile) as f:
+            for l in f:
+                # Ignore comments and blank lines
+                if re.match(r'^\s*(\#|$)',l):
+                    continue
+                # split out command and value...
+                cmdmatch=re.match(r'^\s*(\w+)\s*\:\s*(.*?)\s*$',l)
+                if cmdmatch:
+                    in_model=False
+                    command=cmdmatch.group(1).lower()
+                    value=cmdmatch.group(2)
+                    if command == 'version':
+                        if version is not None:
+                            if value <= version:
+                                raise RuntimeError("Patch versions out of order in {0}: {1} <= {2}"
+                                                   .format(patchfile,value,version))
+                            try:
+                                patchversions.append(PatchVersionDef(
+                                    version,
+                                    event,
+                                    _parseDate(modeldate),
+                                    reverse=reverse,
+                                    hybrid=hybrid,
+                                    time_model=_buildTimeModel(time_model,modeldate)))
+                            except Exception as ex:
+                                raise RuntimeError("Error in {0}: {1}"
+                                                   .format(patchfile,ex.message))
+                        version=value
+                        if not re.match(r'^[12]\d\d\d[01]\d[0123]\d$',version):
+                            raise RuntimeError("Invalid deformation model version {0} in {1}"
+                                               .format(version,patchfile))
+                        continue
+                    if not version:
+                        raise RuntimeError("Version must be the first item in patch file {0}"
+                                           .format(patchfile))
+                    if command == 'event':
+                        event=value
+                    elif command == 'date':
+                        modeldate=value
+                    elif command == 'type':
+                        if value.lower() == 'forward':
+                            reverse=False
+                        elif value.lower() == 'reverse':
+                            reverse=True
+                        elif value.lower() == 'hybrid':
+                            reverse=True
+                            hybrid=True
+                        else:
+                            raise RuntimeError("Invalid Type - must be forward or reverse in {0}"
+                                               .format(patchfile))
+                    elif command == 'forwardpatchmaxdistortionppm':
+                        fvalue=float(value)
+                        if hybrid_tol is None:
+                            hybrid_tol=fvalue
+                        elif hybrid_tol != falue:
+                            raise RuntimeError("Inconsistent forwardPatchMaxDistortionPpm {0} in {1}"
+                                               .format(value,patchfile))
+                    elif command == 'subgridmethod':
+                        if value.lower() == 'nested':
+                            vnested=True
+                        elif value.lower() == 'indpendent':
+                            vnested=False
+                        else:
+                            raise RuntimeError("Invalid SubgridMethod - must be nested or independent in {0}"
+                                               .format(patchfile))
+                        if nested is None:
+                            nested=vnested
+                        elif nested != vnested:
+                            raise RuntimeError("Inconsistent SubgridMethod - all patch versions must use the same method",
+                                               .format(patchfile))
+
+                    elif command == 'timemodel':
+                        time_model=value.split()
+                        in_model=True
+                    else:
+                        raise RuntimeError("Unrecognized command {0} in {1}".format(strip(),patchfile))
+
+                elif in_model: # Not a command line
+                    time_model.extend(l.split())
+                else:
+                    raise RuntimeError("Invalid data \"{0}\" in {1}".format(l,patchfile))
+                    
+            if version is None:
+                raise RuntimeError("No version specified in {0}".format(patchfile))
+
+            try:
+                patchversions.append(PatchVersionDef(
+                    version,
+                    event,
+                    _parseDate(modeldate),
+                    reverse=reverse,
+                    hybrid=hybrid,
+                    time_model=_buildTimeModel(time_model,modeldate)))
+            except Exception as ex:
+                raise RuntimeError("Error in {0}: {1}"
+                                   .format(patchfile,ex.message))
+
+            for i in range(len(patchversions)-1):
+                if patchversions[i].version >= patchversions[i+1].version:
+                    raise RuntimeError("Deformation model versions out of order in {0}".format(patchfile))
+
+            self.patchversions=patchversions
+
+        # Model definition for calc okada
+        Config.setFaultModel( models, moddefs )
+
+        hybrid_tol=None
+        hybrid_ver=None
+        if comp_path: 
+            if len(models) > 1:
+                raise RuntimeError("Cannot create published patch with more than one fault model")
+            patchversions=get_patch_spec( mf )
+            isnested=patchversions[0].nested
+            additive=not patchversions[0].nested
+            for pv in patchversions:
+                if pv.nested != isnested:
+                    raise RuntimeError(
+                        "Inconsistent submodel method in patch versions\n{0}\n-------\n{1}"
+                        .format(patchversions[0],pv))
+                if pv.hybrid:
+                    if hybrid_tol is None:
+                        hybrid_tol=pv.hybrid_tol
+                        hybrid_ver=pv
+                    elif pv.hybrid_tol != hybrid_tol:
+                        raise RuntimeError(
+                            "Inconsistent hybrid grid tolerance in patch definitions\n{0}\n------\n{1}"
+                            .format(hybrid_ver,pv))
 
     def loadModelFile( modelfile ):
         '''
@@ -479,111 +768,6 @@ class PatchVersionList( list ):
             if not modeldate:
                 raise RuntimeError("Event record at start of {0} does not end with a valid date".format(modelfile))
             modeldate=modeldate.strftime('%Y-%m-%d')
-        
-        patchfile=os.path.splitext(modelfile)[0]+'.patch'
-        patchversions=self
-        if os.path.exists(patchfile):
-            version=None
-            reverse=False
-            hybrid=False
-            hybrid_tol=default_forward_patch_max_distortion
-            nested=False
-            time_model=None
-            in_model=False
-
-            with open(patchfile) as f:
-                for l in f:
-                    # Ignore comments and blank lines
-                    if re.match(r'^\s*(\#|$)',l):
-                        continue
-                    cmdmatch=re.match(r'^\s*(\w+)\s*\:\s*(.*?)\s*$',l)
-                    if cmdmatch:
-                        in_model=False
-                        command=cmdmatch.group(1).lower()
-                        value=cmdmatch.group(2)
-                        if command == 'version':
-                            if version is not None:
-                                try:
-                                    self.append(PatchVersionDef(
-                                        version,
-                                        event,
-                                        _parseDate(modeldate),
-                                        reverse=reverse,
-                                        nested=nested,
-                                        hybrid=hybrid,
-                                        hybrid_tol=hybrid_tol,
-                                        time_model=_buildTimeModel(time_model,modeldate)))
-                                except Exception as ex:
-                                    raise RuntimeError("Error in {0}: {1}"
-                                                       .format(patchfile,ex.message))
-                            version=value
-                            if not re.match(r'^[12]\d\d\d[01]\d[0123]\d$',version):
-                                raise RuntimeError("Invalid deformation model version {0} in {1}"
-                                                   .format(version,patchfile))
-                            continue
-                        if not version:
-                            raise RuntimeError("Version must be the first item in patch file {0}"
-                                               .format(patchfile))
-                        if command == 'event':
-                            event=value
-                        elif command == 'date':
-                            modeldate=value
-                        elif command == 'type':
-                            if value.lower() == 'forward':
-                                reverse=False
-                            elif value.lower() == 'reverse':
-                                reverse=True
-                            elif value.lower() == 'hybrid':
-                                reverse=True
-                                hybrid=True
-                            else:
-                                raise RuntimeError("Invalid Type - must be forward or reverse in {0}"
-                                                   .format(patchfile))
-                        elif command == 'forwardpatchmaxdistortionppm':
-                            hybrid_tol=float(value)
-                        elif command == 'subgridmethod':
-                            if value.lower() == 'nested':
-                                nested=True
-                            elif value.lower() == 'indpendent':
-                                nested=False
-                            else:
-                                raise RuntimeError("Invalid SubgridMethod - must be nested or independent in {0}"
-                                                   .format(patchfile))
-                        elif command == 'timemodel':
-                            time_model=value.split()
-                            in_model=True
-                        else:
-                            raise RuntimeError("Unrecognized command {0} in {1}".format(strip(),patchfile))
-
-                    elif in_model: # Not a command line
-                        time_model.extend(l.split())
-                    else:
-                        raise RuntimeError("Invalid data \"{0}\" in {1}".format(l,patchfile))
-                    
-            if version is None:
-                raise RuntimeError("No version specified in {0}".format(patchfile))
-
-            try:
-                self.append(PatchVersionDef(
-                    version,
-                    event,
-                    _parseDate(modeldate),
-                    reverse=reverse,
-                    nested=nested,
-                    hybrid=hybrid,
-                    hybrid_tol=hybrid_tol,
-                    time_model=_buildTimeModel(time_model,modeldate)))
-            except Exception as ex:
-                raise RuntimeError("Error in {0}: {1}"
-                                   .format(patchfile,ex.message))
-
-            for i in range(len(self)-1):
-                if self[i].version >= self[i+1].version:
-                    raise RuntimeError("Deformation model versions out of order in {0}".format(patchfile))
-                if self[i].nested != self[i+1].nested:
-                    raise RuntimeError("Inconsistent SubgridMethod option in {0}".format(patchfile))
-
-        return self
 
 
 class PatchGridDef:
@@ -772,7 +956,7 @@ class PatchGridDef:
     def splitToSubgrids( self ):
         griddef=self
         subgrids=[self]
-        write_log("Building level {0} patch {1}".format(self.level,self.name),self.level,self.name)
+        Logger.write("Building level {0} patch {1}".format(self.level,self.name),self.level,self.name)
 
         subcell_areas=[]
         if self.level < Config.max_split_level:
@@ -923,13 +1107,13 @@ def grid_file_version( gridfile, version ):
     return path+version+ext
 
 def split_forward_reverse_patches( patchpath, patchname, trialgrid, hybrid_tol, gridlist ):
-    write_log("Splitting patch grids into forward/reverse patches")
-    write_log("Forward patch tolerated distortion (ppm): {0}".format(hybrid_tol))
+    Logger.write("Splitting patch grids into forward/reverse patches")
+    Logger.write("Forward patch tolerated distortion (ppm): {0}".format(hybrid_tol))
     reverse_extents = regionsExceedingLevel(trialgrid, forward_patch_test_column,hybrid_tol)
-    write_log("{0} regions found".format(len(reverse_extents)))
-    write_wkt("Extents requiring reverse patch (base tolerance)",0,reverse_extents.to_wkt())
+    Logger.write("{0} regions found".format(len(reverse_extents)))
+    Logger.writeWkt("Extents requiring reverse patch (base tolerance)",0,reverse_extents.to_wkt())
     reverse_grid_extents=[g.bufferedExtents() 
-                          for g in gridlist if g.level >= forward_patch_max_level])
+                          for g in gridlist if g.level >= forward_patch_max_level]
     if reverse_grid_extents:
         reverse_grid_extents.append(reverse_extents)
         reverse_extents=unary_union(reverse_grid_extents)
@@ -940,9 +1124,9 @@ def split_forward_reverse_patches( patchpath, patchname, trialgrid, hybrid_tol, 
     with open(reversewkt,'w') as f:
         f.write(reverse_extents.to_wkt())
 
-    #write_log("Grid list:")
+    #Logger.write("Grid list:")
     #for g in gridlist:
-    #    write_log("{0}".format(g),prefix="    ")
+    #    Logger.write("{0}".format(g),prefix="    ")
 
     # Find grids are fully forward patches, and calculate forward
     # patches for those which are not.
@@ -972,7 +1156,7 @@ def split_forward_reverse_patches( patchpath, patchname, trialgrid, hybrid_tol, 
                 raise RuntimeError('Forward patch required for level greater than {0}'
                                    .format(forward_patch_max_level))
             not_reverse.add(g)
-            write_log('Copying {0} as forward patch grid only'.format(g.name))
+            Logger.write('Copying {0} as forward patch grid only'.format(g.name))
             fgridfile=grid_file_version(g.name,'_F')
             gf=g.update(isforward=True,file=fgridfile,parent=forward_grids.get(gc.parent,None))
             gf.mergeIntoParent()
@@ -988,51 +1172,59 @@ def split_forward_reverse_patches( patchpath, patchname, trialgrid, hybrid_tol, 
 
         if g.level <= forward_patch_max_level:
             fgridfile=grid_file_version(g.file,'_F')
-            fgridparent=forward_grids.get(g.parent,None)
+            basefg=forward_grids.get(g.parent,None)
 
-            write_log('Creating smoothed forward patch grid for {0}'.format(g.name))
+            Logger.write('Creating smoothed forward patch grid for {0}'.format(g.name))
             commands=[
                 gridtool,
-                'read','maxcols','3',g.file,
-                'smooth','linear','inside',reversewkt,
-            ]
-            commands.extend([
-                'write',fgridfile
-                ])
+                'read','maxcols','3',g.file
+                ]
+            if basefg is not None:
+                commands.extend(['replace','maxcols','3',basefg.file,'where','inside',reversewkt])
+            commands.extend(['smooth','linear','inside',reversewkt])
+            if basefg is not None:
+                commands.extend(['not','on_grid',basefg.file])
+            commands.extend(['write',fgridfile])
+        
             call(commands)
 
             if not os.path.exists(fgridfile):
                 raise RuntimeError('Cannot build smoothed forward patch '+fgridfile)
-            write_log('Created forward patch for {0}'.format(fgridfile))
+            Logger.write('Created forward patch for {0}'.format(fgridfile))
 
-            fgrid=g.update(name=fgridfile,isforward=True)
-            splitgrids.append(fgrid)
+            gf=g.update(name=fgridfile,isforward=True)
+            gf.mergeIntoParent()
+            forward_grids[g]=gf
+            splitgrids.append(gf)
         else:
+            # If not creating a forward patch, then use the forward patch
+            # associated with parent grid
             forward_grids[g]=forward_grids.get(g.parent,None)
 
 
         # Now create the reverse patch files by subtracting the forward patch
         # from them
 
-        rgrids={}
-        for gc in family:
-            write_log('Creating reverse patch grid for {0}'.format(gc.name))
-            rgridfile=grid_file_version(gc.file,'_R')
-            commands=[
-                gridtool,
-                'read','maxcols','3',gc.file,
-                'subtract',fgridfile,
-                'write',rgridfile]
-            call(commands)
-            if not os.path.exists(rgridfile):
-                raise RuntimeError('Cannot build reverse patch '+rgridfile)
-            rgrid=gc.update(file=rgridfile,parent=rgrids.get(gc.parent,None),isforward=False)
-            rgrids[gc]=rgrid
-            splitgrids.append(rgrid)
+        rgridfile=grid_file_version(g.file,'_R')
+        fgrid=forward_grids[g]
+        Logger.write('Creating reverse patch grid for {0}'.format(g.name))
+        commands=[
+            gridtool,
+            'read','maxcols','3',g.file,
+            'subtract',fgrid.file,
+            'trim','1',
+            'write',rgridfile]
+        call(commands)
+        if not os.path.exists(rgridfile):
+            raise RuntimeError('Cannot build reverse patch '+rgridfile)
+        rbase=reverse_grids.get(g,None)
+        rgrid=g.update(file=rgridfile,parent=reverse_grids.get(g.parent,None),isforward=False)
+        reverse_grids[g]=rgrid
+        splitgrids.append(rgrid)
 
-    write_log("\nSplit grids")
+    Logger.write("\nSplit grids")
     for g in splitgrids:
-        write_log("-------------------\n{0}".format(g))
+        Logger.write("-------------------\n{0}".format(g))
     
     return splitgrids
 
@@ -1053,9 +1245,9 @@ def build_deformation_grids( splitbase=True, hybrid_tol=None ):
     trialgriddef=basespec.alignedTo(Config.base_size)
     trialgridfile=Config.filename(extension="_trial.grid")
 
-    write_log("Building trial grid using {0} to {1}".format(
+    Logger.write("Building trial grid using {0} to {1}".format(
         trialgriddef,trialgridfile))
-    write_wkt("Trial extents",0,trialgriddef.boundPolygonWkt())
+    Logger.writeWkt("Trial extents",0,trialgriddef.boundPolygonWkt())
 
     trialgrid=PatchGridDef(trialgridfile,spec=trialgriddef)
 
@@ -1063,8 +1255,8 @@ def build_deformation_grids( splitbase=True, hybrid_tol=None ):
     # a list of polygons
 
     real_extents = trialgrid.regionsExceedingLevel(base_limit_test_column,base_limit_tolerance)
-    write_log("{0} patch extents found".format(len(real_extents)))
-    write_wkt("Extents requiring patch (base tolerance)",0,real_extents.to_wkt())
+    Logger.write("{0} patch extents found".format(len(real_extents)))
+    Logger.writeWkt("Extents requiring patch (base tolerance)",0,real_extents.to_wkt())
 
     # Bounds beyond which patch not required because guaranteed by local accuracy bounds
     bounds_extents = trialgrid.regionsExceedingLevel(base_limit_bounds_column,base_limit_bounds_tolerance)
@@ -1075,23 +1267,23 @@ def build_deformation_grids( splitbase=True, hybrid_tol=None ):
 
     dsmax = trialgrid.maxShiftOutsideAreas( real_extents )
     buffersize = dsmax/base_ramp_tolerance
-    write_log("Maximum shift outside patch extents {0}".format(dsmax))
-    write_log("Buffering patches by {0}".format(buffersize))
+    Logger.write("Maximum shift outside patch extents {0}".format(dsmax))
+    Logger.write("Buffering patches by {0}".format(buffersize))
 
     buffered_extent=Util.bufferedPolygon( real_extents, buffersize )
-    write_wkt("Buffered extents",0,buffered_extent.to_wkt())
-    write_wkt("Absolute bounds on patch",0,bounds_extents.to_wkt())
+    Logger.writeWkt("Buffered extents",0,buffered_extent.to_wkt())
+    Logger.writeWkt("Absolute bounds on patch",0,bounds_extents.to_wkt())
 
     real_extents=buffered_extent.intersection( bounds_extents )
     if 'geoms' not in dir(real_extents):
         real_extents = MultiPolygon([real_extents])
-    write_wkt("Bounds before potential land intersection",0,real_extents.to_wkt())
+    Logger.writeWkt("Bounds before potential land intersection",0,real_extents.to_wkt())
 
 
     # Test areas against land definitions, buffer, and merge overlapping grid definitions
 
     if Config.land_areas:
-        write_log("Intersecting areas with land extents".format(len(real_extents)))
+        Logger.write("Intersecting areas with land extents".format(len(real_extents)))
         valid_areas=[]
         for sc in real_extents:
             p=sc.intersection(Config.land_areas)
@@ -1101,17 +1293,17 @@ def build_deformation_grids( splitbase=True, hybrid_tol=None ):
                 if type(g) == Polygon:
                     valid_areas.append(g)
         real_extents=MultiPolygon(valid_areas)
-        write_wkt("Bounds after land area intersection",0,real_extents.to_wkt())
+        Logger.writeWkt("Bounds after land area intersection",0,real_extents.to_wkt())
 
         # If limiting to land areas then also need to calculate sea areas where
         # lower tolerance applies
 
         sea_extents = trialgrid.regionsExceedingLevel(base_limit_test_column,base_limit_sea_tolerance)
         if len(sea_extents) == 0:
-            write_log("No potential sea extents found")
+            Logger.write("No potential sea extents found")
         else:
-            write_log("{0} patch sea extents found".format(len(sea_extents)))
-            write_wkt("Sea extents requiring patch (base tolerance)",0,sea_extents.to_wkt())
+            Logger.write("{0} patch sea extents found".format(len(sea_extents)))
+            Logger.writeWkt("Sea extents requiring patch (base tolerance)",0,sea_extents.to_wkt())
 
             # Sea bounds beyond which patch not required because guaranteed by local accuracy bounds
             sea_bounds_extents = trialgrid.regionsExceedingLevel(
@@ -1124,24 +1316,24 @@ def build_deformation_grids( splitbase=True, hybrid_tol=None ):
             sea_outside_patch=sea_extents.union( land_area )
             sea_dsmax = trialgrid.maxShiftOutsideAreas( sea_outside_patch )
             sea_buffersize = sea_dsmax/base_ramp_sea_tolerance
-            write_log("Maximum shift outside sea patch extents {0}".format(sea_dsmax))
-            write_log("Buffering sea patches by {0}".format(sea_buffersize))
+            Logger.write("Maximum shift outside sea patch extents {0}".format(sea_dsmax))
+            Logger.write("Buffering sea patches by {0}".format(sea_buffersize))
 
             sea_buffered_extent=Util.bufferedPolygon( sea_extents, sea_buffersize )
-            write_wkt("Sea buffered extents",0,sea_buffered_extent.to_wkt())
+            Logger.writeWkt("Sea buffered extents",0,sea_buffered_extent.to_wkt())
 
             if len(sea_bounds_extents) > 0:
-                write_wkt("Sea absolute bounds on patch",0,sea_bounds_extents.to_wkt())
+                Logger.writeWkt("Sea absolute bounds on patch",0,sea_bounds_extents.to_wkt())
                 sea_extents=sea_buffered_extent.intersection( sea_bounds_extents) 
                 if 'geoms' not in dir(sea_extents):
                     sea_extents = MultiPolygon([sea_extents])
 
-            write_wkt("Sea bounds before union with land extents",0,sea_extents.to_wkt())
+            Logger.writeWkt("Sea bounds before union with land extents",0,sea_extents.to_wkt())
 
             real_extents=real_extents.union(sea_extents)
             if 'geoms' not in dir(real_extents):
                 real_extents=MultiPolygon([real_extents])
-            write_wkt("Bounds after union with sea extents",0,real_extents.to_wkt())
+            Logger.writeWkt("Bounds after union with sea extents",0,real_extents.to_wkt())
 
     # Form merged buffered areas
 
@@ -1183,7 +1375,7 @@ def create_patch_csv( patchlist, modelname, additive=True, trimgrid=True, linzgr
     difference to calculated values - just looks nicer!?)
     '''
     # Note: Assumes patchlist is sorted such that parents are before children
-    write_log("Creating patch CSV files")
+    Logger.write("Creating patch CSV files")
     for patch in patchlist:
         # Get the files used for this component of the patch
 
@@ -1191,7 +1383,7 @@ def create_patch_csv( patchlist, modelname, additive=True, trimgrid=True, linzgr
         component = patch.name
         csvfile = re.sub(r'(\.grid)?$','.csv',gridfile,re.I)
         gdffile = re.sub(r'(\.grid)?$','.gdf',gridfile,re.I)
-        write_log("Creating patch file file {0}".format(csvfile))
+        Logger.write("Creating patch file file {0}".format(csvfile))
         parent = patch.parent
         extfile = patch.extentfile+'.extent.wkt'
         buffile = patch.extentfile+'.buffer.wkt'
@@ -1252,7 +1444,7 @@ def create_patch_csv( patchlist, modelname, additive=True, trimgrid=True, linzgr
             x='"'+x+'"' if re.search(r'\s',x) else x
             return x
     
-        write_log("Running "+
+        Logger.write("Running "+
                   re.sub(r'(\w+)',expand_param,merge_commands)
                   .replace("\n","\n    ")
                    )
@@ -1267,40 +1459,6 @@ def create_patch_csv( patchlist, modelname, additive=True, trimgrid=True, linzgr
                 raise RuntimeError("Could not create CSV file "+gdffile)
             patch.gdf=gdffile
 
-
-def write_log( message, level=0, prefix="" ):
-    prefix='  '*level+prefix
-    message="\n".join([prefix+m for m in message.split("\n")])
-    if logfile:
-        logfile.write(message)
-        logfile.write("\n")
-        logfile.flush()
-    if verbose or level < 0:
-        print message
-        sys.stdout.flush()
-
-def write_grid_wkt( name, level, griddef ):
-    ncol=griddef[2][0]
-    nrow=griddef[2][1]
-    if wktgridlines:
-        lines = grid_def_lines( griddef )
-        for l in lines:
-            wktgridfile.write("{0}|{1}|{2}|{3}|LINESTRING({4} {5},{6} {7})\n".format(
-                name,level,ncol,nrow,l[0][0],l[0][1],l[1][0],l[1][1]))
-    else:
-        points=[
-            [griddef[0][0],griddef[0][1]],
-            [griddef[0][0],griddef[1][1]],
-            [griddef[1][0],griddef[1][1]],
-            [griddef[1][0],griddef[0][1]],
-            [griddef[0][0],griddef[0][1]],
-            ]
-        crds=",".join(("{0} {1}".format(*p) for p in points))
-        wktgridfile.write("{0}|{1}|{2}|{3}|POLYGON(({4}))\n".format(name,level,ncol,nrow,crds))
-
-
-def write_wkt( item, level, wkt ):
-    wktfile.write("{0}|{1}|{2}\n".format(item,level,wkt))
 
 def build_linzshift_model( gridlist, modeldef, additive, shiftpath, splitbase=False ):
     '''
@@ -1324,7 +1482,7 @@ def build_linzshift_model( gridlist, modeldef, additive, shiftpath, splitbase=Fa
         shiftdef=shiftname+base[plen:]+'_shift.def'
         shiftbin=shiftname+base[plen:]+'_shift.bin'
         shiftfile=os.path.join(shiftpath,shiftdef)
-        write_log("Creating shift definition file {0}".format(shiftfile))
+        Logger.write("Creating shift definition file {0}".format(shiftfile))
         with open(shiftfile,'w') as f:
             replace=dict(
                 name=base,
@@ -1414,7 +1572,7 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
             if not os.path.isdir(fn):
                 os.remove(fn)
 
-    write_log("Writing published model submodel {0}".format(comppath))
+    Logger.write("Writing published model submodel {0}".format(comppath))
 
     compcsv=os.path.join(comppath,'component.csv')
 
@@ -1491,7 +1649,7 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
                             gd.column('du')*gd.column('du'))),5),
                         file1=csvname,
                         )
-                    write_wkt('Published '+csvname,grid.level,
+                    Logger.writeWkt('Published '+csvname,grid.level,
                               bounds_poly(((min_lon,min_lat),(max_lon,max_lat))).to_wkt())
                     
                     rdate0=0
@@ -1526,131 +1684,87 @@ if __name__ == "__main__":
     parser=argparse.ArgumentParser(description='Build set of grids for deformation patch')
     parser.add_argument('patch_file',help='Base name used for output files')
     parser.add_argument('model_file',help='Model file(s) used to calculate deformation, passed to calc_okada',nargs='+')
-    parser.add_argument('--shift-model-path',help="Create a linzshiftmodel in the specified directory")
+    # parser.add_argument('--shift-model-path',help="Create a linzshiftmodel in the specified directory")
     parser.add_argument('--submodel-path',help="Create publishable component in the specified directory")
     parser.add_argument('--clean-dir',action='store_true',help="Clean publishable component subdirectory")
     parser.add_argument('--subgrids-nest',action='store_false',help="Grid CSV files calculated to replace each other rather than total to deformation")
-    parser.add_argument('--apply-time-model-scale',action='store_true',help="Scale by the time model final value")
+#    parser.add_argument('--apply-time-model-scale',action='store_true',help="Scale by the time model final value")
     parser.add_argument('--max-level',type=int,help="Maximum number of split levels to generate (each level increases resolution by 4)")
     parser.add_argument('--base-tolerance',type=float,help="Base level tolerance - depends on base column")
     parser.add_argument('--split-base',action='store_true',help="Base deformation will be split into separate patches if possible")
     parser.add_argument('--no-trim-subgrids',action='store_false',help="Subgrids will not have redundant rows/columns trimmed")
     parser.add_argument('--precision',type=int,default=5,help="Precision (ndp) of output grid displacements")
     parser.add_argument('--land-area',help="WKT file containing area land area over which model must be defined")
-    parser.add_argument('--parcel-shift',action='store_true',help="Configure for calculating parcel_shift rather than rigorous deformation patch")
-    parser.add_argument('--test-settings',action='store_true',help="Configure for testing - generate lower accuracy grids")
+    # parser.add_argument('--parcel-shift',action='store_true',help="Configure for calculating parcel_shift rather than rigorous deformation patch")
+    # parser.add_argument('--test-settings',action='store_true',help="Configure for testing - generate lower accuracy grids")
     parser.add_argument('--write-grid-lines',action='store_true',help="xx.grid.wkt contains grid cell lines rather than polygon")
+    parser.add_argument('-v','--verbose',action='store_true',help="More verbose output (if not already configured)")
 
     args=parser.parse_args()
 
-    Config.setPatchFile(args.patch_file)
+    Config.setPatchFilenameRoot(args.patch_file)
         
     split_base=args.split_base
-    shift_path=args.shift_model_path
+#    shift_path=args.shift_model_path
     comp_path=args.submodel_path
-    if comp_path and shift_path:
-        raise RuntimeError("Cannot create published patch and shift model")
+#    if comp_path and shift_path:
+#        raise RuntimeError("Cannot create published patch and shift model")
     additive=args.subgrids_nest
     trimgrid=args.no_trim_subgrids
-    if args.parcel_shift: 
-        write_log("Configuring model to use parcel shift parameters")
-        configure_for_parcel_shift()
-    if args.test_settings: 
-        write_log("Configuring model with low accuracy testing settings")
-        configure_for_testing()
-    if comp_path: 
-        args.apply_time_model_scale=False
+#    if args.parcel_shift: 
+#        Logger.write("Configuring model to use parcel shift parameters")
+#        args.configureForParcelShift()
+#    if args.test_settings: 
+#        Logger.write("Configuring model with low accuracy testing settings")
+#        args.configureForTesting()
+#    if comp_path: 
+#        args.apply_time_model_scale=False
 
-    max_split_level=args.max_level if args.max_level else max_split_level
-    base_limit_tolerance=args.base_tolerance if args.base_tolerance else base_limit_tolerance
+    if args.max_level:
+        Config.max_split_level=args.max_level
+
+    if args.base_tolerance:
+        Config.base_limit_tolerance=args.base_tolerance 
+        
     wktgridlines=args.write_grid_lines
 
-    patchpath,patchname=os.path.split(args.patch_file)
-    if not os.path.isdir(patchpath):
-        os.makedirs(patchpath)
+    if not os.path.isdir(Config.patchpath):
+        os.makedirs(Config.patchpath)
 
-    logfile=open(patchfile+".build.log","w")
-
-    log_configuration()
+    Logger.setLogFile(
+        Config.filename(extension=".build.log"),
+         wkt=Config.filename(extension=".build.wkt"),
+         gridwkt=Config.filename(extension=".grids.wkt"),
+         showgridlines=args.write_grid_lines
+        )
+    if Config.verbose or args.verbose:
+        Logger.setVerbose()
+    Config.writeTo(logfile)
 
     try:
         if args.land_area:
             Config.loadLandAreas(args.land_area)
                     
-        models=args.model_file
-        moddefs=[]
-        patchspec={}
-        if not models:
-            models.append(patchname)
-
-        # Check model files are valid
-
-        for i,f in enumerate(models):
-            found = False
-            for template in ('{0}','{0}.model','fault_models/{0}','fault_models/{0}.model'):
-                mf = template.format(f) 
-                if os.path.exists(mf): 
-                    found = True
-                    models[i]=mf
-                    if args.apply_time_model_scale:
-                        scale=1.0
-                        patchversions=get_patch_spec( mf )
-                        if patchversions:
-                            scale=patchversions[-1].time_model[-1].factor
-                        if scale != 1.0:
-                            mf=str(scale)+'*'+mf
-                    moddefs.append(mf)
-                    break
-                    
-            if not found:
-                print "Model file {0} doesn't exist".format(f)
-                sys.exit()
-
-        # Model definition for calc okada
-        Config.setFaultModel( models, moddefs )
-
-        hybrid_tol=None
-        hybrid_ver=None
-        if comp_path: 
-            if len(models) > 1:
-                raise RuntimeError("Cannot create published patch with more than one fault model")
-            patchversions=get_patch_spec( mf )
-            isnested=patchversions[0].nested
-            additive=not patchversions[0].nested
-            for pv in patchversions:
-                if pv.nested != isnested:
-                    raise RuntimeError(
-                        "Inconsistent submodel method in patch versions\n{0}\n-------\n{1}"
-                        .format(patchversions[0],pv))
-                if pv.hybrid:
-                    if hybrid_tol is None:
-                        hybrid_tol=pv.hybrid_tol
-                        hybrid_ver=pv
-                    elif pv.hybrid_tol != hybrid_tol:
-                        raise RuntimeError(
-                            "Inconsistent hybrid grid tolerance in patch definitions\n{0}\n------\n{1}"
-                            .format(hybrid_ver,pv))
-
+        model=OkadaModel( args.model_file )
+        Config.setFaultModel(model)
 
         # Initiallize 
-        wktfile=open(patchfile+".build.wkt","w")
-        wktgridfile=open(patchfile+".grids.wkt","w")
         logfile.write("Building deformation grids for model: {0}\n".format(modeldef))
         wktfile.write("description|level|wkt\n")
         wktgridfile.write("name|level|ncol|nrow|wkt\n")
         
         gridlist = build_deformation_grids( patchpath, patchname, modeldef, splitbase=split_base, hybrid_tol=hybrid_tol )
 
-        build_linzgrid=bool(shift_path)
+#        build_linzgrid=bool(shift_path)
 
         create_patch_csv( gridlist, modelname, linzgrid=build_linzgrid, additive=additive, trimgrid=trimgrid, precision=args.precision )
 
-        if shift_path:
-            build_linzshift_model( gridlist, modeldef, additive, shiftpath=shift_path, splitbase=split_base )
+#        if shift_path:
+#            build_linzshift_model( gridlist, modeldef, additive, shiftpath=shift_path, splitbase=split_base )
 
         if comp_path:
             build_published_component( gridlist, modeldef, modelname, additive, comp_path, args.clean_dir )
     except Exception as ex:
-        write_log('\n\nFailed with error: {0}'.format(ex.message),level=-1)
+        Logger.write('\n\nFailed with error: {0}'.format(ex.message),level=-1)
         raise
 
