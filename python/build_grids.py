@@ -49,9 +49,7 @@ class Config( object ):
     patchpath=''
     patchroot='patch'
     patchname='patch'
-    models=None
-    modeldef='model'
-    modelname='model'
+    model=None
         
     # Grids will be calculated using integer representation based origin.
     # Subgrids will be obtained by dividing basesize by 4
@@ -197,12 +195,8 @@ END_DESCRIPTION
         Config.patchname=os.path.basename(patchroot)
 
     @staticmethod
-    def setFaultModel( models, moddefs=None ):
-        if moddefs is None:
-            moddefs=models
-        Config.models=models
-        Config.modeldef='+'.join(moddefs)
-        Config.modelname=' '.join([os.path.splitext(os.path.basename(x))[0] for x in models])
+    def setFaultModel( model ):
+        Config.model=model
 
     @staticmethod
     def filename( name=None, extension=None ):
@@ -258,6 +252,7 @@ class Logger( object ):
     
     verbose=False
 
+    @staticmethod
     def createLog( logfile=None, wktfile=None, gridwkt=None, showgridlines=None ):
         if logfile:
             Logger.logfile=open(logfile,'w')
@@ -268,9 +263,11 @@ class Logger( object ):
         if showgridlines is not None:
             Logger.wktgridlines=showgridlines
 
+    @staticmethod
     def setVerbose( verbose=True ):
         Logger.verbose=verbose
 
+    @staticmethod
     def write( message, level=0, prefix="" ):
         prefix='  '*level+prefix
         message="\n".join([prefix+m for m in message.split("\n")])
@@ -282,6 +279,7 @@ class Logger( object ):
             print message
             sys.stdout.flush()
 
+    @staticmethod
     def writeGridDefWkt( name, level, griddef ):
         if not Logger.wktgridfile:
             return
@@ -299,6 +297,7 @@ class Logger( object ):
                 name,level,ncol,nrow,spec.boundingPolygonWkt()))
 
 
+    @staticmethod
     def writeWkt( item, level, wkt ):
         if not Logger.wktfile:
             return
@@ -321,60 +320,6 @@ class Util( object ):
             polygon=MultiPolygon([polygon])
         return polygon
 
-class OkadaModelFile( object ):
-        moddefs=[]
-        patchspec={}
-        if not models:
-            models.append(patchname)
-
-        # Check model files are valid
-
-        for i,f in enumerate(models):
-            found = False
-            for template in ('{0}','{0}.model','fault_models/{0}','fault_models/{0}.model'):
-                mf = template.format(f) 
-                if os.path.exists(mf): 
-                    found = True
-                    models[i]=mf
-                    if args.apply_time_model_scale:
-                        scale=1.0
-                        patchversions=get_patch_spec( mf )
-                        if patchversions:
-                            scale=patchversions[-1].time_model[-1].factor
-                        if scale != 1.0:
-                            mf=str(scale)+'*'+mf
-                    moddefs.append(mf)
-                    break
-                    
-            if not found:
-                print "Model file {0} doesn't exist".format(f)
-                sys.exit()
-
-        # Model definition for calc okada
-        Config.setFaultModel( models, moddefs )
-
-        hybrid_tol=None
-        hybrid_ver=None
-        if comp_path: 
-            if len(models) > 1:
-                raise RuntimeError("Cannot create published patch with more than one fault model")
-            patchversions=get_patch_spec( mf )
-            isnested=patchversions[0].nested
-            additive=not patchversions[0].nested
-            for pv in patchversions:
-                if pv.nested != isnested:
-                    raise RuntimeError(
-                        "Inconsistent submodel method in patch versions\n{0}\n-------\n{1}"
-                        .format(patchversions[0],pv))
-                if pv.hybrid:
-                    if hybrid_tol is None:
-                        hybrid_tol=pv.hybrid_tol
-                        hybrid_ver=pv
-                    elif pv.hybrid_tol != hybrid_tol:
-                        raise RuntimeError(
-                            "Inconsistent hybrid grid tolerance in patch definitions\n{0}\n------\n{1}"
-                            .format(hybrid_ver,pv))
-
 class GridSpec( object ):
     '''
     Class representing a basic grid definition - min and max coordinates and number of 
@@ -385,11 +330,11 @@ class GridSpec( object ):
     '''
 
     @staticmethod
-    def fromBounds( self, bounds ):
+    def fromBounds( bounds ):
         return GridSpec(bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1] )
 
     @staticmethod
-    def _calc_min_max( base, minv, maxv, csize ):
+    def _calc_min_max( base, minv, maxv, csize, multiple ):
         csize *= multiple
         n0 = int(math.floor((minv-base)/csize))
         n1 = int(math.ceil((maxv-base)/csize))
@@ -423,10 +368,10 @@ class GridSpec( object ):
         of size from the origin.  
         '''
         if origin is None:
-            origin=Config.orgin
+            origin=Config.origin
 
-        xmin,xmax,nln=GridSpec._calc_min_max(origin[0],self.xmin,self.xmax,size[0])
-        ymin,ymax,nlt=GridSpec._calc_min_max(origin[1],self.ymin,self.ymax,size[1])
+        xmin,xmax,nln=GridSpec._calc_min_max(origin[0],self.xmin,self.xmax,cellsize[0],multiple)
+        ymin,ymax,nlt=GridSpec._calc_min_max(origin[1],self.ymin,self.ymax,cellsize[1],multiple)
         return GridSpec( xmin, ymin, xmax, ymax, nln, nlt )
 
     def split( self, splitfactor ):
@@ -533,7 +478,7 @@ class GridSpec( object ):
 
 class FaultModel( object ):
 
-    filename_templates=('{0}','{0}.model','fault_models/{0}','fault_models/{0}.model'):
+    filename_templates=('{0}','{0}.model','fault_models/{0}','fault_models/{0}.model')
 
     class PatchVersion( object ) :
 
@@ -568,7 +513,7 @@ class FaultModel( object ):
         self.modelname=None
         self.modeldate=None
         self.hybridTolerance=None
-        for template in ('{0}','{0}.model','fault_models/{0}','fault_models/{0}.model'):
+        for template in FaultModel.filename_templates:
             mf=template.format(modelfile)
             if os.path.exists(mf):
                 self.modelpath=mf
@@ -576,7 +521,8 @@ class FaultModel( object ):
         if self.modelpath is None:
             raise RuntimeError('Cannot find fault model file {0}'.format(modelfile))
 
-         self.loadPatchSpecs()
+        self.loadModelFile()
+        self.loadPatchSpecs()
 
 
     def loadModelFile( self ):
@@ -584,10 +530,8 @@ class FaultModel( object ):
         Loads a patch model file, and returns a list of patch versions associated with it.
         '''
         
-        modelname=os.path.basename(modelpath)
-        modelname=re.sub(r'\..*','',modelname)
-        self.modelname=modelname
-        with open(modelpath) as f:
+        self.modelname=os.path.basename(self.modelpath)
+        with open(self.modelpath) as f:
             event = f.readline()
             model = f.readline()
             version = f.readline()
@@ -603,6 +547,38 @@ class FaultModel( object ):
             if not modeldate:
                 raise RuntimeError("Event record at start of {0} does not end with a valid date".format(modelfile))
             self.modeldate=modeldate.strftime('%Y-%m-%d')
+
+    def _parseDate( self, datestr ):
+        datestr=datestr.strip()
+        for format in ('%d %b %Y','%d %B %Y','%Y-%m-%d'):
+            try:
+                return datetime.datetime.strptime(datestr,format)
+            except:
+                pass
+        raise ValueError("Cannot parse date {0}".format(datestr))
+
+    def _buildTimeModel(self,time_model,modeldate):
+        if time_model is None:
+            return [FaultModel.PatchVersion.TimePoint(self._parseDate(modeldate),1.0)]
+        model=[]
+        ntime=len(time_model)
+        if ntime < 2:
+            raise RuntimeError("Invalid or empty TimeModel")
+        if ntime % 2 != 0:
+            raise RuntimeError("TimeModel must consist of paired date and value")
+        for i in range(0,ntime,2):
+            fdate=self._parseDate(time_model[i])
+            try:
+                factor=float(time_model[i+1])
+            except:
+                raise RuntimeError("Invalid scale factor {0} in TimeModel"
+                                   .format(time_model[i+1]))
+            model.append(FaultModel.PatchVersion.TimePoint(fdate,factor))
+
+        for i in range(len(model)-1):
+            if model[i].date > model[i+1].date:
+                raise RuntimeError("Dates out of order in TimeModel")
+        return model
 
     def loadPatchSpecs( self ):
         patchfile=os.path.splitext(self.modelpath)[0]+'.patch'
@@ -635,13 +611,13 @@ class FaultModel( object ):
                                 raise RuntimeError("Patch versions out of order in {0}: {1} <= {2}"
                                                    .format(patchfile,value,version))
                             try:
-                                patchversions.append(PatchVersionDef(
+                                patchversions.append(FaultModel.PatchVersion(
                                     version,
                                     event,
-                                    _parseDate(modeldate),
+                                    self._parseDate(modeldate),
                                     reverse=reverse,
                                     hybrid=hybrid,
-                                    time_model=_buildTimeModel(time_model,modeldate)))
+                                    time_model=self._buildTimeModel(time_model,modeldate)))
                             except Exception as ex:
                                 raise RuntimeError("Error in {0}: {1}"
                                                    .format(patchfile,ex.message))
@@ -686,7 +662,7 @@ class FaultModel( object ):
                         if nested is None:
                             nested=vnested
                         elif nested != vnested:
-                            raise RuntimeError("Inconsistent SubgridMethod - all patch versions must use the same method",
+                            raise RuntimeError("Inconsistent SubgridMethod - all patch versions must use the same method in {0}"
                                                .format(patchfile))
 
                     elif command == 'timemodel':
@@ -704,13 +680,13 @@ class FaultModel( object ):
                 raise RuntimeError("No version specified in {0}".format(patchfile))
 
             try:
-                patchversions.append(PatchVersionDef(
+                patchversions.append(FaultModel.PatchVersion(
                     version,
                     event,
-                    _parseDate(modeldate),
+                    self._parseDate(modeldate),
                     reverse=reverse,
                     hybrid=hybrid,
-                    time_model=_buildTimeModel(time_model,modeldate)))
+                    time_model=self._buildTimeModel(time_model,modeldate)))
             except Exception as ex:
                 raise RuntimeError("Error in {0}: {1}"
                                    .format(patchfile,ex.message))
@@ -720,59 +696,52 @@ class FaultModel( object ):
                     raise RuntimeError("Deformation model versions out of order in {0}".format(patchfile))
 
             self.patchversions=patchversions
+            self.hybrid=hybrid
+            self.hybrid_tol=hybrid_tol
 
-        # Model definition for calc okada
-        Config.setFaultModel( models, moddefs )
+    def calcGrid( self, gridspec, gridfile ):
+        global calc_okada
+        gridspecstr=str(gridspec)
+        modelpath=self.modelpath
+        # if verbose:
+        #     print "Calculating deformation on {0}".format(gridfile)
+        #     print "Model {0}".format(modeldef)
+        #     print "Grid spec {0}".format(gridspec)
 
-        hybrid_tol=None
-        hybrid_ver=None
-        if comp_path: 
-            if len(models) > 1:
-                raise RuntimeError("Cannot create published patch with more than one fault model")
-            patchversions=get_patch_spec( mf )
-            isnested=patchversions[0].nested
-            additive=not patchversions[0].nested
-            for pv in patchversions:
-                if pv.nested != isnested:
-                    raise RuntimeError(
-                        "Inconsistent submodel method in patch versions\n{0}\n-------\n{1}"
-                        .format(patchversions[0],pv))
-                if pv.hybrid:
-                    if hybrid_tol is None:
-                        hybrid_tol=pv.hybrid_tol
-                        hybrid_ver=pv
-                    elif pv.hybrid_tol != hybrid_tol:
-                        raise RuntimeError(
-                            "Inconsistent hybrid grid tolerance in patch definitions\n{0}\n------\n{1}"
-                            .format(hybrid_ver,pv))
-
-    def loadModelFile( modelfile ):
-        '''
-        Loads a patch model file, and returns a list of patch versions associated with it.
-        '''
-        modelname=os.path.basename(modelfile)
-        modelname=re.sub(r'\..*','',modelname)
-        with open(modelfile) as f:
-            event = f.readline()
-            model = f.readline()
-            version = f.readline()
-            description = event+model+version
-            match=re.search(r'(\d{1,2})\s+(\w{3})\w*\s+(\d{4})\s*$',event)
-            modeldate = None
-            if match:
-                try:
-                    datestr=match.group(1)+' '+match.group(2)+' '+match.group(3)
-                    modeldate = datetime.datetime.strptime(datestr,'%d %b %Y')
-                except:
-                    pass
-            if not modeldate:
-                raise RuntimeError("Event record at start of {0} does not end with a valid date".format(modelfile))
-            modeldate=modeldate.strftime('%Y-%m-%d')
-
+        params=[calc_okada,'-f','-x','-l','-s',modelpath,gridspecstr,gridfile]
+        meta='\n'.join(params)
+        metafile=gridfile+'.metadata'
+        built = False
+        # Check if grid file is already built - mainly convenience for
+        # script development as this takes much longer than anything else!
+        if os.path.exists(gridfile) and os.path.exists(metafile):
+            with open(metafile) as f:
+                oldmeta=f.read()
+                if oldmeta.strip() == meta.strip():
+                    built=True
+            if os.path.getmtime(gridfile) > os.path.getmtime(metafile):
+                built=False
+            if built:
+                if os.path.getmtime(modelpath) > os.path.getmtime(gridfile):
+                    built=False
+        if not built:
+            if os.path.exists(gridfile):
+                os.remove(gridfile)
+            print "          Building grid {0} ({1} x {2} points) ...".format(
+                gridfile,gridspec.ngx,gridspec.ngy)
+            call(params)
+            if not os.path.exists(gridfile):
+                raise RuntimeError("Failed to calculate grid file {0}\n{1}".
+                                   format(gridfile," ".join(params)))
+            with open(metafile,'w') as f:
+                f.write(meta)
+        else:
+            print "          Reloading existing grid {0} ...".format(gridfile)
+        grid=defgrid.DeformationGrid(gridfile)
+        return grid
 
 class PatchGridDef:
                                  
-
     def __init__( self, name=None, subpatch=None, extents=None, buffer=0.0, level=1, spec=None, parent=None ):
         self.buffer=0.0
         self.level=level
@@ -807,58 +776,17 @@ class PatchGridDef:
     # This is not quite correct - model should be a procedure or object that
     # is called with the grid spec ... may not alway be using Okada.
 
-    def calcOkadaGrid( self, modeldef=None ):
-        global calc_okada
-        if self.spec is None:
-            raise RuntimeError('{0} grid spec not calculated before calcOkadaGrid'
-                               .format(self.name))
-        if modeldef is None:
-            modeldef=Config.modeldef
-
-        gridspec=str(self.spec)
+    def calcGrid( self, modeldef=None ):
         gridfile=self._fileWithExtension('.grid')
-        # if verbose:
-        #     print "Calculating deformation on {0}".format(gridfile)
-        #     print "Model {0}".format(modeldef)
-        #     print "Grid spec {0}".format(gridspec)
-
-        params=[calc_okada,'-f','-x','-l','-s',modeldef,gridspec,gridfile]
-        meta='\n'.join(params)
-        metafile=gridfile+'.metadata'
-        built = False
-        # Check if grid file is already built - mainly convenience for
-        # script development
-        if os.path.exists(gridfile) and os.path.exists(metafile):
-            with open(metafile) as f:
-                oldmeta=f.read()
-                if oldmeta.strip() == meta.strip():
-                    built=True
-            if os.path.getmtime(gridfile) > os.path.getmtime(metafile):
-                built=False
-            if built:
-                for mf in modeldef.split('+'):
-                    if '*' in mf:
-                        mf=mf.split('*',1)[1]
-                    if os.path.getmtime(mf) > os.path.getmtime(gridfile):
-                        built=False
-                        break
-        if not built:
-            npts=griddef[2][0]*griddef[2][1]
-            print "          Building {0} ({1} points) ...".format(gridfile,npts)
-            call(params)
-            if not os.path.exists(gridfile):
-                raise RuntimeError("Failed to calculate grid file {0}".format(gridfile))
-            with open(metafile,'w') as f:
-                f.write(meta)
-        print "          Loading {0} ...".format(gridfile)
-        grid=defgrid.DeformationGrid(gridfile)
-        self.grid=_grid
-        return grid
+        return Config.model.calcGrid( self.spec, gridfile )
 
     @property
     def grid( self ):
+        if self.spec is None:
+            raise RuntimeError('{0} grid spec not calculated before calculating grid values'
+                               .format(self.name))
         if self._grid is None:
-            self._grid=self.calcOkadaGrid()
+            self._grid=self.calcGrid()
         return self._grid
 
     def _fileWithExtension( self, extension ):
@@ -1228,7 +1156,7 @@ def split_forward_reverse_patches( patchpath, patchname, trialgrid, hybrid_tol, 
     
     return splitgrids
 
-def build_deformation_grids( splitbase=True, hybrid_tol=None ):
+def build_deformation_grids( splitbase=True ):
     '''
     Function builds all the grids that are used.  Basically sets up a trial grid to determine
     the extents on which patches are required, then for each patch required within the extents
@@ -1241,20 +1169,20 @@ def build_deformation_grids( splitbase=True, hybrid_tol=None ):
 
     # Calculate a trial grid to determine extents of patches
 
-    basespec=GridSpec.fromBounds(base_extents)
+    basespec=GridSpec.fromBounds(Config.base_extents)
     trialgriddef=basespec.alignedTo(Config.base_size)
     trialgridfile=Config.filename(extension="_trial.grid")
 
     Logger.write("Building trial grid using {0} to {1}".format(
         trialgriddef,trialgridfile))
-    Logger.writeWkt("Trial extents",0,trialgriddef.boundPolygonWkt())
+    Logger.writeWkt("Trial extents",0,trialgriddef.boundingPolygonWkt())
 
     trialgrid=PatchGridDef(trialgridfile,spec=trialgriddef)
 
     # Determine the extents on which the base tolerance is exceed - returns
     # a list of polygons
 
-    real_extents = trialgrid.regionsExceedingLevel(base_limit_test_column,base_limit_tolerance)
+    real_extents = trialgrid.regionsExceedingLevel(Config.base_limit_test_column,Config.base_limit_tolerance)
     Logger.write("{0} patch extents found".format(len(real_extents)))
     Logger.writeWkt("Extents requiring patch (base tolerance)",0,real_extents.to_wkt())
 
@@ -1352,7 +1280,8 @@ def build_deformation_grids( splitbase=True, hybrid_tol=None ):
             p.base=griddef.name if splitbase else Config.patchname
             p.basename=Config.patchname
             gridlist.append(p)
-    if hybrid_tol:
+    if Config.model.hybrid:
+        hybrid_tol=Config.model.hybridTolerance
         gridlist=split_forward_reverse_patches( patchpath, patchname, trialgrid, hybrid_tol, gridlist )
     return gridlist
 
@@ -1511,38 +1440,6 @@ def build_linzshift_model( gridlist, modeldef, additive, shiftpath, splitbase=Fa
                 ))
         call(['makelinzshiftmodel.pl',shiftdef,shiftbin],cwd=shiftpath)
 
-def _parseDate( datestr ):
-    datestr=datestr.strip()
-    for format in ('%d %b %Y','%d %B %Y','%Y-%m-%d'):
-        try:
-            return datetime.datetime.strptime(datestr,format)
-        except:
-            pass
-    raise ValueError("Cannot parse date {0}".format(datestr))
-
-def _buildTimeModel(time_model,modeldate):
-    if time_model is None:
-        return [PatchVersionDef.TimePoint(_parseDate(modeldate),1.0)]
-    model=[]
-    ntime=len(time_model)
-    if ntime < 2:
-        raise RuntimeError("Invalid or empty TimeModel")
-    if ntime % 2 != 0:
-        raise RuntimeError("TimeModel must consist of paired date and value")
-    for i in range(0,ntime,2):
-        fdate=_parseDate(time_model[i])
-        try:
-            factor=float(time_model[i+1])
-        except:
-            raise RuntimeError("Invalid scale factor {0} in TimeModel"
-                               .format(time_model[i+1]))
-        model.append(PatchVersionDef.TimePoint(fdate,factor))
-
-    for i in range(len(model)-1):
-        if model[i].date > model[i+1].date:
-            raise RuntimeError("Dates out of order in TimeModel")
-    return model
-
 
 def build_published_component( gridlist, modeldef, modelname, additive, comppath, cleandir=False ):
     '''
@@ -1683,7 +1580,7 @@ if __name__ == "__main__":
 
     parser=argparse.ArgumentParser(description='Build set of grids for deformation patch')
     parser.add_argument('patch_file',help='Base name used for output files')
-    parser.add_argument('model_file',help='Model file(s) used to calculate deformation, passed to calc_okada',nargs='+')
+    parser.add_argument('model_file',help='Model file(s) used to calculate deformation, passed to calc_okada')
     # parser.add_argument('--shift-model-path',help="Create a linzshiftmodel in the specified directory")
     parser.add_argument('--submodel-path',help="Create publishable component in the specified directory")
     parser.add_argument('--clean-dir',action='store_true',help="Clean publishable component subdirectory")
@@ -1731,29 +1628,24 @@ if __name__ == "__main__":
     if not os.path.isdir(Config.patchpath):
         os.makedirs(Config.patchpath)
 
-    Logger.setLogFile(
+    Logger.createLog(
         Config.filename(extension=".build.log"),
-         wkt=Config.filename(extension=".build.wkt"),
+         wktfile=Config.filename(extension=".build.wkt"),
          gridwkt=Config.filename(extension=".grids.wkt"),
          showgridlines=args.write_grid_lines
         )
     if Config.verbose or args.verbose:
         Logger.setVerbose()
-    Config.writeTo(logfile)
+    Config.writeTo(Logger.write)
 
     try:
         if args.land_area:
             Config.loadLandAreas(args.land_area)
                     
-        model=OkadaModel( args.model_file )
+        model=FaultModel( args.model_file )
         Config.setFaultModel(model)
 
-        # Initiallize 
-        logfile.write("Building deformation grids for model: {0}\n".format(modeldef))
-        wktfile.write("description|level|wkt\n")
-        wktgridfile.write("name|level|ncol|nrow|wkt\n")
-        
-        gridlist = build_deformation_grids( patchpath, patchname, modeldef, splitbase=split_base, hybrid_tol=hybrid_tol )
+        gridlist = build_deformation_grids( splitbase=split_base )
 
 #        build_linzgrid=bool(shift_path)
 
