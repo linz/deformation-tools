@@ -166,7 +166,6 @@ class Grid( object ):
         else:
             cmax=np.max(data)
         cmax = cmax+abs(limit-cmax)*2+1000
-        print 'defgrid',col,limit,cmax
         contours = self.contourf(col,levels=[limit,cmax],multiple=multiple, returnContours=True)
         result = []
         for c in contours:
