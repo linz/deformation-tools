@@ -781,16 +781,12 @@ void grid::alignto( grid &g )
     resize(rowmin,colmin,rowmax,colmax);
 }
 
-void grid::trimto( grid&g, int buffer )
+void grid::trimto( grid &g, int buffer )
 {
-    // Determine the grid corners in terms of the alignment grid
-    // Only really makes sense if grids have consistent x,y axes...
-    
     double minx, maxx, miny, maxy;
-
     g.nodexy( 0, 0, minx, miny );
     g.nodexy( g.nrow()-1, g.ncol()-1, maxx, maxy );
-    trimto( minx, miny, maxx, maxy, buffer );
+    trimto( minx, maxx, miny, maxy, buffer );
 }
 
 void grid::trimto( double minx, double maxx, double miny, double maxy, int buffer )
@@ -801,8 +797,6 @@ void grid::trimto( double minx, double maxx, double miny, double maxy, int buffe
     int rowmin=m_nrow-1;
 
     point corner;
-
-    int grow;
 
     for( int ix=0; ix<2; ix++ ) 
     {

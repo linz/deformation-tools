@@ -3,6 +3,8 @@ Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Grid statistics
+X extents: 15 - 27.7407
+Y extents: 4 - 18
 Rows: 8
 Cols: 7
 Values per node: 2
@@ -150,6 +152,8 @@ Reading file from test1.csv
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Grid statistics
+X extents: 15 - 27.7407
+Y extents: 4 - 18
 Rows: 8
 Cols: 7
 Values per node: 2
@@ -184,6 +188,18 @@ Grid has 8 rows and 7 columns
 Each point has 2 data values
 Adding selected grid values from grid test3.grid
 Writing grid to file out/test28_add.grid
+test 28a - add with on_grid selection
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Adding selected grid values from grid add1.grid
+Writing grid to file out/test28a_add.grid
+test 28b - add with on_grid selection
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Adding selected grid values from grid test3.grid
+Writing grid to file out/test28b_add.grid
 test 29 - replace
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
@@ -224,20 +240,38 @@ Reading file from align2.grid
 Grid has 6 rows and 7 columns
 Each point has 2 data values
 Resizing to include rows -15 to 50 and columns -15 to 31
-Trimming to grid to align1.grid
+Trimming to grid align1.grid
 Writing grid to file out/test32.grid
 Reading file from out/test32.grid
 Grid has 26 rows and 31 columns
 Each point has 2 data values
 Resizing to include rows -1 to 26 and columns -1 to 31
-Trimming to grid to align1.grid
+Trimming to grid align1.grid
 Writing grid to file out/test32b.grid
 Reading file from out/test32.grid
 Grid has 26 rows and 31 columns
 Each point has 2 data values
 Resizing to include rows 1 to 24 and columns 1 to 29
-Trimming to grid to align1.grid
+Trimming to grid align1.grid
 Writing grid to file out/test32c.grid
+Reading file from align2.grid
+Grid has 6 rows and 7 columns
+Each point has 2 data values
+Resizing to include rows -15 to 50 and columns -15 to 31
+Trimming to grid align1.grid with buffer 2
+Writing grid to file out/test32d.grid
+Reading file from align2.grid
+Grid has 6 rows and 7 columns
+Each point has 2 data values
+Resizing to include rows -15 to 50 and columns -15 to 31
+Trimming to wkt test2.wkt
+Writing grid to file out/test32e.grid
+Reading file from align2.grid
+Grid has 6 rows and 7 columns
+Each point has 2 data values
+Resizing to include rows -15 to 50 and columns -15 to 31
+Trimming to wkt test2.wkt with buffer 3
+Writing grid to file out/test32f.grid
 test 33 - create
 Writing grid to file out/test33a.csv
 Writing grid to file out/test33b.csv

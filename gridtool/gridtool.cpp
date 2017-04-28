@@ -492,6 +492,9 @@ static void run_trimto( grid &g, commandlist &commands )
     if( next_command_is(commands,"wkt"))
     {
         string wktfile= next_command( commands, "File name for trimto wkt");
+        cout <<  "Trimming to wkt " << wktfile;
+        if( buffer ) cout << " with buffer " << buffer;
+        cout << endl;
         double minx, maxx, miny, maxy;
         wkt_extents(wktfile.c_str(),minx,maxx,miny,maxy);
         g.trimto(minx,maxx,miny,maxy,buffer);
@@ -500,7 +503,9 @@ static void run_trimto( grid &g, commandlist &commands )
     {
         grid galign;
         string filename = run_read_grid( galign, commands, "align" );
-        cout <<  "Trimming to grid to " << filename << endl;
+        cout <<  "Trimming to grid " << filename;
+        if( buffer ) cout << " with buffer " << buffer;
+        cout << endl;
         g.trimto(galign,buffer);
     }
 }
