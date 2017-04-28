@@ -283,6 +283,29 @@ string grid::fieldName( int iv )
     return name;
 }
 
+static string format_number(double value, int ndp )
+{
+    std::stringstream number;
+    number.setf(std::ios_base::fixed,std::ios_base::floatfield);
+    number << std::setprecision(ndp);
+    number << value;
+    std::string fnum=number.str();
+    std::string::size_type flen=fnum.size();
+    std::string::size_type ndot=fnum.find('.');
+    if( ndot != std::string::npos )
+    {
+        ndot=ndot; // Want at least 1 digit after DP
+        std::string::size_type endpos = fnum.find_last_not_of('0')+1;
+        if( endpos == ndot+1 ) endpos=ndot;
+        if( endpos < flen )
+        {
+            fnum=fnum.substr(0,endpos);
+
+        }
+    }
+    return fnum;
+}
+
 bool grid::writefile( const char *filename, const char *delim, std::vector<int> *colids , bool markedonly )
 {
     if( ! delim ) delim = "\t";
@@ -337,22 +360,18 @@ bool grid::writefile( const char *filename, const char *delim, std::vector<int> 
             nodexy(ir, ic, x, y );
             f << std::setprecision(crdprec);
             f << x << delim << y;
-            f << std::setprecision(dataprec);
-            f.setf(std::ios::fixed,std::ios_base::floatfield);
             for( int iv = 0; iv < nvalues; iv++ )
             {
                 double value = m_values[ir][ipt0+colids->at(iv)];
                 if( value == 0.0 )
                 {
-                    f << delim << "0.0";
+                    f << delim << "0";
                 }
                 else
                 {
-                    value = floor(value*mult+0.5)/mult;
-                    f << delim << value;
+                    f << delim << format_number(value,dataprec);
                 }
             }
-            f.unsetf(std::ios::fixed);
             f << endl;
         }
     }
@@ -762,30 +781,35 @@ void grid::alignto( grid &g )
     resize(rowmin,colmin,rowmax,colmax);
 }
 
-void grid::trimto( grid&g )
+void grid::trimto( grid&g, int buffer )
 {
     // Determine the grid corners in terms of the alignment grid
     // Only really makes sense if grids have consistent x,y axes...
-    //
+    
+    double minx, maxx, miny, maxy;
+
+    g.nodexy( 0, 0, minx, miny );
+    g.nodexy( g.nrow()-1, g.ncol()-1, maxx, maxy );
+    trimto( minx, miny, maxx, maxy, buffer );
+}
+
+void grid::trimto( double minx, double maxx, double miny, double maxy, int buffer )
+{    
     int colmax=0;
     int colmin=m_ncol-1;
     int rowmax=0;
     int rowmin=m_nrow-1;
 
     point corner;
-    point gcorner;
-    point ncorner;
 
     int grow;
 
-    for( int icol=0; icol<2; icol++ ) 
+    for( int ix=0; ix<2; ix++ ) 
     {
-        int gcol=icol ? 0 : g.ncol()-1;
-        for( int irow=0; irow<2; irow++ )
+        double gx = ix ? minx : maxx;
+        for( int iy=0; iy<2; iy++ )
         {
-            double gx,gy;
-            int grow=irow ? 0 : g.nrow()-1;
-            g.nodexy( grow, gcol, gx, gy);
+            double gy=iy ? miny : maxy;
             gridcoords(point(gx,gy),corner);
             if( corner.y-0.0001 < rowmin ) rowmin=int(ceil(corner.y-0.0001));
             if( corner.y+0.0001 > rowmax ) rowmax=int(floor(corner.y+0.0001));
@@ -794,12 +818,18 @@ void grid::trimto( grid&g )
         }
     }
 
+    rowmin -= buffer;
+    rowmax += buffer;
+    colmin -= buffer;
+    colmax += buffer;
+
     if( rowmin < 0 ) rowmin=0;
     if( rowmax >= m_nrow ) rowmax=m_nrow-1;
     if( colmin < 0 ) colmin=0;
     if( colmax >= m_ncol ) colmax=m_ncol-1;
 
     resize(rowmin,colmin,rowmax,colmax);
+
 }
 
 void grid::resize( int rowmin, int colmin, int rowmax, int colmax )

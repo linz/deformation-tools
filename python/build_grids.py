@@ -530,6 +530,7 @@ class FaultModel( object ):
         self.modelpath=None
         self.modelname=None
         self.modeldate=None
+        self.description=None
         self.hybridTolerance=None
         for template in FaultModel.filename_templates:
             mf=template.format(modelfile)
@@ -553,7 +554,7 @@ class FaultModel( object ):
             event = f.readline()
             model = f.readline()
             version = f.readline()
-            description = event+model+version
+            description = event+' '+model+' '+version
             match=re.search(r'(\d{1,2})\s+(\w{3})\w*\s+(\d{4})\s*$',event)
             modeldate = None
             if match:
@@ -564,6 +565,7 @@ class FaultModel( object ):
                     pass
             if not modeldate:
                 raise RuntimeError("Event record at start of {0} does not end with a valid date".format(modelfile))
+            self.description=description
             self.modeldate=modeldate.strftime('%Y-%m-%d')
 
     def _parseDate( self, datestr ):
@@ -854,7 +856,7 @@ class PatchGridDef:
         self.spec=spec
         self._grid=None
         self._strainGrid=None
-        self.csv=None
+        self._csv=None
         self.gdf=None
         self.base=None
         self.basename=None
@@ -946,6 +948,39 @@ class PatchGridDef:
             self._grid=self._loadGrid()
         return self._grid
 
+    @property
+    def csvfile( self ):
+        global gridtool
+        if self._csv is None:
+            gridfile=self.builtFilename
+            csvfile = re.sub(r'(\.grid)?$','.csv',gridfile,re.I)
+            commands=[gridtool,
+                      'read','maxcols','3',gridfile,
+                      'write','csv',csvfile]
+            call(commands)
+            self._csv=csvfile
+        return self._csv
+
+    @property
+    def gdffile( self ):
+        global gridtool
+        if self._gdf is None:
+            gridfile=self.builtFilename
+            gdffile = re.sub(r'(\.grid)?$','.gdf',gridfile,re.I)
+            header2='Model '+Config.model.description
+            header1='Patch component '+self.name
+            header3=runtime
+            commands=[gridtool,
+                      'read','maxcols','3',gridfile,
+                      'write_linzgrid','NZGD2000',
+                      header1,
+                      header2,
+                      header3,
+                      gdffile]
+            call(commands)
+            self._gdf=gdffile
+        return self._gdf
+
     def _fileWithExtension( self, extension ):
         return Config.filename(name=self.name,extension=extension)
 
@@ -1004,7 +1039,11 @@ class PatchGridDef:
     def mergeIntoParent( self ):
         '''
         Modify the grid to match transition to the parent grid between
-        its extents and its buffered extents
+        its extents and its buffered extents.  
+
+        Grid is not modified inside its extents (ie where it is distinctly different).
+        Merge is between extents and buffered extents.  Outside buffered extents and 
+        on boundary it is always matched to the parent.
         '''
         global gridtool
         if self.parent is None:
@@ -1015,9 +1054,11 @@ class PatchGridDef:
         pgridfile=self.parent.builtFilename
         commands=[gridtool,
                   'read','maxcols','3',gridfile,
-                  'zero','outside',extwkt,
-                  'add','maxcols','3',pgridfile,'outside',bufwkt,
-                  'smooth','linear','outside',extwkt,'inside',bufwkt,
+                  'trimto','buffer','1','wkt',bufwkt,
+                  'trimto',pgridfile,
+                  'zero','outside',extwkt,'edge','1',
+                  'add','maxcols','3',pgridfile,'outside',bufwkt,'edge',1,
+                  'smooth','linear','outside',extwkt,'not','outside',bufwkt,'not','edge',1,
                   'write',gridfile
                  ]
         call(commands)
@@ -1151,7 +1192,7 @@ class PatchGridDef:
             "    Grid file: {0}".format(self.filename),
             "    Extent file: {0}".format(self.extentsWktFile),
             "    Level: {0}".format(self.level),
-            "    Csv: {0}".format(self.csv),
+            "    Csv: {0}".format(self._csv),
             "    Gdf: {0}".format(self.gdf),
             "    Base: {0}".format(self.base),
             "    Base name: {0}".format(self.basename),
@@ -1493,179 +1534,29 @@ def build_deformation_grids( splitbase=True ):
             p.basename=Config.patchname
             gridlist.append(p)
 
+    # If splitting into a hybrid model then separate out forward and reverse patches.  
+    # This also merges grids into parents.
+    #
+    # Otherwise just need to directly merge grids into parent grids
+
     if Config.model.hybrid:
         hybrid_tol=Config.model.hybridTolerance or Config.default_forward_patch_max_distortion
         gridlist=split_forward_reverse_patches( trialgrid, hybrid_tol, gridlist )
+    else:
+        for g in gridlist:
+            g.mergeIntoParent()
     return gridlist
 
-def create_patch_csv( patchlist, modelname, additive=True, trimgrid=True, linzgrid=False, precision=5 ):
-    '''
-    Function takes a set of grids of deformation data and compiles CSV and optionally LINZ 
-    ascii grid format files defining the patch.  Each grid file has associated extent and 
-    buffer WKT files, which define the extents over which they are actually required (ie
-    within which the parent grid resolution is not adequate).  The buffer wkt defines the
-    extents over which the grid deformation is smoothed into that of the parent grid.
-    So the main work of this routine is to smooth each grid into its parent grid.
 
-    By default assumes that the patch is "additive", that is each component is
-    added together to build the total deformation.  If additive is false, then the 
-    CSV files are constructed such that each subgrid overrides its parent grid over the
-    area in which it applies.
-
-    By default trims grids to remove redundant zero rows/columns at edges.  This 
-    can be turned off to keep grid boundaries aligned with parent grid (makes no
-    difference to calculated values - just looks nicer!?)
-    '''
-    # Note: Assumes patchlist is sorted such that parents are before children
-    Logger.write("Creating patch CSV files")
-    for patch in patchlist:
-        # Get the files used for this component of the patch
-
-        gridfile = patch.file
-        component = patch.name
-        csvfile = re.sub(r'(\.grid)?$','.csv',gridfile,re.I)
-        gdffile = re.sub(r'(\.grid)?$','.gdf',gridfile,re.I)
-        Logger.write("Creating patch file file {0}".format(csvfile))
-        parent = patch.parent
-        extfile = patch.extentfile+'.extent.wkt'
-        buffile = patch.extentfile+'.buffer.wkt'
-        gridparams = dict(
-            gridfile=gridfile,
-            csvfile=csvfile,
-            gdffile=gdffile,
-            parentgrid=parent.file if parent else 'undefined',
-            parentcsv=parent.csv if parent else 'undefined',
-            extents=extfile,
-            buffer=buffile,
-            header1='Patch component '+component.replace('"',"'"),
-            header2='Model source '+modelname.replace('"',"'"),
-            header3=runtime
-        )
-
-        # Build a grid tool command to process the file
-        
-        # Read in the existing file (only need de, dn, du components)
-        merge_commands=gridtool+'\nread maxcols 3 gridfile '
- 
-        # If have a parent, then subtract it as want to merge into it
-        if parent: merge_commands = merge_commands + '\nsubtract maxcols 3 parentgrid'
-
-        # Set to zero outside area extents for which patch subcell resolution is required
-        merge_commands=merge_commands + '\nzero outside extents'
-
-        # Ensure zero at edge
-        merge_commands=merge_commands + '\nzero edge 1'
-
-        # Smooth out to buffer to avoid sharp transition
-        merge_commands=merge_commands + '\nsmooth linear outside extents not outside buffer not edge 1'
-
-        # Trim redundant zeros around the edge of the patch
-        merge_commands=merge_commands + '\ntrim 1'
-
-        # If LINZ grid required then write it out.  LINZ grid is always additive
-        # so this comes before adding the parent grid back on
-        if linzgrid:
-            merge_commands=merge_commands + '\nwrite_linzgrid NZGD2000 header1 header2 header3 gdffile'
-
-        # If we have a parent and are not making additive patches then add the parent back
-        # on.
-        if parent and not additive: merge_commands = merge_commands + '\nadd csv parentcsv'
-
-        # Set the output coordinate precision
-        merge_commands = merge_commands + '\nprecision {0}'.format(precision)
-
-        # Finally write out as a CSV file
-        merge_commands=merge_commands + '\nwrite csv csvfile'
-
-        # Run the commands
-        gridtoolcmd=[gridparams.get(x,x) for x in merge_commands.split() ]
-
-        def expand_param(m):
-            x=m.group(1)
-            x=gridparams.get(x,x)
-            x='"'+x+'"' if re.search(r'\s',x) else x
-            return x
-    
-        Logger.write("Running "+
-                  re.sub(r'(\w+)',expand_param,merge_commands)
-                  .replace("\n","\n    ")
-                   )
-
-        call(gridtoolcmd)
-
-        if not os.path.exists( csvfile ):
-            raise RuntimeError("Could not create CSV file "+csvfile)
-        patch.csv=csvfile
-        if linzgrid:
-            if not os.path.exists( gdffile ):
-                raise RuntimeError("Could not create CSV file "+gdffile)
-            patch.gdf=gdffile
-
-
-def build_linzshift_model( gridlist, modeldef, additive, shiftpath, splitbase=False ):
-    '''
-    Creates shift definition files using list of grids.  Assumes that grids have
-    been generated using linzgrid=True
-    '''
-
-    if not gridlist or not gridlist[0].gdf:
-        raise RuntimeError("Cannot build shift model - haven't built LINZ grid format files")
-    if not additive:
-        raise RuntimeError("Cannot build shift model - grids must be built as additive")
-
-    shiftname=os.path.basename(shiftpath)
-    shiftpath = os.path.dirname(shiftpath)
-    if not os.path.isdir(shiftpath):
-        os.makedirs(shiftpath)
-    patchname=gridlist[0].basename
-    plen=len(patchname)
-    baselist=set([patch.base for patch in gridlist])
-    for base in baselist:
-        shiftdef=shiftname+base[plen:]+'_shift.def'
-        shiftbin=shiftname+base[plen:]+'_shift.bin'
-        shiftfile=os.path.join(shiftpath,shiftdef)
-        Logger.write("Creating shift definition file {0}".format(shiftfile))
-        with open(shiftfile,'w') as f:
-            replace=dict(
-                name=base,
-                runtime=runtime,
-                modelname=modelname
-            )
-            f.write(re.sub(
-                r'\{(\w+)\}',
-                lambda m: replace[m.group(1)],
-                shift_model_header
-            ))
-            for patch in gridlist:
-                if patch.base != base and splitbase:
-                    continue
-                gdf=os.path.basename(patch.gdf)
-                gdf=shiftname+gdf[plen:]
-                gdffile=os.path.join(shiftpath,gdf)
-                if gdffile != patch.gdf:
-                    shutil.copyfile(patch.gdf,gdffile)
-                replace['component']=patch.name
-                replace['gridfile']=gdf
-                f.write(re.sub(
-                    r'\{(\w+)\}',
-                    lambda m: replace[m.group(1)],
-                    shift_model_component
-                ))
-        call(['makelinzshiftmodel.pl',shiftdef,shiftbin],cwd=shiftpath)
-
-
-def build_published_component( gridlist, modeldef, modelname, additive, comppath, cleandir=False ):
+def build_published_component( gridlist, comppath, cleandir=False ):
     '''
     Creates the component.csv file and grid components used as a published
     component of a LINZ published deformation model
     '''
 
-    patchversions=get_patch_spec( modeldef )
-    if not patchversions:
-        raise RuntimeError("Patch definition file missing for {0}".format(modeldef))
-    patchdir='patch_'+modelname
-    modeldesc=patchversions[0].event
-    modeldate=patchversions[0].date
+    patchdir='patch_'+Config.model.modelname
+    modeldesc=Config.model.description
+    modeldate=Config.model.modeldate
 
     # If the model date doesn't contain a date, then append it
     if not re.search(r'[12]\d\d\d[01]\d[0123]\d',patchdir):
@@ -1674,15 +1565,17 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
     if not gridlist or not gridlist[0].csv:
         raise RuntimeError("Cannot build shift model - haven't built grid CSV files")
     comppath = os.path.join( comppath, 'model', patchdir )
+
+    Logger.write("Writing published model submodel {0}".format(comppath))
     if not os.path.isdir(comppath):
         os.makedirs(comppath)
     if cleandir:
         for f in os.listdir(comppath):
             fn=os.path.join(comppath,f)
             if not os.path.isdir(fn):
+                Logger.write("   Removing existing file {0}".format(f))
                 os.remove(fn)
 
-    Logger.write("Writing published model submodel {0}".format(comppath))
 
     compcsv=os.path.join(comppath,'component.csv')
 
@@ -1734,14 +1627,15 @@ def build_published_component( gridlist, modeldef, modelname, additive, comppath
                 for priority, grid in enumerate(gridlist):
                     if grid.topLevelGrid() != tg:
                         continue
-                    gd=defgrid.DeformationGrid(grid.csv)
-                    (gridpath,csvname)=os.path.split(grid.csv)
+                    csvfile=grid.csvfile
+                    gd=defgrid.DeformationGrid(csvfile)
+                    (gridpath,csvname)=os.path.split(csvfile)
                     rvs=reverse_patch if grid.isforward is None else not grid.isforward
                     csvdata['reverse_patch']='Y' if rvs else 'N'
                     csvname = re.sub(r'^(grid_)?','grid_',csvname)
                     compcsv=os.path.join(comppath,csvname)
-                    if compcsv != grid.csv:
-                        shutil.copyfile(grid.csv,compcsv)
+                    if compcsv != csvfile:
+                        shutil.copyfile(csvfile,compcsv)
                     min_lon=round(np.min(gd.column('lon')),10)
                     max_lon=round(np.max(gd.column('lon')),10)
                     min_lat=round(np.min(gd.column('lat')),10)
@@ -1797,7 +1691,9 @@ if __name__ == "__main__":
     # parser.add_argument('--shift-model-path',help="Create a linzshiftmodel in the specified directory")
     parser.add_argument('--submodel-path',help="Create publishable component in the specified directory")
     parser.add_argument('--clean-dir',action='store_true',help="Clean publishable component subdirectory")
-    parser.add_argument('--subgrids-nest',action='store_false',help="Grid CSV files calculated to replace each other rather than total to deformation")
+    subnest_group=parser.add_mutually_exclusive_group()
+    subnext_group.parser.add_argument('--subgrids-nest',action='store_true',help="Grid CSV files subgrids replace parent values to calculate deformation")
+    subnext_group.parser.add_argument('--subgrids-additive',action='store_true',help="Grid CSV files subgrids added to calculate total deformation")
 #    parser.add_argument('--apply-time-model-scale',action='store_true',help="Scale by the time model final value")
     parser.add_argument('--max-level',type=int,help="Maximum number of split levels to generate (each level increases resolution by 4)")
     parser.add_argument('--base-tolerance',type=float,help="Base level tolerance - depends on base column")
@@ -1819,7 +1715,9 @@ if __name__ == "__main__":
     comp_path=args.submodel_path
 #    if comp_path and shift_path:
 #        raise RuntimeError("Cannot create published patch and shift model")
-    additive=args.subgrids_nest
+    additive=args.subgrids_additive
+    if additive:
+        raise RuntimeError("Non-nested grids not supported in current implementation")
     trimgrid=args.no_trim_subgrids
 #    if args.parcel_shift: 
 #        Logger.write("Configuring model to use parcel shift parameters")
@@ -1860,15 +1758,9 @@ if __name__ == "__main__":
 
         gridlist = build_deformation_grids( splitbase=split_base )
 
-#        build_linzgrid=bool(shift_path)
-
-        create_patch_csv( gridlist, modelname, linzgrid=build_linzgrid, additive=additive, trimgrid=trimgrid, precision=args.precision )
-
-#        if shift_path:
-#            build_linzshift_model( gridlist, modeldef, additive, shiftpath=shift_path, splitbase=split_base )
-
         if comp_path:
-            build_published_component( gridlist, modeldef, modelname, additive, comp_path, args.clean_dir )
+            build_published_component( gridlist, comp_path, args.clean_dir )
+
     except Exception as ex:
         Logger.write('\n\nFailed with error: {0}'.format(ex.message),level=-1)
         raise

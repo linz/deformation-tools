@@ -482,12 +482,27 @@ static void run_aligntogrid( grid &g, commandlist &commands )
     g.alignto(galign);
 }
 
-static void run_trimtogrid( grid &g, commandlist &commands )
+static void run_trimto( grid &g, commandlist &commands )
 {
-    grid galign;
-    string filename = run_read_grid( galign, commands, "align" );
-    cout <<  "Trimming to grid to " << filename << endl;
-    g.trimto(galign);
+    int buffer=0;
+    if( next_command_is(commands,"buffer"))
+    {
+        next_command_value(commands,buffer,"Buffer size for trimto");
+    }
+    if( next_command_is(commands,"wkt"))
+    {
+        string wktfile= next_command( commands, "File name for trimto wkt");
+        double minx, maxx, miny, maxy;
+        wkt_extents(wktfile.c_str(),minx,maxx,miny,maxy);
+        g.trimto(minx,maxx,miny,maxy,buffer);
+    }
+    else
+    {
+        grid galign;
+        string filename = run_read_grid( galign, commands, "align" );
+        cout <<  "Trimming to grid to " << filename << endl;
+        g.trimto(galign,buffer);
+    }
 }
 
 static void run_multiply( grid &g, commandlist &commands )
@@ -676,7 +691,7 @@ static void run_commands( commandlist &commands )
             else if( op == "subtract" ) run_addgrid(g, commands, op );
             else if( op == "replace" ) run_addgrid(g, commands, op );
             else if( op == "alignto" ) run_aligntogrid( g, commands );
-            else if( op == "trimto" ) run_trimtogrid( g, commands );
+            else if( op == "trimto" ) run_trimto( g, commands );
             else if( op == "multiply" ) run_multiply( g, commands );
             else if( op == "evaluate" ) run_evaluate( g, commands );
             else if( op == "resize" ) run_resize( g, commands );

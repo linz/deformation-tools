@@ -74,9 +74,12 @@ echo "test 32 - trim" | tee -a out/tests.log
 ../gridtool read align2.grid resize relative -15 -15 45 25  trimto align1.grid write out/test32.grid >> out/tests.log
 ../gridtool read out/test32.grid resize relative -1 -1 1 1 trimto align1.grid write out/test32b.grid >> out/tests.log
 ../gridtool read out/test32.grid resize relative 1 1 -1 -1 trimto align1.grid write out/test32c.grid >> out/tests.log
+../gridtool read align2.grid resize relative -15 -15 45 25  trimto buffer 2 align1.grid write out/test32d.grid >> out/tests.log
 
 echo "test 33 - create" | tee -a out/tests.log
 ../gridtool create 25.0 29.0 0.25 -42.0 -41.0 0.1 columns de+dn write csv out/test33a.csv >> out/tests.log
 ../gridtool create extents align1.grid 0.25 0.1 columns de+dn write csv out/test33b.csv >> out/tests.log
 ../gridtool create extents wkt test.wkt 0.25 0.1 columns de+dn write csv out/test33c.csv >> out/tests.log
+
+diff -q -r -B -b out check
 
