@@ -1057,8 +1057,8 @@ class PatchGridDef:
                   'trimto','buffer','1','wkt',bufwkt,
                   'trimto',pgridfile,
                   'zero','outside',extwkt,'edge','1',
-                  'add','maxcols','3',pgridfile,'outside',bufwkt,'edge',1,
-                  'smooth','linear','outside',extwkt,'not','outside',bufwkt,'not','edge',1,
+                  'add','maxcols','3',pgridfile,'outside',extwkt,'edge','1',
+                  'smooth','linear','outside',extwkt,'not','outside',bufwkt,'not','edge','1',
                   'write',gridfile
                  ]
         call(commands)
@@ -1562,7 +1562,7 @@ def build_published_component( gridlist, comppath, cleandir=False ):
     if not re.search(r'[12]\d\d\d[01]\d[0123]\d',patchdir):
         patchdir=patchdir+'_'+modeldate.strftime('%Y%m%d')
 
-    if not gridlist or not gridlist[0].csv:
+    if not gridlist or not gridlist[0].csvfile:
         raise RuntimeError("Cannot build shift model - haven't built grid CSV files")
     comppath = os.path.join( comppath, 'model', patchdir )
 
@@ -1581,7 +1581,7 @@ def build_published_component( gridlist, comppath, cleandir=False ):
 
     with open(compcsv,"w") as ccsvf:
         ccsv=csv.writer(ccsvf)
-        ccsv.writerow(published_component_columns)
+        ccsv.writerow(Config.published_component_columns)
         csvdata=dict(
             version_added=0,
             version_revoked=0,
@@ -1614,6 +1614,7 @@ def build_published_component( gridlist, comppath, cleandir=False ):
         
         ir0=1
         toplevelgrids=[g for g in gridlist if g.isTopLevelGrid()]
+        patchversions=Config.model.patchversions
         for nv in range(len(patchversions)):
             versionspec=patchversions[nv]
             reverse_patch=versionspec.reverse
@@ -1654,7 +1655,7 @@ def build_published_component( gridlist, comppath, cleandir=False ):
                         file1=csvname,
                         )
                     Logger.writeWkt('Published '+csvname,grid.level,
-                              bounds_poly(((min_lon,min_lat),(max_lon,max_lat))).to_wkt())
+                            GridSpec(min_lon,min_lat,max_lon,max_lat).boundingPolygonWkt())
                     
                     rdate0=0
                     for ir,r in enumerate(versionspec.time_model):
@@ -1678,7 +1679,7 @@ def build_published_component( gridlist, comppath, cleandir=False ):
                             compdata['component']=ir+ir1
                             compdata['priority']=priority
                         csvdata.update(compdata)
-                        ccsv.writerow([csvdata[c] for c in published_component_columns])
+                        ccsv.writerow([csvdata[c] for c in Config.published_component_columns])
 
 
 if __name__ == "__main__":
@@ -1692,8 +1693,8 @@ if __name__ == "__main__":
     parser.add_argument('--submodel-path',help="Create publishable component in the specified directory")
     parser.add_argument('--clean-dir',action='store_true',help="Clean publishable component subdirectory")
     subnest_group=parser.add_mutually_exclusive_group()
-    subnext_group.parser.add_argument('--subgrids-nest',action='store_true',help="Grid CSV files subgrids replace parent values to calculate deformation")
-    subnext_group.parser.add_argument('--subgrids-additive',action='store_true',help="Grid CSV files subgrids added to calculate total deformation")
+    subnest_group.add_argument('--subgrids-nest',action='store_true',help="Grid CSV files subgrids replace parent values to calculate deformation")
+    subnest_group.add_argument('--subgrids-additive',action='store_true',help="Grid CSV files subgrids added to calculate total deformation")
 #    parser.add_argument('--apply-time-model-scale',action='store_true',help="Scale by the time model final value")
     parser.add_argument('--max-level',type=int,help="Maximum number of split levels to generate (each level increases resolution by 4)")
     parser.add_argument('--base-tolerance',type=float,help="Base level tolerance - depends on base column")
