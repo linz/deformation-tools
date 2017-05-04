@@ -84,4 +84,7 @@ echo "test 33 - create" | tee -a out/tests.log
 ../gridtool create extents wkt test.wkt 0.25 0.1 columns de+dn write csv out/test33c.csv >> out/tests.log
 
 diff -q -r -B -b out check
+if [ $? = 0 ]; then
+    echo "All tests successfully passed"
+fi
 

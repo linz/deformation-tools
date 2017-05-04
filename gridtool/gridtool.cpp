@@ -318,6 +318,7 @@ static void mark_grid( grid &g, commandlist &commands, string markcommand, grid 
 static void run_write_grid( grid &g, commandlist &commands )
 {
     bool csv = false;
+    const char *crlf="\n";
     string filename;
     string columns = "*";
     while( 1 )
@@ -326,6 +327,10 @@ static void run_write_grid( grid &g, commandlist &commands )
         if( filename == "csv" ) 
         {
             csv=true;
+        }
+        else if( filename == "dos" ) 
+        {
+            crlf="\r\n";
         }
         else if( filename == "columns" )
         {
@@ -346,7 +351,7 @@ static void run_write_grid( grid &g, commandlist &commands )
     vector<int> colids;
     grid_columns( g, columns, colids );
     cout << "Writing grid" << (marked ? " data" : "") << " to file " << filename << endl;
-    g.writefile(filename.c_str(),csv ? "," : "\t",&colids,marked);
+    g.writefile(filename.c_str(),csv ? "," : "\t",crlf,&colids,marked);
 }
 
 static void run_precision( grid &g, commandlist &commands )

@@ -306,11 +306,12 @@ static string format_number(double value, int ndp )
     return fnum;
 }
 
-bool grid::writefile( const char *filename, const char *delim, std::vector<int> *colids , bool markedonly )
+bool grid::writefile( const char *filename, const char *delim, const char *crlf, std::vector<int> *colids , bool markedonly )
 {
     if( ! delim ) delim = "\t";
+    if( ! crlf ) crlf = "\n";
 
-    ofstream f(filename);
+    ofstream f(filename, std::ios_base::out | std::ios_base::binary );
     m_filename=std::string(filename);
     int crdprec = 12;
     int dataprec = m_dataprec > 0 ? m_dataprec : crdprec;
@@ -347,7 +348,7 @@ bool grid::writefile( const char *filename, const char *delim, std::vector<int> 
         {
             f << delim << m_fields[colids->at(iv)];
         }
-        f << endl;
+        f << crlf;
     }
 
     for( int ir = 0; ir < m_nrow; ir++ )
@@ -372,7 +373,7 @@ bool grid::writefile( const char *filename, const char *delim, std::vector<int> 
                     f << delim << format_number(value,dataprec);
                 }
             }
-            f << endl;
+            f << crlf;
         }
     }
     f.close();
