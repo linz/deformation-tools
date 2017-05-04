@@ -987,12 +987,20 @@ class PatchGridDef:
         if self._csv is None:
             gridfile=self.builtFilename
             csvfile = re.sub(r'(\.grid)?$','.csv',gridfile,re.I)
-            commands=[gridtool,
-                      'read','maxcols','3',gridfile,
-                      'write','csv','dos',csvfile]
-            call(commands)
+            self.writeCsvFile( csvfile, -1 )
             self._csv=csvfile
         return self._csv
+
+    def writeCsvFile( self, filename, ndp=4 ):
+        global gridtool
+        if self._csv is None:
+            gridfile=self.builtFilename
+            csvfile = re.sub(r'(\.grid)?$','.csv',gridfile,re.I)
+            commands=[gridtool,
+                      'read','maxcols','3',gridfile,
+                      'write','ndp',str(ndp),'csv','dos',filename]
+            call(commands)
+        return filename
 
     @property
     def gdffile( self ):
@@ -1287,8 +1295,6 @@ class PatchGridList( list ):
         Logger.writeWkt('Buffered extents for {0}/{1}'.format(pname,subpatch),
                         level,buffered_areas.to_wkt())
 
-        print "Merging.."
-        print "cellsize",cellsize
         merged_specs=[]
         for a in buffered_areas:
             if not a.intersects(areas):
@@ -1297,7 +1303,6 @@ class PatchGridList( list ):
             if keepWithin is not None:
                 bounds=bounds.intersectWith(keepWithin)
             bounds=bounds.alignedTo(cellsize)
-            print "   ",bounds
             bounds.mergeIntoList( merged_specs )
 
         merged_specs.sort(key=lambda x: x.area(), reverse=True)
@@ -1311,9 +1316,7 @@ class PatchGridList( list ):
             name=name+"_L{0}".format(level)
 
         patchdefs=PatchGridList()
-        print "Creating grids"
         for i,spec in enumerate(merged_specs):
-            print "   spec",spec
             extents=MultiPolygon([a for a in areas if a.intersects(spec.boundingPolygon())])
             buffered_extents=MultiPolygon([a for a in buffered_areas if a.intersects(spec.boundingPolygon())])
             patchname=name.format(i)
@@ -1589,9 +1592,7 @@ def build_deformation_grids( splitbase=True ):
     gridlist=[]
     for griddef in griddefs:
         patchgrids=griddef.splitToSubgrids()
-        print "PG"
         for p in patchgrids:
-            print "   ",p.name,p.spec
             p.base=griddef.name if splitbase else Config.patchname
             p.basename=Config.patchname
             gridlist.append(p)
@@ -1613,7 +1614,7 @@ def build_deformation_grids( splitbase=True ):
     return gridlist
 
 
-def build_published_component( gridlist, comppath, cleandir=False ):
+def build_published_component( gridlist, comppath, cleandir=False, ndp=4 ):
     '''
     Creates the component.csv file and grid components used as a published
     component of a LINZ published deformation model
@@ -1627,7 +1628,7 @@ def build_published_component( gridlist, comppath, cleandir=False ):
     if not re.search(r'[12]\d\d\d[01]\d[0123]\d',patchdir):
         patchdir=patchdir+'_'+modeldate.strftime('%Y%m%d')
 
-    if not gridlist or not gridlist[0].csvfile:
+    if not gridlist:
         raise RuntimeError("Cannot build shift model - haven't built grid CSV files")
     comppath = os.path.join( comppath, 'model', patchdir )
 
@@ -1693,15 +1694,15 @@ def build_published_component( gridlist, comppath, cleandir=False ):
                 for priority, grid in enumerate(gridlist):
                     if grid.topLevelGrid() != tg:
                         continue
-                    csvfile=grid.csvfile
-                    gd=defgrid.DeformationGrid(csvfile)
-                    (gridpath,csvname)=os.path.split(csvfile)
                     rvs=reverse_patch if grid.isforward is None else not grid.isforward
                     csvdata['reverse_patch']='Y' if rvs else 'N'
+                    csvname=os.path.split(grid.builtFilename)[1]
+                    csvname=os.path.splitext(csvname)[0]+'.csv'
                     csvname = re.sub(r'^(grid_)?','grid_',csvname)
                     compcsv=os.path.join(comppath,csvname)
-                    if compcsv != csvfile:
-                        shutil.copyfile(csvfile,compcsv)
+                    grid.writeCsvFile( compcsv, ndp )
+                    
+                    gd=defgrid.DeformationGrid(compcsv)
                     min_lon=round(np.min(gd.column('lon')),10)
                     max_lon=round(np.max(gd.column('lon')),10)
                     min_lat=round(np.min(gd.column('lat')),10)
@@ -1825,7 +1826,7 @@ if __name__ == "__main__":
         gridlist = build_deformation_grids( splitbase=split_base )
 
         if comp_path:
-            build_published_component( gridlist, comp_path, args.clean_dir )
+            build_published_component( gridlist, comp_path, args.clean_dir, args.precision )
 
     except Exception as ex:
         Logger.write('\n\nFailed with error: {0}'.format(ex.message),level=-1)
