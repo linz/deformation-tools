@@ -19,6 +19,7 @@ import os
 import os.path
 import re
 import shutil
+import numbers
 import sys
 
 calc_okada=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),'okada','calc_okada')
@@ -29,7 +30,7 @@ gridtool=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))
 if not os.path.exists(gridtool):
     raise RuntimeError('Cannot find gridtool program at '+gridtool)
 
-# Log file ...
+# Logging parameters
 
 runtime=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 runtime_version=datetime.datetime.now().strftime("%Y%m%d")
@@ -281,6 +282,11 @@ class Logger( object ):
             sys.stdout.flush()
 
     @staticmethod
+    def dumpGridList( message, gridlist ):
+        gridtxt=message+"\n"+"\n".join(["   "+g.shortStr() for g in gridlist])
+        Logger.write(gridtxt)
+
+    @staticmethod
     def writeGridDefWkt( name, level, griddef ):
         if not Logger.wktgridfile:
             return
@@ -303,9 +309,24 @@ class Logger( object ):
         if not Logger.wktfile:
             return
         Logger.wktfile.write("{0}|{1}|{2}\n".format(item,level,wkt))
+        Logger.wktfile.flush()
 
 
 class Util( object ):
+
+    @staticmethod
+    def asMultiPolygon( areas ):
+        if type( areas) != MultiPolygon:
+            if type(areas) == Polygon:
+                areas=[areas]
+            if type(areas) == list:
+                areas=MultiPolygon(areas)
+        if not areas.is_valid:
+            Logger.write("Attempting to fix invalid geometry in asMultiPolygon")
+            areas=areas.buffer(0.0)
+            if type(areas) == Polygon:
+                areas=MultiPolygon([areas])
+        return areas
 
     @staticmethod
     def bufferedPolygon( polygon, buffer ):
@@ -317,9 +338,7 @@ class Util( object ):
             polygon=affinity.scale(polygon,xfact=1.0/Config.scale_factor[0],yfact=1.0/Config.scale_factor[1],origin=Config.origin)
             polygon=polygon.buffer(buffer)
             polygon=affinity.scale(polygon,xfact=Config.scale_factor[0],yfact=Config.scale_factor[1],origin=Config.origin)
-        if 'geoms' not in dir(polygon):
-            polygon=MultiPolygon([polygon])
-        return polygon
+        return Util.asMultiPolygon(polygon)
 
 class GridSpec( object ):
     '''
@@ -339,8 +358,8 @@ class GridSpec( object ):
     @staticmethod
     def _calc_min_max( base, minv, maxv, csize, multiple ):
         csize *= multiple
-        n0 = int(math.floor((minv-base)/csize))
-        n1 = int(math.ceil((maxv-base)/csize))
+        n0 = int(math.floor((minv-base)/csize+0.0001))
+        n1 = int(math.ceil((maxv-base)/csize-0.0001))
         return base+n0*csize,base+n1*csize,(n1-n0)*multiple
 
     def __init__( self, xmin, ymin, xmax, ymax, ngx=1, ngy=1, cellsize=None ):
@@ -348,9 +367,9 @@ class GridSpec( object ):
             raise RuntimeError('Odd!')
         if cellsize is not None:
             if ngx == 1:
-                ngx=max(int((xmax-xmin)/cellsize[0]+0.5)+1,1)
+                ngx=max(int((xmax-xmin)/cellsize[0]+0.5),1)
             if ngy == 1:
-                ngy=max(int((ymax-ymin)/cellsize[1]+0.5)+1,1)
+                ngy=max(int((ymax-ymin)/cellsize[1]+0.5),1)
         self.xmin=xmin
         self.ymin=ymin
         self.xmax=xmax
@@ -364,6 +383,9 @@ class GridSpec( object ):
             self.xmax, self.ymax,
             self.ngx, self.ngy,
             )
+
+    def copy( self ):
+        return GridSpec( self.xmin, self.ymin, self.xmax, self.ymax, self.ngx, self.ngy )
 
     def alignedTo( self, cellsize, origin=None, multiple=1 ):
         '''
@@ -481,6 +503,7 @@ class GridSpec( object ):
         return (self.xmax-self.xmin)*(self.ymax-self.ymin)
 
     def mergeIntoList( self, deflist ):
+        merged=self.copy()
         while True:
             overlap = None
             for def1 in deflist:
@@ -489,10 +512,10 @@ class GridSpec( object ):
                     break
             if overlap:
                 deflist.remove(overlap)
-                self=self.mergeWith(overlap)
+                merged=self.mergeWith(overlap)
             else:
                 break
-        deflist.append(self)
+        deflist.append(merged)
 
 class FaultModel( object ):
 
@@ -549,7 +572,7 @@ class FaultModel( object ):
         Loads a patch model file, and returns a list of patch versions associated with it.
         '''
         
-        self.modelname=os.path.basename(self.modelpath)
+        self.modelname=os.path.splitext(os.path.basename(self.modelpath))[0]
         with open(self.modelpath) as f:
             event = f.readline()
             model = f.readline()
@@ -758,39 +781,48 @@ class FaultModel( object ):
                 gf.write(v)
 
     def _addToCache( self, missing ):
-        print "          ... calculating {0} grid values".format(len(missing))
+        global calc_okada
+        nmissing=len(missing)
         cachefile=self._cacheFile()
         missingfile=Config.filename(name=self.modelname,extension='_grid.cache.missing.tmp')
         calcfile=Config.filename(name=self.modelname,extension='_grid.cache.calcs.tmp')
 
-        nmissing=0
-        with open(missingfile,'w') as mf:
-            for l in missing:
-                mf.write(l)
-                mf.write('\n')
-                nmissing+=1
+        blocksize=1000
+        ncalc=0
+        for imissing in range(0,nmissing,blocksize):
+            sys.stdout.write("          ... calculated {0}/{1} grid values\r".format(ncalc,nmissing))
+            sys.stdout.flush()
+            with open(missingfile,'w') as mf:
+                for l in missing[imissing:imissing+blocksize]:
+                    mf.write(l)
+                    mf.write('\n')
 
-        global calc_okada
-        modelpath=self.modelpath
-        params=[calc_okada,'-f','-x','-l','-s',modelpath,missingfile,calcfile]
-        call(params)
+            modelpath=self.modelpath
+            params=[calc_okada,'-f','-x','-l','-s',modelpath,missingfile,calcfile]
+            call(params)
 
-        header=None
-        with open(cachefile) as cf:
-            header=cf.next()
+            header=None
+            if os.path.exists(cachefile):
+                with open(cachefile) as cf:
+                    header=cf.next()
 
-        with open(calcfile) as calcf:
-            calcheader=calcf.next()
-            mode='w' if calcheader != header else 'a'
-            with open(cachefile,mode) as cf:
-                if mode == 'w':
-                    cf.write(calcheader)
-                for l in calcf:
-                    parts=l.split('\t')
-                    key=self._cacheKey(parts[:2])
-                    cf.write(key)
-                    cf.write('\t')
-                    cf.write('\t'.join(parts[2:]))
+            with open(calcfile) as calcf:
+                calcheader=calcf.next()
+                mode='w' if calcheader != header else 'a'
+                with open(cachefile,mode) as cf:
+                    if mode == 'w':
+                        cf.write(calcheader)
+                    for l in calcf:
+                        parts=l.split('\t')
+                        key=self._cacheKey(parts[:2])
+                        cf.write(key)
+                        cf.write('\t')
+                        cf.write('\t'.join(parts[2:]))
+                        ncalc += 1
+            os.remove(missingfile)
+            os.remove(calcfile)
+        if nmissing:
+            sys.stdout.write("\n")
 
         
     def calcGrid( self, gridspec, gridfile ):
@@ -843,15 +875,14 @@ class FaultModel( object ):
 
 class PatchGridDef:
                                  
-    def __init__( self, name=None, subpatch=None, extents=None, buffer=0.0, level=1, spec=None, parent=None, source=None ):
-        self.buffer=0.0
+    def __init__( self, name=None, subpatch=None, extents=None, buffered_extents=None, level=1, spec=None, parent=None, source=None ):
         self.level=level
         self.parent=parent
         self.name=name
         self.subpatch=subpatch
         self._extents=extents
         self._extentsWkt=None
-        self._bufferedExtents=None
+        self._bufferedExtents=buffered_extents or extents
         self._bufferedExtentsWkt=None
         self.spec=spec
         self._grid=None
@@ -869,6 +900,8 @@ class PatchGridDef:
         if extents is not None:
             Logger.writeWkt('PatchGridDef {0} extents'.format(name,subpatch),
                             level,extents.to_wkt())
+            Logger.writeWkt('PatchGridDef {0} buffered extents'.format(name,subpatch),
+                            level,self._bufferedExtents.to_wkt())
             if not self._extents.is_valid:
                 raise RuntimeError('Invalid extents defined for grid {0}'.format(name))
 
@@ -876,7 +909,7 @@ class PatchGridDef:
                     name=Unspecified, 
                     subpatch=Unspecified, 
                     extents=Unspecified, 
-                    buffer=Unspecified, 
+                    buffered_extents=Unspecified, 
                     level=Unspecified, 
                     parent=Unspecified, 
                     isforward=Unspecified, 
@@ -885,7 +918,7 @@ class PatchGridDef:
             name=name if name is not Unspecified else self.name,
             subpatch=subpatch if subpatch is not Unspecified else self.subpatch,
             extents=extents if extents is not Unspecified else self.extents,
-            buffer=buffer if buffer is not Unspecified else self.buffer,
+            buffered_extents=buffered_extents if buffered_extents is not Unspecified else self.bufferedExtents,
             level=level if level is not Unspecified else self.level,
             source=source if source is not Unspecified else self.source,
             parent=parent if parent is not Unspecified else None
@@ -956,7 +989,7 @@ class PatchGridDef:
             csvfile = re.sub(r'(\.grid)?$','.csv',gridfile,re.I)
             commands=[gridtool,
                       'read','maxcols','3',gridfile,
-                      'write','csv',csvfile]
+                      'write','csv','dos',csvfile]
             call(commands)
             self._csv=csvfile
         return self._csv
@@ -1004,19 +1037,15 @@ class PatchGridDef:
         return self._extentsWkt
 
     @property
-    def bufferedExtents( self, buffer=None ):
+    def bufferedExtents( self ):
         '''
         Return the buffered extents over which the grid may differ from its
         parent.
 
         Returned as a single MultiPolygon
         '''
-        if self.buffer != buffer:
-            self._bufferedExtents=None
-            self._bufferedExtentsWkt=None
-            self.buffer=buffer
         if self._bufferedExtents is None and self.extents is not None:
-            self._bufferedExtents=Util.bufferedPolygon(self.extents,self.buffer)
+            self._bufferedExtents=self.extents
         return self._bufferedExtents
 
     @property
@@ -1087,6 +1116,8 @@ class PatchGridDef:
         grid=self.grid
         gridr = grid.calcResolution(tolerance,precision=0.0000001)
         subcell_areas=gridr.regionsLessThanLevel('reqsize',celldimension )
+        if len(subcell_areas) <= 0:
+            return None
         return subcell_areas
 
     # Recursive function (recursing on grid level) that populates the array 
@@ -1103,9 +1134,11 @@ class PatchGridDef:
 
             # Form a trial grid split the cellsize for the next level
             splitspec=self.spec.split(Config.cell_split_factor)
+            name="{0}_SL{1}".format(self.name,self.level+1)
+            level1=self.level+1
             grid2=PatchGridDef(
-                name="{0}_SL{1}".format(self.name,self.level+1),
-                level=self.level+1,
+                name=name,
+                level=level1,
                 spec=splitspec,
                 source=self.source
                 )
@@ -1117,47 +1150,50 @@ class PatchGridDef:
             resolution=self.spec.cellDimension()
             subcell_areas=grid2.areasNeedingFinerGrid( 
                 Config.subcell_resolution_tolerance, resolution)
+            if subcell_areas is not None:
+                subcell_areas=Util.asMultiPolygon(subcell_areas)
+                Logger.writeWkt("{0} subcells".format(name),level1,subcell_areas.to_wkt())
+                
+                if Config.land_areas is not None:
+                    subcell_areas=subcell_areas.intersection(Config.land_areas)
+                    Logger.writeWkt("{0} subcells on land area".format(name),
+                                    level1,subcell_areas.to_wkt())
 
-            if Config.land_areas is not None:
-                valid_areas=[]
-                for sc in subcell_areas:
-                    p=sc.intersection(Config.land_areas)
-                    if 'geoms' not in dir(p):
-                        p=[p]
-                    for g in p:
-                        if type(g) == Polygon:
-                            valid_areas.append(g)
-                subcell_areas=valid_areas
+                    # If limiting to land areas, then also select areas where sea resolution
+                    # is to be applied.
+                
+                    sea_areas= grid2.areasNeedingFinerGrid( 
+                        Config.subcell_resolution_sea_tolerance,
+                        resolution)
+                    if sea_areas is not None:
+                        sea_areas=Util.asMultiPolygon(sea_areas)
+                        Logger.writeWkt("{0} sea subcells".format(name),
+                                        level1,sea_areas.to_wkt())
+                        subcell_areas=subcell_areas.union(Util.asMultiPolygon(sea_areas))
+                        Logger.writeWkt("{0} combined subcells".format(name),
+                                        level1,subcell_areas.to_wkt())
 
-                # If limiting to land areas, then also select areas where sea resolution
-                # is to be applied.
-            
-                subcell_areas.extend(grid2.areasNeedingFinerGrid( 
-                    Config.subcell_resolution_sea_tolerance,
-                    resolution))
+                # Note: previous version of code provided for replacing parent 
+                # grid where subgrids covered significant portion of parent
+                #
+                # This will be replaced with an optimize grids function 
+                # when generating the published grids
 
-            # Buffer to expand subcell areas by parent grid size (resolution) 
-            # This is to provide a sufficient buffer for smoothing on to
-            # parent grid without 
+                subcells=PatchGridList.gridsForAreas( 
+                    subcell_areas, 
+                    resolution,
+                    splitspec.cellSize(),
+                    keepWithin=self.spec,
+                    level=self.level+1,
+                    subpatch=self.subpatch,
+                    parent=self,
+                    source=self.source
+                    )
 
-            # Note: previous version of code provided for replacing parent 
-            # grid 
+                # Now split each subgrid and add to the total list of grids
 
-            subcells=PatchGridList.gridsForAreas( 
-                subcell_areas, 
-                splitspec.cellSize(),
-                buffer=resolution,
-                keepWithin=self.spec,
-                level=self.level+1,
-                subpatch=self.subpatch,
-                parent=self,
-                source=self.source
-                )
-
-            # Now split each subgrid and add to the total list of grids
-
-            for s in subcells:
-                subgrids.extend(s.splitToSubgrids())
+                for s in subcells:
+                    subgrids.extend(s.splitToSubgrids())
             
         return subgrids
 
@@ -1183,6 +1219,16 @@ class PatchGridDef:
         family.sort( key=lambda x: (x.level,x.file) )
         return family
 
+    def shortStr( self ):
+        return "Grid: {0} parent={1} level={2} F/R={3}".format(
+            self.name,
+            self.parent.name if self.parent is not None else '-',
+            self.level,
+            'F' if self.isforward is True else
+                'R' if self.isforward is False else
+                '-'
+            )
+
     def __str__( self ):
         return "\n".join((
             "Grid Name: {0}".format(self.name),
@@ -1202,7 +1248,7 @@ class PatchGridDef:
 class PatchGridList( list ):
 
     @staticmethod
-    def gridsForAreas( areas, cellsize, buffer=0.0, keepWithin=None, level=1, 
+    def gridsForAreas( areas, buffered_areas, cellsize, keepWithin=None, level=1, 
                       name=None,subpatch='',parent=None,source=None):
         '''
         Calculate a set of grids to cover the polygon areas defined in areas.
@@ -1220,29 +1266,41 @@ class PatchGridList( list ):
         as a separate postprocessing step to optimise total grid size.
         '''
 
-        if type(areas) == Polygon:
-            areas=[areas]
-        if type(areas) == list:
-            areas=MultiPolygon(areas)
-        if not areas.is_valid:
-            Logger.write("Attempting to fix invalid area in gridsForAreas")
-            areas=areas.buffer(0.0)
-            if type(areas) == Polygon:
-                areas=MultiPolygon([areas])
-        Logger.writeWkt('Required extents for {0}/{1}'.format(name,subpatch),
+        # pname used for debugging info
+        pname=name
+        if pname is None:
+            pname=Config.patchname
+            if subpatch:
+                pname=pname+"_"+subpatch+'??'
+            pname=pname+"_L{0}".format(level)
+
+        areas=Util.asMultiPolygon(areas)
+        Logger.writeWkt('Required extents for {0}/{1}'.format(pname,subpatch),
                         level,areas.to_wkt())
         if not areas.is_valid:
             raise RuntimeError('Invalid area defined for splitting {0}/{1}'.
-                               format(name,subpatch))
+                               format(pname,subpatch))
 
+        if isinstance(buffered_areas,numbers.Number):
+            buffered_areas=Util.bufferedPolygon( areas, buffered_areas )
+        buffered_areas=Util.asMultiPolygon(buffered_areas)
+        Logger.writeWkt('Buffered extents for {0}/{1}'.format(pname,subpatch),
+                        level,buffered_areas.to_wkt())
+
+        print "Merging.."
+        print "cellsize",cellsize
         merged_specs=[]
-        for a in areas:
+        for a in buffered_areas:
+            if not a.intersects(areas):
+                continue
             bounds = GridSpec.fromBounds(a.bounds).expand(cellsize)
             if keepWithin is not None:
                 bounds=bounds.intersectWith(keepWithin)
             bounds=bounds.alignedTo(cellsize)
+            print "   ",bounds
             bounds.mergeIntoList( merged_specs )
-        merged_specs.sort(key=lambda x: x.ymin)
+
+        merged_specs.sort(key=lambda x: x.area(), reverse=True)
 
         if name is None:
             if len(merged_specs) > 1:
@@ -1252,15 +1310,17 @@ class PatchGridList( list ):
                 name=name+"_"+subpatch
             name=name+"_L{0}".format(level)
 
-        boundsbuffer=(buffer*Config.scale_factor[0],buffer*Config.scale_factor[1])
-
         patchdefs=PatchGridList()
-        for i,b in enumerate(merged_specs):
-            extents=MultiPolygon([a for a in areas if a.intersects(b.boundingPolygon())])
+        print "Creating grids"
+        for i,spec in enumerate(merged_specs):
+            print "   spec",spec
+            extents=MultiPolygon([a for a in areas if a.intersects(spec.boundingPolygon())])
+            buffered_extents=MultiPolygon([a for a in buffered_areas if a.intersects(spec.boundingPolygon())])
             patchname=name.format(i)
             gsubpatch=subpatch.format(i)
-            spec=b.expand(boundsbuffer).alignedTo(cellsize)
-            patchdefs.append(PatchGridDef(name=patchname,subpatch=gsubpatch,spec=spec,extents=extents,buffer=buffer,level=level,parent=parent,source=source))
+            patchdefs.append(PatchGridDef(name=patchname,subpatch=gsubpatch,spec=spec,
+                                          extents=extents,buffered_extents=buffered_extents,
+                                          level=level,parent=parent,source=source))
 
         return patchdefs
 
@@ -1338,13 +1398,15 @@ def split_forward_reverse_patches( trialgrid, hybrid_tol, gridlist ):
             fgridname=g.name+'_F'
             basefg=forward_grids.get(g.parent,None)
 
-            gf=g.updatedWith(name=fgridname,isforward=True,source=None)
+            gf=g.updatedWith(name=fgridname,isforward=True,source=None,
+                            parent=basefg)
             fgridfile=gf.filename
 
             Logger.write('Creating smoothed forward patch grid for {0}'.format(g.name))
             commands=[
                 gridtool,
                 'read','maxcols','3',g.builtFilename
+                #,'write','csv',g._fileWithExtension('_presmooth.csv')
                 ]
             if basefg is not None:
                 commands.extend(['replace','maxcols','3',basefg.builtFilename,'where','inside',reversewkt])
@@ -1352,6 +1414,7 @@ def split_forward_reverse_patches( trialgrid, hybrid_tol, gridlist ):
             if basefg is not None:
                 commands.extend(['not','on_grid',basefg.builtFilename])
             commands.extend(['write',fgridfile])
+            #commands.extend(['write','csv',g._fileWithExtension('_postsmooth.csv')])
         
             call(commands)
 
@@ -1437,6 +1500,11 @@ def build_deformation_grids( splitbase=True ):
     # Bounds beyond which patch not required because guaranteed by local accuracy bounds
     bounds_extents = trialgrid.regionsExceedingLevel(
         Config.base_limit_bounds_column,Config.base_limit_bounds_tolerance)
+    Logger.writeWkt("Absolute bounds on patch",0,bounds_extents.to_wkt())
+
+    real_extents=real_extents.intersection( bounds_extents )
+    real_extents=Util.asMultiPolygon(real_extents)
+    Logger.writeWkt("Intersected extents",0,real_extents.to_wkt())
 
     # Now want to find maximum shift outside extents of test.. 
     # Prepare a multipolygon for testing containment.. add a buffer to
@@ -1447,30 +1515,21 @@ def build_deformation_grids( splitbase=True ):
     Logger.write("Maximum shift outside patch extents {0}".format(dsmax))
     Logger.write("Buffering patches by {0}".format(buffersize))
 
-    buffered_extent=Util.bufferedPolygon( real_extents, buffersize )
-    Logger.writeWkt("Buffered extents",0,buffered_extent.to_wkt())
-    Logger.writeWkt("Absolute bounds on patch",0,bounds_extents.to_wkt())
-
-    real_extents=buffered_extent.intersection( bounds_extents )
-    if 'geoms' not in dir(real_extents):
-        real_extents = MultiPolygon([real_extents])
-    Logger.writeWkt("Bounds before potential land intersection",0,real_extents.to_wkt())
-
+    buffered_extents=Util.bufferedPolygon( real_extents, buffersize )
+    buffered_extents=buffered_extents.intersection( bounds_extents )
+    buffered_extents=Util.asMultiPolygon(buffered_extents)
+    Logger.writeWkt("Buffered extents",0,buffered_extents.to_wkt())
 
     # Test areas against land definitions, buffer, and merge overlapping grid definitions
 
     if Config.land_areas:
         Logger.write("Intersecting areas with land extents".format(len(real_extents)))
-        valid_areas=[]
-        for sc in real_extents:
-            p=sc.intersection(Config.land_areas)
-            if 'geoms' not in dir(p):
-                p=[p]
-            for g in p:
-                if type(g) == Polygon:
-                    valid_areas.append(g)
-        real_extents=MultiPolygon(valid_areas)
+        real_extents=real_extents.intersection(Config.land_areas)
+        real_extents=Util.asMultiPolygon(real_extents)
+        buffered_extents=buffered_extents.intersection( Config.land_areas )
+        buffered_extents=Util.asMultiPolygon(buffered_extents)
         Logger.writeWkt("Bounds after land area intersection",0,real_extents.to_wkt())
+        Logger.writeWkt("Buffered_bounds after land area intersection",0,buffered_extents.to_wkt())
 
         # If limiting to land areas then also need to calculate sea areas where
         # lower tolerance applies
@@ -1488,6 +1547,12 @@ def build_deformation_grids( splitbase=True ):
             sea_bounds_extents = trialgrid.regionsExceedingLevel(
                 Config.base_limit_bounds_column,Config.base_limit_sea_bounds_tolerance)
 
+            if len(sea_bounds_extents) > 0:
+                Logger.writeWkt("Sea absolute bounds on patch",0,sea_bounds_extents.to_wkt())
+                sea_extents=sea_extents.intersection( sea_bounds_extents )
+                sea_extents=Util.asMultiPolygon(sea_extents)
+                Logger.writeWkt("Intersected sea extents",0,sea_extents.to_wkt())
+
             # Now want to find maximum shift outside extents of test.. 
             # Prepare a multipolygon for testing containment.. add a buffer to
             # handle points on edge of region where patch runs against base polygon
@@ -1498,26 +1563,21 @@ def build_deformation_grids( splitbase=True ):
             Logger.write("Maximum shift outside sea patch extents {0}".format(sea_dsmax))
             Logger.write("Buffering sea patches by {0}".format(sea_buffersize))
 
-            sea_buffered_extent=Util.bufferedPolygon( sea_extents, sea_buffersize )
-            Logger.writeWkt("Sea buffered extents",0,sea_buffered_extent.to_wkt())
-
+            sea_buffered_extents=Util.bufferedPolygon( sea_extents, sea_buffersize )
             if len(sea_bounds_extents) > 0:
-                Logger.writeWkt("Sea absolute bounds on patch",0,sea_bounds_extents.to_wkt())
-                sea_extents=sea_buffered_extent.intersection( sea_bounds_extents) 
-                if 'geoms' not in dir(sea_extents):
-                    sea_extents = MultiPolygon([sea_extents])
+                sea_buffered_extents=sea_buffered_extents.intersection( sea_bounds_extents )
+            sea_buffered_extents=Util.asMultiPolygon(sea_buffered_extents)
+            Logger.writeWkt("Sea buffered extents",0,sea_buffered_extents.to_wkt())
 
-            Logger.writeWkt("Sea bounds before union with land extents",0,sea_extents.to_wkt())
-
-            real_extents=real_extents.union(sea_extents)
-            if 'geoms' not in dir(real_extents):
-                real_extents=MultiPolygon([real_extents])
+            real_extents=Util.asMultiPolygon(real_extents.union(sea_extents))
+            buffered_extents=Util.asMultiPolygon(buffered_extents.union(sea_buffered_extents))
             Logger.writeWkt("Bounds after union with sea extents",0,real_extents.to_wkt())
+            Logger.writeWkt("Buffered bounds after union with sea extents",0,buffered_extents.to_wkt())
 
     # Form merged buffered areas
 
     griddefs=PatchGridList.gridsForAreas(real_extents,
-                                        buffer=buffersize,
+                                        buffered_extents,
                                         cellsize=Config.base_size,
                                         keepWithin=basespec,
                                         level=1,
@@ -1529,7 +1589,9 @@ def build_deformation_grids( splitbase=True ):
     gridlist=[]
     for griddef in griddefs:
         patchgrids=griddef.splitToSubgrids()
+        print "PG"
         for p in patchgrids:
+            print "   ",p.name,p.spec
             p.base=griddef.name if splitbase else Config.patchname
             p.basename=Config.patchname
             gridlist.append(p)
@@ -1539,9 +1601,12 @@ def build_deformation_grids( splitbase=True ):
     #
     # Otherwise just need to directly merge grids into parent grids
 
+    
     if Config.model.hybrid:
+        Logger.dumpGridList("Grids before hybrid/merge",gridlist)
         hybrid_tol=Config.model.hybridTolerance or Config.default_forward_patch_max_distortion
         gridlist=split_forward_reverse_patches( trialgrid, hybrid_tol, gridlist )
+        Logger.dumpGridList("Grids after hybrid/merge",gridlist)
     else:
         for g in gridlist:
             g.mergeIntoParent()

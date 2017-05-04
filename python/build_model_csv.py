@@ -61,7 +61,7 @@ for c in submodels:
         complist.append([c,version_added,version_revoked,reverse_patch,description])
 
 modelcsv=os.path.join(modeldir,'model.csv')
-with file(modelcsv,'w') as mcsvf:
+with file(modelcsv,'wb') as mcsvf:
     mcsv = csv.writer(mcsvf)
     for row in complist:
         mcsv.writerow(row)
