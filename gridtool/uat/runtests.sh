@@ -53,6 +53,8 @@ echo "test 25 - write no columns" | tee -a out/tests.log
 ../gridtool read csv test1.csv  write csv columns none out/test25.out >> out/tests.log
 echo "test 26 - write selected columns" | tee -a out/tests.log
 ../gridtool read csv test1.csv  write csv columns v2 out/test26.out >> out/tests.log
+echo "test 26a - write with specified precision" | tee -a out/tests.log
+../gridtool read csv test1.csv  write csv ndp 2 columns v2 out/test26a.out >> out/tests.log
 echo "test 27 - write with selection" | tee -a out/tests.log
 ../gridtool read csv test1.csv  write out/test27.out where v1 gt 20 >> out/tests.log
 echo "test 28 - add with selection" | tee -a out/tests.log

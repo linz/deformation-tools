@@ -177,6 +177,11 @@ Reading file from test1.csv
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Writing grid to file out/test26.out
+test 26a - write with specified precision
+Reading file from test1.csv
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Writing grid to file out/test26a.out
 test 27 - write with selection
 Reading file from test1.csv
 Grid has 8 rows and 7 columns

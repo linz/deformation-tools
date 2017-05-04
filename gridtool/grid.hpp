@@ -62,7 +62,7 @@ public:
     grid( const char * filename = 0, char delim=' ' );
     ~grid();
     bool readfile( const char * filename, char delim=' ', int maxcols=99 );
-    bool writefile( const char * filename, const char *delim = 0, const char *crlf=0, std::vector<int> *colids=0, bool markedonly=false );
+    bool writefile( const char * filename, const char *delim = 0, const char *crlf=0, std::vector<int> *colids=0, bool markedonly=false, int valuendp=-1 );
     std::string filename(){ return m_filename; }
     void setprecision( int dataprec ){ m_dataprec = dataprec; }
     int nrow() { return m_nrow; }

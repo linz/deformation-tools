@@ -321,6 +321,7 @@ static void run_write_grid( grid &g, commandlist &commands )
     const char *crlf="\n";
     string filename;
     string columns = "*";
+    int ndp=-1;
     while( 1 )
     {
         filename = next_command(commands,"Filename for write operation");
@@ -337,6 +338,10 @@ static void run_write_grid( grid &g, commandlist &commands )
             columns=next_command(commands,"Grid columns to write");
             if( columns == "none" ) columns = "";
         }
+        else if( filename == "ndp" )
+        {
+            next_command_value(commands,ndp,"Precision (ndp) of writing grid");
+        }
         else
         {
             break;
@@ -351,7 +356,7 @@ static void run_write_grid( grid &g, commandlist &commands )
     vector<int> colids;
     grid_columns( g, columns, colids );
     cout << "Writing grid" << (marked ? " data" : "") << " to file " << filename << endl;
-    g.writefile(filename.c_str(),csv ? "," : "\t",crlf,&colids,marked);
+    g.writefile(filename.c_str(),csv ? "," : "\t",crlf,&colids,marked,ndp);
 }
 
 static void run_precision( grid &g, commandlist &commands )
