@@ -105,7 +105,7 @@ public:
             double miny, double maxy, double incy,
             std::vector<std::string> columns );
     void extents( double &minx, double &maxx, double &miny, double &maxy );
-    void trim( int borderSize = 0 );
+    void trim( int borderSize = 0, double zerotol=0.0 );
     std::string fieldName( int iv );
 private:
     void initiallize();
@@ -129,6 +129,7 @@ private:
     double m_rowdx;
     double m_rowdy;
     double m_rowlen;
+    double m_zerotol;
     vector2<bool> m_marked;
     vector2<double> m_values;
     std::string m_lon;

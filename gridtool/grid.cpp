@@ -38,6 +38,7 @@ void grid::initiallize()
     m_coldx=1.0;
     m_coldy=0.0;
     m_collen=1.0;
+    m_zerotol=0.0;
     m_values.resize(0);
     m_marked.resize(0);
     m_fields.resize(0);
@@ -872,7 +873,7 @@ void grid::resize( int rowmin, int colmin, int rowmax, int colmax )
 bool grid::valueIsZero( int row, int col )
 {
     vector<double>::pointer pv = values(row,col);
-    for( int iv = 0; iv < m_nvalue; iv++ ) if( *pv++ != 0.0 ) return false;
+    for( int iv = 0; iv < m_nvalue; iv++ ) if( fabs(*(pv++)) > m_zerotol) return false;
     return true;
 }
 
@@ -888,9 +889,10 @@ bool grid::colIsZero( int col )
     return true;
 }
 
-void grid::trim( int borderSize )
+void grid::trim( int borderSize, double zerotol )
 {
     int rowmin, rowmax, colmin, colmax;
+    m_zerotol=zerotol;
     for( rowmin = 0; rowmin < m_nrow; rowmin++ ) if( ! rowIsZero(rowmin)) break;
     if( rowmin == m_nrow )
     {

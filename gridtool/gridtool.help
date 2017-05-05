@@ -75,11 +75,12 @@ resize [relative] rowmin colmin rowmax colmax
    Resize to only include rows between rowmin and rowmax and columns
    between colmin and colmax
 
-trim bordersize
+trim [tolerance #.###] bordersize
    Trim off zero rows and columns from edge of grid, leaving at least
    borderSize zero rows and columns.  If borderSize is greater than 0
    then the grid may be expanded to ensure the required number of zero
-   rows and columns
+   rows and columns.  If a tolerance is specified then values less than
+   the tolerance in absolute value can be trimmed.
 
 evaluate [with_ids] [at] points_file [to] output_file
    Evaluates the grid at a set of points in a points file and writes the

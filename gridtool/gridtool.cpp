@@ -552,9 +552,14 @@ static void run_resize( grid &g, commandlist &commands )
 static void run_trim( grid &g, commandlist &commands )
 {
     int borderSize;
+    double zerotol;
+    if( next_command_is(commands,"tolerance"))
+    {
+        next_command_value(commands,zerotol,"Trim tolerance");
+    }
     next_command_value(commands,borderSize,"Trim border size");
     cout << "Trimming to leave " << borderSize << " zero rows/cols around border" << endl;
-    g.trim(borderSize);
+    g.trim(borderSize,zerotol);
 }
 
 static void run_evaluate( grid &g, commandlist &commands )
