@@ -427,11 +427,15 @@ class DeformationGrid( Grid ):
         return Grid(gsgrid,columns=('lon','lat','error','reqsize'),
             source='Grid size to achieve tolerance '+str(tolerance))
 
-    def grid_definition( self ):
-        nlon,nlat=self.array.shape[0:2]
-        return ("grid:"+":".join([str(x) for x in self.extents.reshape((4,))])+':'+
-                str(self.array.shape[1]-1) + ":" + str(self.array.shape[0]-1))
+    def grid_params( self ):
+        spec=list(self.extents.reshape((4,)))
+        shape=self.array.shape
+        spec.append(shape[1]-1)
+        spec.append(shape[0]-1)
+        return spec
 
+    def grid_definition( self ):
+        return "grid:"+":".join([str(x) for x in self.grid_params()])
         
 
 if __name__=="__main__":

@@ -7,7 +7,7 @@ from shapely.prepared import prep
 from shapely.ops import unary_union
 from shapely import affinity
 from shapely.wkt import loads as wkt_load
-from subprocess import call
+from subprocess import call, check_output
 import accuracy_standards
 import argparse
 import csv
@@ -751,6 +751,7 @@ class FaultModel( object ):
         return Config.filename(name=self.modelname,extension='_grid.cache')
 
     def _loadGridFromCache( self, spec, gridfile ):
+        Logger.write("_loadGridFromCache {0}".format(spec))
         keys={}
         for i,n in enumerate(spec.nodes()):
             keys[self._cacheKey(n)]=i
@@ -773,6 +774,7 @@ class FaultModel( object ):
 
         missing=[k for k in keys if values[keys[k]] is None]
         if missing:
+            Logger.write("{0} missing values".format(len(missing)))
             return missing
 
         with open(gridfile,'w') as gf:
@@ -799,7 +801,9 @@ class FaultModel( object ):
 
             modelpath=self.modelpath
             params=[calc_okada,'-f','-x','-l','-s',modelpath,missingfile,calcfile]
-            call(params)
+            Logger.write(" ".join(params),1)
+            okada_output=check_output(params)
+            Logger.write(okada_output,1)
 
             header=None
             if os.path.exists(cachefile):
@@ -828,6 +832,7 @@ class FaultModel( object ):
     def calcGrid( self, gridspec, gridfile ):
         global calc_okada
         gridspecstr=str(gridspec)
+        Logger.write("Running calcgrid ..{0}".format(gridspecstr),0)
         modelpath=self.modelpath
         # if verbose:
         #     print "Calculating deformation on {0}".format(gridfile)
@@ -884,7 +889,7 @@ class PatchGridDef:
         self._extentsWkt=None
         self._bufferedExtents=buffered_extents or extents
         self._bufferedExtentsWkt=None
-        self.spec=spec
+        self._spec=spec
         self._grid=None
         self._strainGrid=None
         self._csv=None
@@ -921,28 +926,46 @@ class PatchGridDef:
             buffered_extents=buffered_extents if buffered_extents is not Unspecified else self.bufferedExtents,
             level=level if level is not Unspecified else self.level,
             source=source if source is not Unspecified else self.source,
-            parent=parent if parent is not Unspecified else None
+            parent=parent if parent is not Unspecified else None,
+            spec=self._spec.copy() if self._spec is not None else None
             )
         pgd.isforward=isforward if isforward is not Unspecified else self.isforward
         pgd.base=self.base
         pgd.basename=self.basename
         return pgd
 
+    def _isFileSource( self ):
+        return isinstance(self.source,basestring)
+
     def setSource( self, source ):
         self.source=source
         self.grid=None
+        if self._isFileSource():
+            self._spec=None
 
     @property
     def filename( self ):
         return self._fileWithExtension('.grid')
+
+    @property
+    def spec( self ):
+        if self._spec is None:
+            if self._isFileSource():
+                grid=self._loadGrid()
+                grid_params=grid.grid_params()
+                self._spec=GridSpec(*grid_params)
+        return self._spec
 
     def _loadGrid( self, build_only=False ):
         if self.source is None:
             raise RuntimeError('PatchGridDef._loadGrid: Grid source not defined')
         gridfile=self.filename
         source=self.source
-        if callable( source):
-            source(self.spec, gridfile )
+        if not self._isFileSource():
+            if self._spec is None:
+                raise RuntimeError('{0} grid spec not defined before calculating grid values'
+                                   .format(self.name))
+            source(self._spec, gridfile )
         elif os.path.exists( source ):
             if( source != gridfile ):
                 shutil.copyfile(source,gridfile)
@@ -974,9 +997,6 @@ class PatchGridDef:
 
     @property
     def grid( self ):
-        if self.spec is None:
-            raise RuntimeError('{0} grid spec not calculated before calculating grid values'
-                               .format(self.name))
         if self._grid is None:
             self._grid=self._loadGrid()
         return self._grid
@@ -998,8 +1018,12 @@ class PatchGridDef:
             csvfile = re.sub(r'(\.grid)?$','.csv',gridfile,re.I)
             commands=[gridtool,
                       'read','maxcols','3',gridfile,
-                      'write','ndp',str(ndp),'csv','dos',filename]
-            call(commands)
+                      'write','ndp',str(ndp),'csv','dos',filename,
+                      'read','csv',filename]
+            Logger.write(" ".join(commands),1)
+            gt_output=check_output(commands)
+            Logger.write(gt_output,1)
+
         return filename
 
     @property
@@ -1018,7 +1042,9 @@ class PatchGridDef:
                       header2,
                       header3,
                       gdffile]
-            call(commands)
+            Logger.write(" ".join(commands),1)
+            gt_output=check_output(commands)
+            Logger.write(gt_output,1)
             self._gdf=gdffile
         return self._gdf
 
@@ -1036,7 +1062,7 @@ class PatchGridDef:
     @property
     def extentsWktFile( self ):
         if self._extentsWkt is None and self.extents is not None:
-            extentfile=self._fileWithExtension('extent.wkt')
+            extentfile=self._fileWithExtension('_extent.wkt')
             with open(extentfile,'w') as wktf:
                 for pgn in self.extents:
                     wktf.write(pgn.to_wkt())
@@ -1065,7 +1091,7 @@ class PatchGridDef:
         Returned as a single MultiPolygon
         '''
         if self._bufferedExtentsWkt is None and self.bufferedExtents is not None:
-            extentfile=self._fileWithExtension('buffer.wkt')
+            extentfile=self._fileWithExtension('_buffer.wkt')
             with open(extentfile,'w') as wktf:
                 for pgn in self.extents:
                     wktf.write(pgn.to_wkt())
@@ -1093,12 +1119,15 @@ class PatchGridDef:
                   'read','maxcols','3',gridfile,
                   'trimto','buffer','1','wkt',bufwkt,
                   'trimto',pgridfile,
-                  'zero','outside',extwkt,'edge','1',
-                  'add','maxcols','3',pgridfile,'outside',extwkt,'edge','1',
+                  'zero','outside',extwkt,'and','edge','1',
+                  'add','maxcols','3',pgridfile,'where','outside',extwkt,'and','edge','1',
                   'smooth','linear','outside',extwkt,'not','outside',bufwkt,'not','edge','1',
-                  'write',gridfile
+                  'write',gridfile,
+                  'read',gridfile,
                  ]
-        call(commands)
+        Logger.write(" ".join(commands),1)
+        gt_output=check_output(commands)
+        Logger.write(gt_output,1)
         self.setSource(gridfile)
 
     def maxShiftOutsideAreas( self, areas ):
@@ -1134,7 +1163,7 @@ class PatchGridDef:
     def splitToSubgrids( self ):
         griddef=self
         subgrids=[self]
-        Logger.write("Building level {0} patch {1}".format(self.level,self.name),self.level,self.name)
+        Logger.write("Building level {0} patch {1}".format(self.level,self.name),self.level)
 
         subcell_areas=[]
         if self.level < Config.max_split_level:
@@ -1241,7 +1270,7 @@ class PatchGridDef:
         return "\n".join((
             "Grid Name: {0}".format(self.name),
             "    Subpatch: {0}".format(self.subpatch),
-            "    Grid spec: {0}".format(self.spec),
+            "    Grid spec: {0}".format(self._spec),
             "    Parent grid: {0}".format(self.parent.name if self.parent else ""),
             "    Grid file: {0}".format(self.filename),
             "    Extent file: {0}".format(self.extentsWktFile),
@@ -1375,6 +1404,8 @@ def split_forward_reverse_patches( trialgrid, hybrid_tol, gridlist ):
         #print "Splitting",g.name,g.extents.is_valid,g.buffer,g.bufferedExtents.is_valid
         #print reverse_extents.is_valid
 
+        Logger.write("Processing {0}".format(g.name))
+
         if (g.parent in not_reverse 
                 or not g.bufferedExtents.intersects(reverse_extents)):
             if g.level > Config.forward_patch_max_level:
@@ -1383,9 +1414,14 @@ def split_forward_reverse_patches( trialgrid, hybrid_tol, gridlist ):
             Logger.write('Copying {0} as forward patch grid only'.format(g.name))
             not_reverse.add(g)
             fgridname=g.name+'_F'
+            Logger.writeWkt("Outside forward grid {0} before update".format(g.name),0,g.spec.boundingPolygonWkt())
             gf=g.updatedWith(isforward=True,name=fgridname,parent=forward_grids.get(g.parent,None),
                              source=g.builtFilename)
+            Logger.writeWkt("Outside forward grid {0}_F before merge".format(gf.name),0,gf.spec.boundingPolygonWkt())
+            #print "Split: forward gf: {0}".format(gf)
             gf.mergeIntoParent()
+            Logger.writeWkt("Outside forward grid {0}_F after merge".format(gf.name),0,gf.spec.boundingPolygonWkt())
+            #print "Split: forward gf merged: {0}".format(gf)
             forward_grids[g]=gf
             splitgrids.append(gf)
             continue
@@ -1398,14 +1434,16 @@ def split_forward_reverse_patches( trialgrid, hybrid_tol, gridlist ):
         # research
 
         if g.level <= Config.forward_patch_max_level:
+            Logger.write('Creating smoothed forward patch grid for {0}'.format(g.name))
             fgridname=g.name+'_F'
             basefg=forward_grids.get(g.parent,None)
 
+            Logger.writeWkt("Overlapping forward grid {0} before update".format(g.name),0,g.spec.boundingPolygonWkt())
             gf=g.updatedWith(name=fgridname,isforward=True,source=None,
                             parent=basefg)
+
             fgridfile=gf.filename
 
-            Logger.write('Creating smoothed forward patch grid for {0}'.format(g.name))
             commands=[
                 gridtool,
                 'read','maxcols','3',g.builtFilename
@@ -1416,17 +1454,21 @@ def split_forward_reverse_patches( trialgrid, hybrid_tol, gridlist ):
             commands.extend(['smooth','linear','inside',reversewkt])
             if basefg is not None:
                 commands.extend(['not','on_grid',basefg.builtFilename])
-            commands.extend(['write',fgridfile])
+            commands.extend(['write',fgridfile,'read',fgridfile])
             #commands.extend(['write','csv',g._fileWithExtension('_postsmooth.csv')])
         
-            call(commands)
+            Logger.write(" ".join(commands),1)
+            gt_output=check_output(commands)
+            Logger.write(gt_output,1)
 
             if not os.path.exists(fgridfile):
                 raise RuntimeError('Cannot build smoothed forward patch '+fgridfile)
             gf.setSource(fgridfile)
-            Logger.write('Created forward patch for {0}'.format(fgridfile))
 
             gf.mergeIntoParent()
+            Logger.writeWkt("Overlapping forward grid {0}_F".format(gf.name),0,gf.spec.boundingPolygonWkt())
+            Logger.write('Created forward patch for {0}'.format(fgridfile))
+
             forward_grids[g]=gf
             splitgrids.append(gf)
         elif g.parent is not None:
@@ -1440,22 +1482,40 @@ def split_forward_reverse_patches( trialgrid, hybrid_tol, gridlist ):
         # Now create the reverse patch files by subtracting the forward patch
         # from them
 
+        if not g.extents.intersects(reverse_extents):
+            continue
+        Logger.write('Creating reverse patch grid for {0}'.format(g.name))
+        r_extents=Util.asMultiPolygon(g.extents.intersection(reverse_extents));
+        r_buffered_extents=Util.asMultiPolygon(g.extents.intersection(reverse_extents));
+
+        Logger.writeWkt("Constructing reverse grid for {0}".format(g.name),0,g.spec.boundingPolygonWkt())
         rgridname=g.name+'_R'
-        rgrid=g.updatedWith(name=rgridname,parent=reverse_grids.get(g.parent,None),isforward=False)
+        rgrid=g.updatedWith(
+            extents=r_extents,
+            buffered_extents=r_buffered_extents,
+            name=rgridname,
+            parent=reverse_grids.get(g.parent,None),
+            isforward=False
+             )
         rgridfile=rgrid.filename
         fgrid=forward_grids[g]
-        Logger.write('Creating reverse patch grid for {0}'.format(g.name))
         commands=[
             gridtool,
             'read','maxcols','3',g.builtFilename,
             'subtract',fgrid.builtFilename,
-            'trim','1',
-            'write',rgridfile]
-        call(commands)
+            'trimto',fgrid.builtFilename,
+            'zero','edge','1',
+            'trim','tolerance','0.00001','1',
+            'write',rgridfile,
+            'read',rgridfile]
+        Logger.write(" ".join(commands),1)
+        gt_output=check_output(commands)
+        Logger.write(gt_output,1)
         if not os.path.exists(rgridfile):
             raise RuntimeError('Cannot build reverse patch '+rgridfile)
         rgrid.setSource(rgridfile)
-        Logger.write('Created reverse patch for {0}'.format(fgridfile))
+        Logger.write('Created reverse patch for {0}'.format(g.name))
+        Logger.writeWkt("Reverse grid {0}".format(rgrid.name),0,g.spec.boundingPolygonWkt())
         rbase=reverse_grids.get(g,None)
         reverse_grids[g]=rgrid
         splitgrids.append(rgrid)
@@ -1527,6 +1587,7 @@ def build_deformation_grids( splitbase=True ):
 
     if Config.land_areas:
         Logger.write("Intersecting areas with land extents".format(len(real_extents)))
+        Logger.writeWkt("Land areas",0,Config.land_areas.to_wkt())
         real_extents=real_extents.intersection(Config.land_areas)
         real_extents=Util.asMultiPolygon(real_extents)
         buffered_extents=buffered_extents.intersection( Config.land_areas )
@@ -1589,6 +1650,7 @@ def build_deformation_grids( splitbase=True ):
 
     # Now process the extents...
 
+
     gridlist=[]
     for griddef in griddefs:
         patchgrids=griddef.splitToSubgrids()
@@ -1596,6 +1658,10 @@ def build_deformation_grids( splitbase=True ):
             p.base=griddef.name if splitbase else Config.patchname
             p.basename=Config.patchname
             gridlist.append(p)
+
+    #for g in gridlist:
+    #    Logger.writeWkt("{0} bounds".format(g.name),0,g.spec.boundingPolygonWkt())
+    #sys.exit()
 
     # If splitting into a hybrid model then separate out forward and reverse patches.  
     # This also merges grids into parents.

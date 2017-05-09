@@ -57,6 +57,9 @@ for c in submodels:
                 reverse_patch='Y'
             if item['version_added'] > descversion:
                 description = item['description'].strip()
+        match=re.match(r'Event:\s+([^\n]*?)\s*$',description,re.M)
+        if match:
+            description=match.group(1)
         print "  Added",version_added,"revoked",version_revoked,"reverse patch",reverse_patch
         complist.append([c,version_added,version_revoked,reverse_patch,description])
 
