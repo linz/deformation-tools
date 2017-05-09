@@ -1100,7 +1100,7 @@ class PatchGridDef:
         if self._bufferedExtentsWkt is None and self.bufferedExtents is not None:
             extentfile=self._fileWithExtension('_buffer.wkt')
             with open(extentfile,'w') as wktf:
-                for pgn in self.extents:
+                for pgn in self.bufferedExtents:
                     wktf.write(pgn.to_wkt())
                     wktf.write('\n')
             self._bufferedExtentsWkt=extentfile
@@ -1375,6 +1375,9 @@ class PatchGridList( list ):
         list.remove(self,grid)
 
     def removeRedundantGrids( self ):
+        # Remove grids which are completely overlapped by child grid.  Note:
+        # should this set the child grid extents to the union with the parent
+        # grid extents
         gridlist=sorted(self,key=lambda x: x.level)
         removed=PatchGridList()
         for g in gridlist:
@@ -1513,8 +1516,12 @@ def split_forward_reverse_patches( trialgrid, hybrid_tol, gridlist ):
         if not g.extents.intersects(reverse_extents):
             continue
         Logger.write('Creating reverse patch grid for {0}'.format(g.name))
+        buffersize=g.spec.cellDimension()*Config.cell_split_factor
         r_extents=Util.asMultiPolygon(g.extents.intersection(reverse_extents));
-        r_buffered_extents=Util.asMultiPolygon(g.bufferedExtents.intersection(reverse_extents));
+        r_buffered_extents=Util.asMultiPolygon(
+            g.bufferedExtents.intersection(reverse_extents).union(
+                Util.bufferedPolygon(r_extents,buffersize)
+            ));
 
         Logger.writeWkt("Constructing reverse grid for {0}".format(g.name),0,g.spec.boundingPolygonWkt())
         rgridname=g.name+'_R'
@@ -1687,24 +1694,25 @@ def build_deformation_grids( splitbase=True ):
             p.basename=Config.patchname
             gridlist.append(p)
 
+    # Merge grids into parent grids
+
+    for g in gridlist:
+        g.mergeIntoParent()
+
     #for g in gridlist:
     #    Logger.writeWkt("{0} bounds".format(g.name),0,g.spec.boundingPolygonWkt())
     #sys.exit()
 
     # If splitting into a hybrid model then separate out forward and reverse patches.  
     # This also merges grids into parents.
-    #
-    # Otherwise just need to directly merge grids into parent grids
-
     
     if Config.model.hybrid:
         Logger.dumpGridList("Grids before hybrid/merge",gridlist)
         hybrid_tol=Config.model.hybridTolerance or Config.default_forward_patch_max_distortion
         gridlist=split_forward_reverse_patches( trialgrid, hybrid_tol, gridlist )
         Logger.dumpGridList("Grids after hybrid/merge",gridlist)
-    else:
-        for g in gridlist:
-            g.mergeIntoParent()
+
+    # Optimize grids.  Remove parent grids completely overlapped by child grid.
 
     for g in gridlist.removeRedundantGrids():
         Logger.write("Removing redundant grid {0}".format(g.name))
