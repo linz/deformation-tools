@@ -144,6 +144,18 @@ template<class T> bool next_command_value( commandlist &commands, T &value, cons
     return result;
 }
 
+static void write_spec( grid &g )
+{
+    int nrow, ncol;
+    double xmin, ymin, xmax, ymax;
+    nrow=g.nrow();
+    ncol=g.ncol();
+    g.extents(xmin,xmax,ymin,ymax);
+    cout << "Rows " << nrow << " cols " << ncol 
+        << " x_range " << xmin << " - " << xmax 
+        << " y_range " << ymin << " - " << ymax 
+        << endl;
+}
 static string run_read_grid( grid &g, commandlist &commands, const string &operation="read" )
 {
     int maxcols = 99;
@@ -490,6 +502,7 @@ static void run_aligntogrid( grid &g, commandlist &commands )
     string filename = run_read_grid( galign, commands, "align" );
     cout <<  "Aligning grid to " << filename << endl;
     g.alignto(galign);
+    write_spec(g);
 }
 
 static void run_trimto( grid &g, commandlist &commands )
@@ -508,6 +521,7 @@ static void run_trimto( grid &g, commandlist &commands )
         double minx, maxx, miny, maxy;
         wkt_extents(wktfile.c_str(),minx,maxx,miny,maxy);
         g.trimto(minx,maxx,miny,maxy,buffer);
+        write_spec(g);
     }
     else
     {
@@ -517,6 +531,7 @@ static void run_trimto( grid &g, commandlist &commands )
         if( buffer ) cout << " with buffer " << buffer;
         cout << endl;
         g.trimto(galign,buffer);
+        write_spec(g);
     }
 }
 
@@ -547,6 +562,7 @@ static void run_resize( grid &g, commandlist &commands )
     cout << "Resizing to include rows " << rowmin << " to " << rowmax
         << " and columns " << colmin << " to " << colmax << endl;
     g.resize(rowmin,colmin,rowmax,colmax);
+    write_spec(g);
 }
 
 static void run_trim( grid &g, commandlist &commands )
@@ -560,6 +576,7 @@ static void run_trim( grid &g, commandlist &commands )
     next_command_value(commands,borderSize,"Trim border size");
     cout << "Trimming to leave " << borderSize << " zero rows/cols around border" << endl;
     g.trim(borderSize,zerotol);
+    write_spec(g);
 }
 
 static void run_evaluate( grid &g, commandlist &commands )

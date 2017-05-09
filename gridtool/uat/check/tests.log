@@ -88,18 +88,21 @@ Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Resizing to include rows 3 to 5 and columns 1 to 4
+Rows 3 cols 4 x_range 17.1235 - 23.4938 y_range 10 - 14
 Writing grid to file out/test1_resize1.grid
 test 14 - resize 2
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Resizing to include rows -2 to 10 and columns -3 to 11
+Rows 13 cols 15 x_range 8.62963 - 38.358 y_range 0 - 24
 Writing grid to file out/test1_resize2.grid
 test 15 - trim
 Reading file from test4.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Trimming to leave 1 zero rows/cols around border
+Rows 5 cols 5 x_range 17.1235 - 25.6173 y_range 8 - 16
 Writing grid to file out/test4_trim1.grid
 test 16 - extents_wkt
 Reading file from test1.grid
@@ -222,60 +225,78 @@ Reading file from align2.grid
 Grid has 6 rows and 7 columns
 Each point has 2 data values
 Aligning grid to align1.grid
+Rows 11 cols 11 x_range 17.5 - 22.5 y_range 9 - 14
 Writing grid to file out/test31.grid
 Reading file from out/test31.grid
 Grid has 11 rows and 11 columns
 Each point has 2 data values
 Aligning grid to align1.grid
+Rows 11 cols 11 x_range 17.5 - 22.5 y_range 9 - 14
 Writing grid to file out/test31a.grid
 Reading file from out/test31.grid
 Grid has 11 rows and 11 columns
 Each point has 2 data values
 Resizing to include rows -1 to 11 and columns -1 to 11
+Rows 13 cols 13 x_range 17 - 23 y_range 8.5 - 14.5
 Aligning grid to align1.grid
+Rows 21 cols 21 x_range 15 - 25 y_range 6.5 - 16.5
 Writing grid to file out/test31b.grid
 Reading file from out/test31.grid
 Grid has 11 rows and 11 columns
 Each point has 2 data values
 Resizing to include rows 1 to 9 and columns 1 to 9
+Rows 9 cols 9 x_range 18 - 22 y_range 9.5 - 13.5
 Aligning grid to align1.grid
+Rows 11 cols 11 x_range 17.5 - 22.5 y_range 9 - 14
 Writing grid to file out/test31c.grid
 test 32 - trim
 Reading file from align2.grid
 Grid has 6 rows and 7 columns
 Each point has 2 data values
 Resizing to include rows -15 to 50 and columns -15 to 31
+Rows 66 cols 47 x_range 11 - 34 y_range 2.5 - 35
 Trimming to grid align1.grid
+Rows 26 cols 31 x_range 15 - 30 y_range 4 - 16.5
 Writing grid to file out/test32.grid
 Reading file from out/test32.grid
 Grid has 26 rows and 31 columns
 Each point has 2 data values
 Resizing to include rows -1 to 26 and columns -1 to 31
+Rows 28 cols 33 x_range 14.5 - 30.5 y_range 3.5 - 17
 Trimming to grid align1.grid
+Rows 26 cols 31 x_range 15 - 30 y_range 4 - 16.5
 Writing grid to file out/test32b.grid
 Reading file from out/test32.grid
 Grid has 26 rows and 31 columns
 Each point has 2 data values
 Resizing to include rows 1 to 24 and columns 1 to 29
+Rows 24 cols 29 x_range 15.5 - 29.5 y_range 4.5 - 16
 Trimming to grid align1.grid
+Rows 24 cols 29 x_range 15.5 - 29.5 y_range 4.5 - 16
 Writing grid to file out/test32c.grid
 Reading file from align2.grid
 Grid has 6 rows and 7 columns
 Each point has 2 data values
 Resizing to include rows -15 to 50 and columns -15 to 31
+Rows 66 cols 47 x_range 11 - 34 y_range 2.5 - 35
 Trimming to grid align1.grid with buffer 2
+Rows 30 cols 35 x_range 14 - 31 y_range 3 - 17.5
 Writing grid to file out/test32d.grid
 Reading file from align2.grid
 Grid has 6 rows and 7 columns
 Each point has 2 data values
 Resizing to include rows -15 to 50 and columns -15 to 31
+Rows 66 cols 47 x_range 11 - 34 y_range 2.5 - 35
 Trimming to wkt test2.wkt
+Rows 30 cols 31 x_range 16.5 - 31.5 y_range 2.5 - 17
 Writing grid to file out/test32e.grid
 Reading file from align2.grid
 Grid has 6 rows and 7 columns
 Each point has 2 data values
 Resizing to include rows -15 to 50 and columns -15 to 31
+Rows 66 cols 47 x_range 11 - 34 y_range 2.5 - 35
 Trimming to wkt test2.wkt with buffer 3
+Rows 33 cols 37 x_range 15 - 33 y_range 2.5 - 18.5
 Writing grid to file out/test32f.grid
 test 33 - create
 Writing grid to file out/test33a.csv
