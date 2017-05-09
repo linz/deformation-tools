@@ -460,6 +460,13 @@ class GridSpec( object ):
             self.ymin > other.ymax or
             other.ymin > self.ymax)
 
+    def contains( self, other ):
+        return (
+            self.xmin <= other.xmin and
+            self.xmax >= other.xmax and
+            self.ymin <= other.ymin and
+            self.ymax >= other.ymax)
+
     def boundingPolygon( self ):
         bl=(self.xmin,self.ymin)
         br=(self.xmin,self.ymax)
@@ -1162,7 +1169,7 @@ class PatchGridDef:
 
     def splitToSubgrids( self ):
         griddef=self
-        subgrids=[self]
+        subgrids=PatchGridList(self)
         Logger.write("Building level {0} patch {1}".format(self.level,self.name),self.level)
 
         subcell_areas=[]
@@ -1356,6 +1363,27 @@ class PatchGridList( list ):
 
         return patchdefs
 
+    def __init__( self, *grids ):
+        list.__init__(self)
+        self.extend(grids)
+
+    def remove( self, grid ):
+        for g in self:
+            if g.parent == grid:
+                g.parent=grid.parent
+        grid.parent=None
+        list.remove(self,grid)
+
+    def removeRedundantGrids( self ):
+        gridlist=sorted(self,key=lambda x: x.level)
+        removed=PatchGridList()
+        for g in gridlist:
+            p=g.parent
+            if p is not None and g.spec.contains(p.spec):
+                self.remove(p)
+                removed.append(p)
+        return removed
+
 
 def split_forward_reverse_patches( trialgrid, hybrid_tol, gridlist ):
     Logger.write("Splitting patch grids into forward/reverse patches")
@@ -1486,7 +1514,7 @@ def split_forward_reverse_patches( trialgrid, hybrid_tol, gridlist ):
             continue
         Logger.write('Creating reverse patch grid for {0}'.format(g.name))
         r_extents=Util.asMultiPolygon(g.extents.intersection(reverse_extents));
-        r_buffered_extents=Util.asMultiPolygon(g.extents.intersection(reverse_extents));
+        r_buffered_extents=Util.asMultiPolygon(g.bufferedExtents.intersection(reverse_extents));
 
         Logger.writeWkt("Constructing reverse grid for {0}".format(g.name),0,g.spec.boundingPolygonWkt())
         rgridname=g.name+'_R'
@@ -1651,7 +1679,7 @@ def build_deformation_grids( splitbase=True ):
     # Now process the extents...
 
 
-    gridlist=[]
+    gridlist=PatchGridList()
     for griddef in griddefs:
         patchgrids=griddef.splitToSubgrids()
         for p in patchgrids:
@@ -1677,6 +1705,9 @@ def build_deformation_grids( splitbase=True ):
     else:
         for g in gridlist:
             g.mergeIntoParent()
+
+    for g in gridlist.removeRedundantGrids():
+        Logger.write("Removing redundant grid {0}".format(g.name))
     return gridlist
 
 
