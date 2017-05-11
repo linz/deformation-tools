@@ -85,7 +85,7 @@ class OkadaPoint
         // reference point x0, y0, d0
         void SetFaultPoint( double fs, double fd ){ this->fs = fs; this->fd = fd; }
 
-        void AddOkada( double U1, double U2, double U3, double *dislocation, double *strain, double factor );
+        void AddOkada( double U1, double U2, double U3, double *dislocation, double *strain, double *tilt, double factor );
     private:
         // Input parameters
         FaultRefSys &fsys;
@@ -140,13 +140,14 @@ void OkadaPoint::SetPosition()
 }
 
 void OkadaPoint::AddOkada( double U1, double U2, double U3, 
-        double *dislocation, double *strain, double factor )
+        double *dislocation, double *strain, double *tilt, double factor )
 {
 
     SetPosition();
     if( R < SMALLOFFSET ) return;
 
     bool calcStrains = (strain != 0);
+    bool calcTilts = (tilt != 0);
     bool strikeslip = fabs(U1) > SMALLSLIP;
     bool dipslip = fabs(U2) > SMALLSLIP;
     bool tensile = fabs(U3) > SMALLSLIP;
@@ -154,9 +155,11 @@ void OkadaPoint::AddOkada( double U1, double U2, double U3,
 
     double ux = 0, uy = 0, uz = 0;
     double uxx = 0, uxy=0, uyx=0, uyy=0;
+    double uzx = 0, uzy=0;
 
     double I1=0.0, I2=0.0, I3=0.0, I4=0.0, I5=0.0;
     double J1=0.0, J2=0.0, J3=0.0, J4=0.0;
+    double K1=0.0, K2=0.0, K3=0.0;
     double Axi = 0.0, Aeta=0.0;
     double cosd = fsys.cosd;
     double sind = fsys.sind;
@@ -185,8 +188,11 @@ void OkadaPoint::AddOkada( double U1, double U2, double U3,
         I3 =   (medium/2.0)*(eta/Rd + y*qRd2 - log(R + eta));
         I1 = - (medium/2.0)*xi*qRd2;
 
-        if( calcStrains )
+        if( calcStrains || calcTilts )
         {
+            K1 = medium*eta*qRd2/R;
+            K3 = medium*(sind/Rd)*(eta*eta/RRd-1);
+            K2 = medium*(q*cosd/RReta-sind/R)-K3;
             J1 = medium*qRd2*(xi*xi/(RRd)-0.5);
             J2 = medium*xi*(sind/(Rd*Rd))*(q*q/(RRd) - 0.5);
         }
@@ -199,18 +205,20 @@ void OkadaPoint::AddOkada( double U1, double U2, double U3,
         I3 = medium * (y/(Rd*cosd) - lnReta) + sind*I4/cosd;
         I1 = -medium*(xi/(cosd*Rd)) - sind*I5/cosd;
 
-        if( calcStrains )
+        if( calcStrains || calcTilts )
         {
-            double K1 = medium*xi*(1.0/RRd-sind/RReta)/cosd;
-            double K3 = medium*(q/RReta-y/RRd)/cosd;
+            K1 = medium*xi*(1.0/RRd-sind/RReta)/cosd;
+            K3 = medium*(q/RReta-y/RRd)/cosd;
+            K2 = medium*(q*cosd/RReta-sind/R)-K3;
             J1 = (medium*(xi*xi/RRd-1.0)/Rd - sind*K3)/cosd;
             J2 = (medium*xi*y/(RRd*Rd) - sind*K1)/cosd;
         }
     }
+
     // Only need I2 for strike-slip component
     if( strikeslip ) I2 = -medium*lnReta - I3;
 
-    if( calcStrains )
+    if( calcStrains || calcTilts )
     {
 
         J3 = - medium*xi/RReta - J2;
@@ -238,6 +246,12 @@ void OkadaPoint::AddOkada( double U1, double U2, double U3,
             uyx += U2pi*(xi*q*cosd/R3+sind*(xi*q*q*Aeta-J2));
             uyy += U2pi*(y*q*cosd/R3 + (q*q*q*Aeta*sind-2*q*sind/RReta-(xi*xi+eta*eta)*cosd/R3-J4)*sind);
         }
+
+        if( calcTilts )
+        {
+            uzx += U2pi*(sind*(xi*q/R3-K1)-cosd*xi*q*q*Aeta);
+            uzy += U2pi*(cosd*d*q/R3+sind*(xi*xi*q*Aeta*cosd-sind/R+y*q/R3-K2));
+        }
     }
     if( dipslip )
     {
@@ -252,6 +266,12 @@ void OkadaPoint::AddOkada( double U1, double U2, double U3,
             uxy += U2pi*(y*q/R3-sind/R+J1*scd);
             uyx += U2pi*(y*q/R3+q*cosd/RReta+J1*scd);
             uyy += U2pi*(y*y*q*Axi-(2*y/RRxi+xi*cosd/RReta)*sind+J2*scd);
+        }
+
+        if( calcTilts )
+        {
+            uzx += U2pi*(d*q/R3+sind*q/RReta+K3*scd);
+            uzy += U2pi*(y*d*q*Axi-sind*(2*d/RRxi+xi*sind/RReta)+K1*scd);
         }
     }
     if( tensile )
@@ -269,6 +289,12 @@ void OkadaPoint::AddOkada( double U1, double U2, double U3,
             uxy += U2pi*(d*q/R3+xi*xi*q*Aeta*sind-J1*sind2);
             uyx -= U2pi*(q*q*cosd/R3+q*q*q*Aeta*sind+J1*sind2);
             uyy -= U2pi*((y*cosd-d*sind)*q*q*Axi - 2*q*scd/RRxi-(xi*q*q*Aeta-J2)*sind2);
+        }
+
+        if( calcTilts )
+        {
+            uzx += -U2pi*(q*q*sind/R3-q*q*q*Aeta*cosd+K3*sind*sind);
+            uzy += -U2pi*((y*sind+d*cosd)*q*q*Axi+xi*q*q*Aeta*scd-(2*q/RRxi-K1)*sind*sind);
         }
     }
 
@@ -290,6 +316,12 @@ void OkadaPoint::AddOkada( double U1, double U2, double U3,
         strain[1] += (cs*(uyy-uxx)+c2*uxy-s2*uyx)*factor;
         strain[2] += (cs*(uyy-uxx)+c2*uyx-s2*uxy)*factor;
         strain[3] += (s2*uxx-cs*(uxy+uyx)+c2*uyy)*factor;
+    }
+
+    if( calcTilts )
+    {
+        tilt[0] += (uzx*coss-uzy*sins)*factor;
+        tilt[1] += (uzy*coss+uzx*sins)*factor;
     }
 }
 
@@ -381,7 +413,7 @@ void SegmentedFault::SetFaultSlip( int isegs, int isegd, double Uss, double Uds,
 }
 
 
-bool SegmentedFault::AddOkada( double x, double y, double *dislocation, double *strain, double factor )
+bool SegmentedFault::AddOkada( double x, double y, double *dislocation, double *strain, double *tilt, double factor )
 {
     if( ! slipvector ) return false;
 
@@ -405,7 +437,7 @@ bool SegmentedFault::AddOkada( double x, double y, double *dislocation, double *
                 U2 += ufactor * vector[1];
                 U3 += ufactor * vector[2];
                 double pux, puy, puz;
-                pt.AddOkada( U1, U2, U3, dislocation, strain, factor );
+                pt.AddOkada( U1, U2, U3, dislocation, strain, tilt, factor );
             }
         }
     }

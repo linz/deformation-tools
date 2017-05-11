@@ -1,4 +1,4 @@
-// Make M_PI available to MS compiler
+
 #define _USE_MATH_DEFINES
 #include <math.h>
 #define DTOR (M_PI/180.0)
@@ -195,7 +195,7 @@ public:
     bool ReadGNSDefinition( istream &str, int nskip = 0 );
     void setFactor( double fctr ){ factor=fctr; }
     void setApplyConvergence( bool apply ){ applyConvergence = apply; }
-    bool AddOkada( double lon, double lat, double *dislocation, double *strain, bool reset=true );
+    bool AddOkada( double lon, double lat, double *dislocation, double *strain, double *tilt, bool reset=true );
     ostream & write( ostream &os, int style=0, bool header=true );
 private:
     Projection *proj;
@@ -211,7 +211,7 @@ FaultSet::~FaultSet()
     {
         delete( *i );
     }
-    delete proj;
+    if( proj ) delete proj;
 }
 
 
@@ -270,19 +270,20 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
                 proj=0;
                 s >> projcode;
                 if( ! s ) continue;
-                if( projcode == "NZTM")
+                lower_case(projcode);
+                if( projcode == "nztm")
                 {
                     proj=new TMProjection(6378137.0,298.257222101,173.0,0.9996,0.0,1600000.0,10000000.0);
                 }
-                else if( projcode == "UTM59" )
+                else if( projcode == "utm59" )
                 {
                     proj=new TMProjection(6378137.0,298.257222101,171.0,0.9996,0.0,500000.0,10000000.0);
                 }
-                else if( projcode == "UTM60" )
+                else if( projcode == "utm60" )
                 {
                     proj=new TMProjection(6378137.0,298.257222101,177.0,0.9996,0.0,500000.0,10000000.0);
                 }
-                else if( projcode == "TM" )
+                else if( projcode == "tm" )
                 {
                     double a,rf,cm,sf,lto,fe,fn;
                     s >> a >> rf >> cm >> sf >> lto >> fe >> fn;
@@ -290,6 +291,10 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
                     {
                         proj=new TMProjection(a, rf, cm,sf,lto,fe,fn);
                     }
+                }
+                else if( projcode == "none" )
+                {
+                    proj=new NullProjection();
                 }
                 if( proj ) prjcrds=true;
             }
@@ -561,7 +566,7 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
     return ok;
 }
 
-bool FaultSet::AddOkada( double lon, double lat, double *dislocation, double *strain, bool reset )
+bool FaultSet::AddOkada( double lon, double lat, double *dislocation, double *strain, double *tilt, bool reset )
 {
     if( reset )
     {
@@ -574,7 +579,7 @@ bool FaultSet::AddOkada( double lon, double lat, double *dislocation, double *st
     proj->XY(lon,lat,x,y);
     for( list<SegmentedFault *>::const_iterator i = faults.begin(); i != faults.end(); i++ )
     {
-        if( ! (*i)->AddOkada(x,y,denu,strain,factor)) ok = false;
+        if( ! (*i)->AddOkada(x,y,denu,strain,tilt,factor)) ok = false;
     }
     if( dislocation )
     {
@@ -738,6 +743,7 @@ int main( int argc, char *argv[] )
     bool havenames = false;
     bool showlength = false;
     bool calcstrain = false;
+    bool calctilt = false;
     bool applysfconv = false;
     char delim='\t';
     int nskip = 0;
@@ -810,6 +816,10 @@ int main( int argc, char *argv[] )
         case 's':
         case 'S':
             calcstrain = true;
+            break;
+        case 't':
+        case 'T':
+            calctilt = true;
             break;
         case 'v':
         case 'V':
@@ -986,6 +996,7 @@ int main( int argc, char *argv[] )
     out << "lon" << delim << "lat" << delim << "de" << delim << "dn" << delim << "du";
     if( showlength ) out << delim << "ds";
     if( calcstrain ) out << delim << "dil" << delim << "rot" << delim << "shear" << delim << "err";
+    if( calctilt ) out << delim << "tilte" << delim << "tiltn" << delim << "tiltmax";
     if( compare )
     {
         out << "" << delim << "obs_de" << delim << "obs_dn" << delim << "obs_du";
@@ -997,6 +1008,7 @@ int main( int argc, char *argv[] )
     out << setiosflags( ios::fixed );
     string buffer;
     int lineno=0;
+    double ppm=1.0e6;
     while( getline(*in, buffer) )
     {
         lineno++;
@@ -1005,8 +1017,9 @@ int main( int argc, char *argv[] )
         if( p != string::npos) { buffer.erase(p); }
         if( buffer.find_first_not_of(' ') == string::npos ) continue;
 
-        double lon,lat, uxyz[3], duxy[4];
+        double lon,lat, uxyz[3], duxy[4], dz[2];
         double *strain = calcstrain ? duxy : 0;
+        double *tilt = calctilt ? dz : 0;
         double &ux = uxyz[0];
         double &uy = uxyz[1];
         double &uz = uxyz[2];
@@ -1043,7 +1056,7 @@ int main( int argc, char *argv[] )
             bool reset = true;
             for( list<FaultSet *>::iterator f = faultlist.begin(); f != faultlist.end(); f++ )
             {
-                (*f)->AddOkada( lon0, lat0, uxyz, strain, reset );
+                (*f)->AddOkada( lon0, lat0, uxyz, strain, tilt,reset );
                 reset = false;
             }
             if( havenames ) out << name << delim;
@@ -1063,6 +1076,12 @@ int main( int argc, char *argv[] )
                 out << setprecision(strnprecision)
                     << delim << dil << delim << rot
                     << delim << shear << delim << err;
+            }
+            if( calctilt )
+            {
+                double tiltmax=sqrt(tilt[0]*tilt[0]+tilt[1]*tilt[1])*ppm;
+                out << setprecision(strnprecision)
+                    << delim << tilt[0]*ppm << delim << tilt[1]*ppm << delim << tiltmax;
             }
             if( compare )
             {
@@ -1099,7 +1118,7 @@ int main( int argc, char *argv[] )
                     bool reset = true;
                     for( list<FaultSet *>::iterator f = faultlist.begin(); f != faultlist.end(); f++ )
                     {
-                        (*f)->AddOkada( lon, lat, uxyz, strain, reset );
+                        (*f)->AddOkada( lon, lat, uxyz, strain, tilt,reset );
                         reset=false;
                     }
                     out << setprecision(llprecision)
@@ -1118,6 +1137,12 @@ int main( int argc, char *argv[] )
                         out << setprecision(strnprecision)
                             << delim << dil << delim << rot
                             << delim << shear << delim << err;
+                    }
+                    if( calctilt )
+                    {
+                        double tiltmax=sqrt(tilt[0]*tilt[0]+tilt[1]*tilt[1])*ppm;
+                        out << setprecision(strnprecision)
+                            << delim << tilt[0]*ppm << delim << tilt[1]*ppm << delim << tiltmax;
                     }
                     out << endl;
                 }

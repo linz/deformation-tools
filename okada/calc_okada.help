@@ -46,6 +46,8 @@ Options can include:
 
   -s                 Include strain parameters in the output
 
+  -t                 Include tilt parameters in the output
+
   -v                 Use comma as delimiter for input/output
 
   -x                 Extra significant figures to reduce rounding errors
@@ -117,7 +119,7 @@ the data lines, for example fault_type.
 The metadata lines can include a definition of the coordinate system of the
 fault model - this can be one of:
 
-Origin lat lon: 
+Origin: lon lat
    The coordinates are latitude and longitude, and the model is the
    specified latitude and longitude are taken as the orgin of a 
    "Seismologists projection"!
@@ -130,6 +132,10 @@ Projection: definition
    where the parameters are semi-major axis, reciprocal flattening, 
    central meridian, scale factor, origin of latitude, false easting,
    false northing.
+
+   The projection can also be NONE in which case the model coordinates
+   and the test point coordinates are in an arbitrary x,y system unrelated
+   to a projection.
 
 If no coordinate system is defined then the model uses the equivalent of
 a "Origin" definition based on the latitude and longitude of the first 
