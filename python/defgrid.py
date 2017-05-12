@@ -365,7 +365,7 @@ class DeformationGrid( Grid ):
         columns.extend("ds dil rot shear err".split())
         return Grid(result,columns=columns)
 
-    def calcResolution( self, tolerance, maxsize=100000.0,precision=0.0001,margin=1 ):
+    def calcResolution( self, tolerance, maxsize=100000.0,precision=0.0001,margin=1,vertical=False ):
         '''
         For all the internal nodes in the grid calculate the misfit 
         of the node from a value calculated from the four adjacent 
@@ -375,6 +375,8 @@ class DeformationGrid( Grid ):
         Precision is the numeric precision of the grid data. This is used to manage
         the impact of rounding errors on calculating the grid spacing.
         '''
+
+        horizontal=not vertical
 
         coslat=math.cos(math.radians(((self.extents[0,0]+self.extents[0,1])/2)))
         gridsize = np.hypot(self.dln*coslat,self.dlt)*deg_to_metres
@@ -395,8 +397,11 @@ class DeformationGrid( Grid ):
 
         gsgrid=np.empty((self.array.shape[0]-2*margin,self.array.shape[1]-2*margin,4))
         gsgrid[:,:,0:2]=self.array[margin:-margin,margin:-margin,0:2]
-    
-        en = self.array[:,:,2:4]
+
+        if horizontal:
+            en = self.array[:,:,2:4]
+        else:
+            en = self.array[:,:,4:5]
         rmax = en.shape[0];
         cmax = en.shape[1];
         gse = gsgrid[:,:,2]
@@ -415,7 +420,10 @@ class DeformationGrid( Grid ):
                 en[margin:-margin,margin-ofs:-(margin+ofs)]+
                 en[margin:-margin,(margin+ofs):(cmax+ofs-margin)]
                 )/4)
-            error[:]=np.hypot(endiff[:,:,0],endiff[:,:,1])/(ofs*ofs)
+            if horizontal:
+                error[:]=np.hypot(endiff[:,:,0],endiff[:,:,1])/(ofs*ofs)
+            else:
+                error[:]=np.abs(endiff[:,:,0])/(ofs*ofs)
             res[:]=gridsize*np.sqrt(tolerance/np.maximum(error,minerror))
             if ofs == offsets[0]:
                 gse[:] = error

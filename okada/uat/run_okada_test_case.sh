@@ -1,7 +1,7 @@
 #!/bin/sh
 
 echo "Okada test case 2" > out/run_okada_test_case.out
-../calc_okada -x -d -wl out/okdata_2.wkt okada_2s.model point:2000:3000 - >> out/run_okada_test_case.out
+../calc_okada -x -d -wl out/okada_2.wkt okada_2s.model point:2000:3000 - >> out/run_okada_test_case.out
 ../calc_okada -x -d okada_2d.model point:2000:3000 - >> out/run_okada_test_case.out
 ../calc_okada -x -d okada_2t.model point:2000:3000 - >> out/run_okada_test_case.out
 
