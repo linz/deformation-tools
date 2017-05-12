@@ -302,6 +302,10 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
             {
                 fieldlist=match[2].str();
             }
+            if( command == "fault parameter type" )
+            {
+                s >> type;
+            }
             if(command == "additional data" )
             {
                 string fielddata;
@@ -504,17 +508,17 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
         switch( type )
         {
         case 0:
-            fs0 = -fs0; fs1 = 0.0;
+            fs0 = -fs1; fs1 = 0.0;
             fd0 = -fd1; fd1 = 0.0;
             break;
         case 1:
-            fs0 = -fs0; fs1 = 0.0;
+            fs0 = -fs1; fs1 = 0.0;
             fd0 = depth/sin(dip*DTOR);
             fd1 += fd0;
             depth = 0.0;
             break;
         case 2:
-            fs0 = -fs0; fs1 = 0.0;
+            fs0 = -fs1; fs1 = 0.0;
             break;
         case 3:
             fs1 /= 2; fs0 = -fs1;
@@ -742,10 +746,12 @@ int main( int argc, char *argv[] )
     bool compare = false;
     bool havenames = false;
     bool showlength = false;
+    bool calcdiff = false;
     bool calcstrain = false;
     bool calctilt = false;
     bool applysfconv = false;
     char delim='\t';
+    char idelim;
     int nskip = 0;
     int llprecision = 6;
     int dxyprecision = 4;
@@ -812,6 +818,10 @@ int main( int argc, char *argv[] )
         case 'c':
         case 'C':
             compare = true;
+            break;
+        case 'd':
+        case 'D':
+            calcdiff = true;
             break;
         case 's':
         case 'S':
@@ -956,10 +966,15 @@ int main( int argc, char *argv[] )
     
     istream *in;
     string fname(argv[2]);
-    if( fname.substr(0,5) == "grid:")
+    idelim=delim;
+    if( fname.substr(0,5) == "grid:" || fname.substr(0,6) == "point:" )
     {
       replace(fname.begin(),fname.end(),':',' ');
+      if( fname.substr(0,5) == "point" ) fname=fname.substr(6);
       in = new istringstream(fname);
+      idelim=' ';
+      havenames=false;
+      compare=false;
     }
     else if( fname == "-" )
     {
@@ -995,6 +1010,7 @@ int main( int argc, char *argv[] )
     if( havenames ) out << "name" << delim;
     out << "lon" << delim << "lat" << delim << "de" << delim << "dn" << delim << "du";
     if( showlength ) out << delim << "ds";
+    if( calcdiff ) out << delim << "ddede" << delim << "ddedn" << delim << "ddnde" << delim << "ddndn" << delim << "ddude" << delim << "ddudn" ;
     if( calcstrain ) out << delim << "dil" << delim << "rot" << delim << "shear" << delim << "err";
     if( calctilt ) out << delim << "tilte" << delim << "tiltn" << delim << "tiltmax";
     if( compare )
@@ -1018,15 +1034,15 @@ int main( int argc, char *argv[] )
         if( buffer.find_first_not_of(' ') == string::npos ) continue;
 
         double lon,lat, uxyz[3], duxy[4], dz[2];
-        double *strain = calcstrain ? duxy : 0;
-        double *tilt = calctilt ? dz : 0;
+        double *strain = (calcstrain || calcdiff) ? duxy : 0;
+        double *tilt = (calctilt || calcdiff) ? dz : 0;
         double &ux = uxyz[0];
         double &uy = uxyz[1];
         double &uz = uxyz[2];
 
         double lon0, lat0, lon1, lat1, dlon, dlat;
         int nln, nlt;
-        replace(buffer.begin(),buffer.end(),delim,' ');
+        replace(buffer.begin(),buffer.end(),idelim,' ');
         stringstream s(buffer);
         string gridstr;
 
@@ -1068,6 +1084,16 @@ int main( int argc, char *argv[] )
             {
                 double us = sqrt(ux*ux+uy*uy);
                 out << delim << us;
+            }
+            if( calcdiff )
+            {
+                out << setprecision(strnprecision)
+                    << delim << strain[0]*1000000.0
+                    << delim << strain[1]*1000000.0
+                    << delim << strain[2]*1000000.0
+                    << delim << strain[3]*1000000.0
+                    << delim << tilt[0]*1000000.0
+                    << delim << tilt[1]*1000000.0;
             }
             if( calcstrain )
             {
@@ -1129,6 +1155,16 @@ int main( int argc, char *argv[] )
                     {
                         double us = sqrt(ux*ux+uy*uy);
                         out << delim << us;
+                    }
+                    if( calcdiff )
+                    {
+                        out << setprecision(strnprecision)
+                            << delim << strain[0]*1000000.0
+                            << delim << strain[1]*1000000.0
+                            << delim << strain[2]*1000000.0
+                            << delim << strain[3]*1000000.0
+                            << delim << tilt[0]*1000000.0
+                            << delim << tilt[1]*1000000.0;
                     }
                     if( calcstrain )
                     {

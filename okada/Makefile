@@ -1,5 +1,5 @@
 
-CPPFLAGS=-std=c++0x -DUSE_BOOST_REGEX -DUSE_BOOST_STRINGS -D_stricmp=strcasecmp
+CPPFLAGS=-g -std=c++0x -DUSE_BOOST_REGEX -DUSE_BOOST_STRINGS -D_stricmp=strcasecmp
 LDLIBS=-lboost_regex -lm 
 CC=g++
 

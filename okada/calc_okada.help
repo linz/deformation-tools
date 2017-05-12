@@ -17,6 +17,8 @@ where
                      computed.  The test_point_file can be replaced with
                      a grid definition entered as 
                       grid:min_lon:min_lat:max_lon:max_lat:nlon:nlat
+                     or a point entered as 
+                      point:lon:lat
   output_file        A tab delimited file of test points and their east, 
                      north, and up displacements
 
@@ -74,8 +76,8 @@ The header line can specify the following fields separated by whitespace:
   fault_type      defines how the various parameters are interpreted (see below)
  *strike_deg      strike of fault in degrees east of north, measured from 
                   (latf, lonf) towards the right as the observer looks along dip.
- *dip_deg         dip of fault in degrees measured in degrees below horizontal
-                  looking to the right of the direction of strike (unless 
+ *dip_deg         dip of fault in degrees measured in degrees above horizontal
+                  looking to the left of the direction of strike (unless 
                   specified otherwise for fault type below)
  *rake_deg        rake of slip vector, measured in fault plane in degrees; 
                   From the point of view of observer standing on reference
@@ -111,6 +113,8 @@ The fault model lines contain data corresponding to the fields defined by the
 last header line, or the default fields.  Fields are separated by whitespace.
 If the last field is fault_description then it will include any remaining text
 on the line, including whitespace.
+
+The "Fault parameter type" metadata line can set the value for fault_type.
 
 The "Additional data" metadata line(s) can include strings formatted as 
 fieldname=value, which define the default value for fields not included in 

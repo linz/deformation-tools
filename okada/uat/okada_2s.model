@@ -1,0 +1,5 @@
+Event: Okada test model 2 strike slip
+Fault parameter type: 0
+Projection: None
+strike_deg	dip_deg	rake_deg	length_km	width_km	slip_m	opening_m	depth_km	lat_deg	lon_deg	fault_description
+-90	-70	180	3	2	1.0	0	4	0	0	Okada case 2 strike slip
