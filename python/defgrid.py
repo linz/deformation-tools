@@ -96,12 +96,14 @@ class Grid( object ):
                     result.append(ContourLine(level,path.vertices))
         return result
 
-    def contourf( self, col=-1, colours=None, levels=None, percentiles=None, multiple=None, returnContours=False ):
+    def contourf( self, col=-1, colours=None, levels=None, percentiles=None, multiple=None, absolute=False, returnContours=False ):
         index = self.getIndex(col)
         label=self.columns[index] if self.columns else 'Col '+str(index)
         data = self.array[:,:,index]
         if multiple:
             data = data * multiple
+        if absolute:
+            data = np.abs(data)
         levels = self._calcLevels( data, levels, percentiles )
         if not colours:
             colours = ('cyan','blue')
@@ -158,7 +160,7 @@ class Grid( object ):
                 id += 1;
                 f.write("{0:d}|{1:f}|{2:s}\n".format(id,contour.level,contour.wkt()))
 
-    def regionsExceedingLevel( self, col, limit, multiple=None ):
+    def regionsExceedingLevel( self, col, limit, multiple=None, absolute=False ):
         from shapely.geometry import Polygon
         data = self.column(col)
         if multiple:
@@ -166,7 +168,8 @@ class Grid( object ):
         else:
             cmax=np.max(data)
         cmax = cmax+abs(limit-cmax)*2+1000
-        contours = self.contourf(col,levels=[limit,cmax],multiple=multiple, returnContours=True)
+        contours = self.contourf(col,levels=[limit,cmax],multiple=multiple, 
+                                 absolute=absolute, returnContours=True)
         result = []
         for c in contours:
             if c.level == limit:
@@ -365,7 +368,7 @@ class DeformationGrid( Grid ):
         columns.extend("ds dil rot shear err".split())
         return Grid(result,columns=columns)
 
-    def calcResolution( self, tolerance, maxsize=100000.0,precision=0.0001,margin=1,vertical=False ):
+    def calcResolution( self, tolerance, maxsize=100000.0,precision=0.0001,margin=1,horizontal=False, vertical=False ):
         '''
         For all the internal nodes in the grid calculate the misfit 
         of the node from a value calculated from the four adjacent 
@@ -374,9 +377,13 @@ class DeformationGrid( Grid ):
 
         Precision is the numeric precision of the grid data. This is used to manage
         the impact of rounding errors on calculating the grid spacing.
+
+        Can specify that the test is based on horizontal and/or vertical coordinates.
+        If neither is specified then horizontal is assumed for backwards compatibility.
         '''
 
-        horizontal=not vertical
+        if not horizontal or vertical:
+            horizontal=True
 
         coslat=math.cos(math.radians(((self.extents[0,0]+self.extents[0,1])/2)))
         gridsize = np.hypot(self.dln*coslat,self.dlt)*deg_to_metres
@@ -398,10 +405,10 @@ class DeformationGrid( Grid ):
         gsgrid=np.empty((self.array.shape[0]-2*margin,self.array.shape[1]-2*margin,4))
         gsgrid[:,:,0:2]=self.array[margin:-margin,margin:-margin,0:2]
 
-        if horizontal:
-            en = self.array[:,:,2:4]
-        else:
-            en = self.array[:,:,4:5]
+        cmin=2 if horizontal else 4
+        cmax=5 if vertical else 4
+        en=self.array[:,:,cmin:cmax]
+
         rmax = en.shape[0];
         cmax = en.shape[1];
         gse = gsgrid[:,:,2]
@@ -420,10 +427,7 @@ class DeformationGrid( Grid ):
                 en[margin:-margin,margin-ofs:-(margin+ofs)]+
                 en[margin:-margin,(margin+ofs):(cmax+ofs-margin)]
                 )/4)
-            if horizontal:
-                error[:]=np.hypot(endiff[:,:,0],endiff[:,:,1])/(ofs*ofs)
-            else:
-                error[:]=np.abs(endiff[:,:,0])/(ofs*ofs)
+            error=np.sqrt(np.sum(endiff*endiff,axis=2))
             res[:]=gridsize*np.sqrt(tolerance/np.maximum(error,minerror))
             if ofs == offsets[0]:
                 gse[:] = error
