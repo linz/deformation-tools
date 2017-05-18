@@ -1044,6 +1044,8 @@ class FaultModel( object ):
             if built:
                 if os.path.getmtime(modelpath) > os.path.getmtime(gridfile):
                     built=False
+        if built:
+            print "          Using cached file {0}".format(gridfile)
         if not built:
             if os.path.exists(gridfile):
                 os.remove(gridfile)
@@ -1086,9 +1088,11 @@ class PatchGridDef:
                      based grids.  May be overridden for file based grids
         source       Either a function for evaluating the grid based upon the grid specification, or
                      the name of a source datafile.
+        refgrid      A grid used to define a reference used for merging a grid into its parent grid
     '''
                                  
-    def __init__( self, name=None, subpatch=None, extents=None, buffered_extents=None, level=1, spec=None, parent=None, source=None ):
+    def __init__( self, name=None, subpatch=None, extents=None, buffered_extents=None, level=1, 
+                 spec=None, parent=None, source=None, refgrid=None ):
         self.level=level
         self.parent=parent
         self.name=name
@@ -1104,6 +1108,7 @@ class PatchGridDef:
         self.gdf=None
         self.base=None
         self.basename=None
+        self.refgrid=refgrid
         self.isforward=None  # Component is forward/reverse in hybrid grid else None (= either)
         self._buffered_extents=None 
         self.source=source
@@ -1140,6 +1145,7 @@ class PatchGridDef:
         pgd.isforward=isforward if isforward is not Unspecified else self.isforward
         pgd.base=self.base
         pgd.basename=self.basename
+        pgd.refgrid=self.refgrid
         return pgd
 
     def _isFileSource( self ):
@@ -1151,9 +1157,12 @@ class PatchGridDef:
         if self._isFileSource():
             self._spec=None
 
+    def setRefGrid( self, refgrid ):
+        self.refgrid=refgrid
+
     @property
     def filename( self ):
-        return self._fileWithExtension('.grid')
+        return self.fileWithExtension('.grid')
 
     @property
     def spec( self ):
@@ -1257,7 +1266,7 @@ class PatchGridDef:
             self._gdf=gdffile
         return self._gdf
 
-    def _fileWithExtension( self, extension ):
+    def fileWithExtension( self, extension ):
         return Config.filename(name=self.name,extension=extension)
 
     @property
@@ -1271,7 +1280,7 @@ class PatchGridDef:
     @property
     def extentsWktFile( self ):
         if self._extentsWkt is None and self.extents is not None:
-            extentfile=self._fileWithExtension('_extent.wkt')
+            extentfile=self.fileWithExtension('_extent.wkt')
             with open(extentfile,'w') as wktf:
                 for pgn in self.extents:
                     wktf.write(pgn.to_wkt())
@@ -1300,7 +1309,7 @@ class PatchGridDef:
         Returned as a single MultiPolygon
         '''
         if self._bufferedExtentsWkt is None and self.bufferedExtents is not None:
-            extentfile=self._fileWithExtension('_buffer.wkt')
+            extentfile=self.fileWithExtension('_buffer.wkt')
             with open(extentfile,'w') as wktf:
                 for pgn in self.bufferedExtents:
                     wktf.write(pgn.to_wkt())
@@ -1330,10 +1339,22 @@ class PatchGridDef:
                   'trimto',pgridfile,
                   'zero','outside',extwkt,'and','edge','1',
                   'add','maxcols','3',pgridfile,'where','outside',extwkt,'and','edge','1',
+                 ]
+        if self.refgrid is not None:
+            commands.extend([
+                  'subtract','maxcols','3',self.refgrid
+                  ])
+        commands.extend([
                   'smooth','linear','outside',extwkt,'not','outside',bufwkt,'not','edge','1',
+                  ])
+        if self.refgrid is not None:
+            commands.extend([
+                  'add','maxcols','3',self.refgrid
+                  ])
+        commands.extend([
                   'write',gridfile,
                   'read',gridfile,
-                 ]
+                 ])
         Logger.write(" ".join(commands),1)
         gt_output=check_output(commands)
         Logger.write(gt_output,1)
@@ -1439,6 +1460,7 @@ class PatchGridDef:
                 # Now split each subgrid and add to the total list of grids
 
                 for s in subcells:
+                    s.setRefGrid( grid2.builtFilename)
                     subgrids.extend(s.splitToSubgrids(grid_criteria))
             
         return subgrids
@@ -1681,7 +1703,7 @@ def split_forward_reverse_patches( trialgrid, grid_criteria, gridlist ):
             commands=[
                 gridtool,
                 'read','maxcols','3',g.builtFilename
-                #,'write','csv',g._fileWithExtension('_presmooth.csv')
+                #,'write','csv',g.fileWithExtension('_presmooth.csv')
                 ]
             if basefg is not None:
                 commands.extend(['replace','maxcols','3',basefg.builtFilename,'where','inside',reversewkt])
@@ -1689,7 +1711,7 @@ def split_forward_reverse_patches( trialgrid, grid_criteria, gridlist ):
             if basefg is not None:
                 commands.extend(['not','on_grid',basefg.builtFilename])
             commands.extend(['write',fgridfile,'read',fgridfile])
-            #commands.extend(['write','csv',g._fileWithExtension('_postsmooth.csv')])
+            #commands.extend(['write','csv',g.fileWithExtension('_postsmooth.csv')])
         
             Logger.write(" ".join(commands),1)
             gt_output=check_output(commands)
@@ -1733,15 +1755,17 @@ def split_forward_reverse_patches( trialgrid, grid_criteria, gridlist ):
             buffered_extents=r_buffered_extents,
             name=rgridname,
             parent=reverse_grids.get(g.parent,None),
-            isforward=False
+            isforward=False,
              )
-        rgridfile=rgrid.filename
         fgrid=forward_grids[g]
+        rgridfile=rgrid.filename
+        refgridfile=rgrid.fileWithExtension('_ref.grid')
         commands=[
             gridtool,
             'read','maxcols','3',g.builtFilename,
             'subtract',fgrid.builtFilename,
             'trimto',fgrid.builtFilename,
+            'write',refgridfile,
             'zero','edge','1',
             'trim','tolerance','0.00001','1',
             'write',rgridfile,
@@ -1752,6 +1776,7 @@ def split_forward_reverse_patches( trialgrid, grid_criteria, gridlist ):
         if not os.path.exists(rgridfile):
             raise RuntimeError('Cannot build reverse patch '+rgridfile)
         rgrid.setSource(rgridfile)
+        rgrid.setRefGrid(refgridfile)
         Logger.write('Created reverse patch for {0}'.format(g.name))
         Logger.writeWkt("Reverse grid {0}".format(rgrid.name),0,g.spec.boundingPolygonWkt())
         rbase=reverse_grids.get(g,None)
