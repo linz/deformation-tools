@@ -71,6 +71,18 @@ Reading file from test3.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Evaluating grid at points in test1.grid - results in out/test3_eval.txt
+Reading file from test3.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Evaluating grid at 23.4938268 14 - results in output
+lon	lat	v1	v2
+23.4938268	14	12.339	1.219
+Reading file from test3.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Evaluating grid at 23.4938268 14 - results in output
+lon	lat	v1	v2
+23.4938268	14	12.339	1.219
 test 11 - add
 Reading file from test1.grid
 Grid has 8 rows and 7 columns

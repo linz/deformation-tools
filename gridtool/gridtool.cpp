@@ -583,37 +583,90 @@ static void run_evaluate( grid &g, commandlist &commands )
 {
     bool haveids=false;
     bool csv=false;
-    string infile = next_command(commands,"Input file for evaluate");
-    if( infile == "with_ids" ){ 
-        haveids=true; 
+    int crdndp=8;
+    int ndp=12;
+    double x, y;
+    string infile;
+    while( true )
+    {
         infile = next_command(commands,"Input file for evaluate");
+        if( infile == "with_ids" ){ 
+            haveids=true; 
+            infile = next_command(commands,"Input file for evaluate");
+            }
+        else if( infile == "csv" ){ 
+            csv=true; 
+            infile = next_command(commands,"Input file for evaluate");
+            }
+        else if( infile == "ndp" ){ 
+            next_command_value(commands,ndp,"Precision for evaluate output");
+            }
+        else {
+            break;
+            }
+    }
+    if( infile == "at" ) 
+    {
+        double x, y;
+        if( next_command_value(commands,x) )
+        {
+            next_command_value(commands,y,"y coordinate for evaluate");
+            ostringstream ptstr;
+            ptstr << "point:"<< grid::format_number(x,10) << ":" << grid::format_number(y,10);
+            infile=ptstr.str();
         }
-    if( infile == "csv" ){ 
-        csv=true; 
-        infile = next_command(commands,"Input file for evaluate");
+        else
+        {
+            infile = next_command(commands,"Input file for evaluate");
         }
-    if( infile == "at" ) infile = next_command(commands,"Input file for evaluate");
+    }
     string outfile = next_command(commands,"Output file for evaluate");
     if( outfile == "to" )  outfile = next_command(commands,"Output file for evaluate");
 
-    cout << "Evaluating grid at points in " << infile << " - results in " << outfile << endl;
-    ifstream fin(infile.c_str());
-    if( ! fin ) throw runtime_error(string("Cannot open evaluation point input file ").append(infile));
-    ofstream fout(outfile.c_str());
-    if( !fout ) throw runtime_error(string("Cannot open evaluation point output file ").append(outfile)); 
+    istream *fin;
+    ofstream *fclose=0;
+    ostream *fout=&cout;
+    try
+    {
+    if( outfile != "output" )
+    {
+        fclose=new ofstream(outfile.c_str());
+        fout=fclose;
+        if( ! fout->good() ) 
+        {
+            throw runtime_error(string("Cannot open evaluation point output file ").append(outfile)); 
+        }
+    }
+    char delim = csv ? ',' : '\t';
+
+    string pointcmd=infile.substr(0,6);
+    lowercase(pointcmd);
+    if( pointcmd == "point:" )
+    {
+        std::string pointdef(infile.substr(6));
+        std::replace(pointdef.begin(),pointdef.end(),':',delim);
+        fin=new istringstream(pointdef);
+        std::string pointmsg(infile.substr(6));
+        std::replace(pointmsg.begin(),pointmsg.end(),':',' ');
+        cout << "Evaluating grid at " << pointmsg << " - results in " << outfile << endl;
+    }
+    else
+    {
+        fin=new ifstream(infile.c_str());
+        if( ! fin->good() ) throw runtime_error(string("Cannot open evaluation point input file ").append(infile));
+        cout << "Evaluating grid at points in " << infile << " - results in " << outfile << endl;
+    }
     string input;
     string id;
-    char delim = csv ? ',' : '\t';
     vector<double> v;
-    fout << "lon" << delim << "lat";
+    (*fout) << "lon" << delim << "lat";
     for( int i = 0; i < g.nvalue(); i++ )
     {
-        fout << delim << g.fieldName(i);
+        (*fout) << delim << g.fieldName(i);
     }
-    fout << endl;
+    (*fout) << endl;
 
-    fout << setprecision(12);
-    while( getline(fin,input) )
+    while( getline(*fin,input) )
     {
         if( csv ) std::replace(input.begin(),input.end(),',',' ');
         istringstream s(input);
@@ -621,14 +674,20 @@ static void run_evaluate( grid &g, commandlist &commands )
         if( haveids ) s >> id;
         if( ! (s >> p.x >> p.y) ) continue;
         g.valueAt(p,v);
-        if( haveids ) fout << id << "\t";
-
-        fout << p.x << delim << p.y;
+        if( haveids ) (*fout) << id << "\t";
+        (*fout) << grid::format_number(p.x,crdndp) << delim << grid::format_number(p.y,crdndp);
         for( vector<double>::iterator vi = v.begin(); vi != v.end(); vi++ )
         {
-            fout << delim << (*vi);
+            (*fout) << delim << grid::format_number((*vi),ndp);
         }
-        fout << endl;
+        (*fout) << endl;
+    }
+    }
+    catch (...)
+    {
+        if( fin ) { delete fin; }
+        if( fclose ) { delete fclose; }
+        throw;
     }
 }
 

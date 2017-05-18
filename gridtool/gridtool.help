@@ -83,10 +83,13 @@ trim [tolerance #.###] bordersize
    rows and columns.  If a tolerance is specified then values less than
    the tolerance in absolute value can be trimmed.
 
-evaluate [with_ids] [at] points_file [to] output_file
+evaluate [with_ids] [ndp #] [csv] [at] points_file [to] output_file
+evaluate [ndp #] [csv] [at] x y [to] output_file
    Evaluates the grid at a set of points in a points file and writes the
    results to an output file.  If with_ids is specified then the points
-   file includes a point id as the first column (before the x and y values)
+   file includes a point id as the first column (before the x and y values).
+   ndp specifies the number of decimal places in the output data.  csv
+   specifies that the input and output use commas as delimiters.  
 
 affected_area selection wkt_output_file
    Creates a wkt polygon defining the boundary of the cells affected by 

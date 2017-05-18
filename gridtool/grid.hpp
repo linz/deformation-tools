@@ -107,6 +107,7 @@ public:
     void extents( double &minx, double &maxx, double &miny, double &maxy );
     void trim( int borderSize = 0, double zerotol=0.0 );
     std::string fieldName( int iv );
+    static std::string format_number(double value, int ndp );
 private:
     void initiallize();
     void create( int nrow, int ncol, int nvalue );

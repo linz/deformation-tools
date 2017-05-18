@@ -284,7 +284,7 @@ string grid::fieldName( int iv )
     return name;
 }
 
-static string format_number(double value, int ndp )
+string grid::format_number(double value, int ndp )
 {
     std::stringstream number;
     number.setf(std::ios_base::fixed,std::ios_base::floatfield);

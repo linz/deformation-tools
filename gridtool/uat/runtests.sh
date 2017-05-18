@@ -21,6 +21,8 @@ echo "test 9 - multiply" | tee -a out/tests.log
 ../gridtool test1.grid multiply 3.0 out/test1_mult.grid >> out/tests.log
 echo "test 10 - evaluate" | tee -a out/tests.log
 ../gridtool read test3.grid evaluate at test1.grid to out/test3_eval.txt >> out/tests.log
+../gridtool read test3.grid evaluate ndp 3 at point:23.4938268:14 to output >> out/tests.log
+../gridtool read test3.grid evaluate ndp 3 at 23.4938268 14 to output >> out/tests.log
 echo "test 11 - add" | tee -a out/tests.log
 ../gridtool test1.grid add test3.grid out/test1_add.grid >> out/tests.log
 echo "test 12 - subtract" | tee -a out/tests.log
