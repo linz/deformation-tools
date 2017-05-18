@@ -2040,7 +2040,7 @@ def build_published_component( patchversions, built_gridsets, comppath, cleandir
                     for priority, grid in enumerate(gridlist):
                         if grid.topLevelGrid() != tg:
                             continue
-                        rvs=grid.isforward if patch_type == 'hybrid' else (patch_type == 'forward')
+                        rvs=not grid.isforward if patch_type == 'hybrid' else (patch_type != 'forward')
                         csvdata['reverse_patch']='Y' if rvs else 'N'
                         csvname=os.path.split(grid.builtFilename)[1]
                         csvname=os.path.splitext(csvname)[0]+'.csv'
@@ -2066,6 +2066,7 @@ def build_published_component( patchversions, built_gridsets, comppath, cleandir
                             npoints2=gd.array.shape[0],
                             max_displacement=round(math.sqrt(np.max(disp2)),5),
                             file1=csvname,
+                            displacement_type=gs.ordinates,
                             )
                         Logger.writeWkt('Published '+csvname,grid.level,
                                 GridSpec(min_lon,min_lat,max_lon,max_lat).boundingPolygonWkt())
