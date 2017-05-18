@@ -576,6 +576,7 @@ bool FaultSet::AddOkada( double lon, double lat, double *dislocation, double *st
     {
         dislocation[0] = dislocation[1] = dislocation[2] = 0.0;
         if( strain ) { strain[0] = strain[1] = strain[2] = strain[3] = 0.0; }
+        if( tilt ) { tilt[0] = tilt[1] = 0.0; }
     }
     double x, y;
     double denu[3];
