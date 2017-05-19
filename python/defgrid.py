@@ -382,7 +382,7 @@ class DeformationGrid( Grid ):
         If neither is specified then horizontal is assumed for backwards compatibility.
         '''
 
-        if not horizontal or vertical:
+        if not (horizontal or vertical):
             horizontal=True
 
         coslat=math.cos(math.radians(((self.extents[0,0]+self.extents[0,1])/2)))

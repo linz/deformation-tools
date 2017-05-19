@@ -76,6 +76,7 @@ class PatchGridCriteria( object ):
     'forward_patch_test_column',        # Criteria column for partitioning forward/reverse
     'forward_patch_max_distortion',     # Maximum allowable value for test value
     'forward_patch_max_level',          # Maximum allowable level of forward patch
+    'subsplit_using_vertical',          # True if splitting is based on vertical resolution
     )
 
     # Factor by which accuracy standards are multiplied to derive 
@@ -169,12 +170,14 @@ class Config( object ):
         forward_patch_test_column='err',
         forward_patch_max_distortion=10,
         forward_patch_max_level=2,
+        subsplit_using_vertical=False,
         )
 
     vertical_grid_criteria=horizontal_grid_criteria.copy().update(
         base_limit_test_column='tiltmax',
         base_limit_bounds_column='du',
         forward_patch_test_column='tiltmax',
+        subsplit_using_vertical=True,
         )
 
     # Replace entire grid with subcells if more than this percentage 
@@ -983,6 +986,10 @@ class FaultModel( object ):
         for imissing in range(0,nmissing,blocksize):
             sys.stdout.write("          ... calculated {0}/{1} grid values\r".format(ncalc,nmissing))
             sys.stdout.flush()
+            if os.path.exists(missingfile):
+                os.path.remove(missingfile)
+            if os.path.exists(calcfile):
+                os.path.remove(calcfile)
             with open(missingfile,'w') as mf:
                 for l in missing[imissing:imissing+blocksize]:
                     mf.write(l)
@@ -1028,7 +1035,7 @@ class FaultModel( object ):
         #     print "Model {0}".format(modeldef)
         #     print "Grid spec {0}".format(gridspec)
 
-        params=[calc_okada,'-f','-x','-l','-s',modelpath,gridspecstr,gridfile]
+        params=[calc_okada,'-f','-x','-l','-s','-t',modelpath,gridspecstr,gridfile]
         meta='\n'.join(params)
         metafile=gridfile+'.metadata'
         built = False
@@ -1375,13 +1382,13 @@ class PatchGridDef:
             grid=self._strainGrid
         return MultiPolygon(grid.regionsExceedingLevel( column, tolerance, absolute=absolute ))
 
-    def areasNeedingFinerGrid( self, tolerance, celldimension  ):
+    def areasNeedingFinerGrid( self, tolerance, celldimension, vertical ):
         '''
         Determine the areas needing a finer grid than cellsize based
         on a required tolerance
         '''
         grid=self.grid
-        gridr = grid.calcResolution(tolerance,precision=0.0000001)
+        gridr = grid.calcResolution(tolerance,precision=0.0000001,vertical=vertical)
         subcell_areas=gridr.regionsLessThanLevel('reqsize',celldimension )
         if len(subcell_areas) <= 0:
             return None
@@ -1416,7 +1423,7 @@ class PatchGridDef:
 
             resolution=self.spec.cellDimension()
             subcell_areas=grid2.areasNeedingFinerGrid( 
-                grid_criteria.grid_level_split_criteria, resolution)
+                grid_criteria.grid_level_split_criteria, resolution, grid_criteria.subsplit_using_vertical)
             if subcell_areas is not None:
                 subcell_areas=Util.asMultiPolygon(subcell_areas)
                 Logger.writeWkt("{0} subcells".format(name),level1,subcell_areas.to_wkt())
@@ -1431,7 +1438,7 @@ class PatchGridDef:
                 
                     sea_areas= grid2.areasNeedingFinerGrid( 
                         grid_criteria.grid_level_split_sea_criteria,
-                        resolution)
+                        resolution, grid_criteria.subsplit_using_vertical)
                     if sea_areas is not None:
                         sea_areas=Util.asMultiPolygon(sea_areas)
                         Logger.writeWkt("{0} sea subcells".format(name),
