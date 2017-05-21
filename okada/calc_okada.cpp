@@ -195,7 +195,8 @@ public:
     bool ReadGNSDefinition( istream &str, int nskip = 0 );
     void setFactor( double fctr ){ factor=fctr; }
     void setApplyConvergence( bool apply ){ applyConvergence = apply; }
-    bool AddOkada( double lon, double lat, double *dislocation, double *strain, double *tilt, bool reset=true );
+    bool CalcOkada( double lon, double lat, double *dislocation, double *strain, double *tilt );
+    bool AddOkada( double lon, double lat, double *dislocation, double *strain, double *tilt );
     ostream & write( ostream &os, int style=0, bool header=true );
 private:
     Projection *proj;
@@ -570,14 +571,16 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
     return ok;
 }
 
-bool FaultSet::AddOkada( double lon, double lat, double *dislocation, double *strain, double *tilt, bool reset )
+bool FaultSet::CalcOkada( double lon, double lat, double *dislocation, double *strain, double *tilt )
 {
-    if( reset )
-    {
-        dislocation[0] = dislocation[1] = dislocation[2] = 0.0;
-        if( strain ) { strain[0] = strain[1] = strain[2] = strain[3] = 0.0; }
-        if( tilt ) { tilt[0] = tilt[1] = 0.0; }
-    }
+    dislocation[0] = dislocation[1] = dislocation[2] = 0.0;
+    if( strain ) { strain[0] = strain[1] = strain[2] = strain[3] = 0.0; }
+    if( tilt ) { tilt[0] = tilt[1] = 0.0; }
+    AddOkada( lon, lat, dislocation, strain, tilt );
+}
+
+bool FaultSet::AddOkada( double lon, double lat, double *dislocation, double *strain, double *tilt )
+{
     double x, y;
     double denu[3];
     bool ok = true;
@@ -1070,11 +1073,14 @@ int main( int argc, char *argv[] )
                                       << lineno << ": " << buffer << endl;
                 continue;
             }
-            bool reset = true;
+
+            uxyz[0] = uxyz[1] = uxyz[2] = 0.0;
+            duxy[0] = duxy[1] = duxy[2] = duxy[3] = 0.0;
+            dz[0] = dz[1] = 0.0;
+
             for( list<FaultSet *>::iterator f = faultlist.begin(); f != faultlist.end(); f++ )
             {
-                (*f)->AddOkada( lon0, lat0, uxyz, strain, tilt,reset );
-                reset = false;
+                (*f)->AddOkada( lon0, lat0, uxyz, strain, tilt );
             }
             if( havenames ) out << name << delim;
             out << setprecision(llprecision)
@@ -1142,11 +1148,13 @@ int main( int argc, char *argv[] )
                 int nlnrow = nln;
                 for( lon = lon0; nlnrow > 0; nlnrow--, lon += dlon )
                 {
-                    bool reset = true;
+                    uxyz[0] = uxyz[1] = uxyz[2] = 0.0;
+                    duxy[0] = duxy[1] = duxy[2] = duxy[3] = 0.0;
+                    dz[0] = dz[1] = 0.0;
+
                     for( list<FaultSet *>::iterator f = faultlist.begin(); f != faultlist.end(); f++ )
                     {
-                        (*f)->AddOkada( lon, lat, uxyz, strain, tilt,reset );
-                        reset=false;
+                        (*f)->AddOkada( lon, lat, uxyz, strain, tilt );
                     }
                     out << setprecision(llprecision)
                         << lon <<  delim << lat << delim
