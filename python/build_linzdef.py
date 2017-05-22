@@ -25,7 +25,7 @@ argparser.add_argument('linzdef_file',help='Name of final model')
 args = argparser.parse_args()
 
 md=args.model_dir
-if not isdir(md) or not isdir(joinpath(md,'model')) or not isdir(joinpath(md,'tools')):
+if not isdir(md) or not isdir(joinpath(md,'model')):
     raise RuntimeError("Invalid model directory: "+md)
 
 bd=args.target_dir
@@ -38,8 +38,14 @@ if not isdir(bd):
 defname=args.linzdef_file
 deffile=open(joinpath(bd,defname+'.def'),"w")
 
-sys.path.append(joinpath(md,'tools'))
-from LINZ.DeformationModel import Model, Time
+toolsdir=joinpath(md,'tools')
+if os.path.exists(toolsdir):
+    sys.path.append(joinpath(md,toolsdir))
+
+try:
+    from LINZ.DeformationModel import Model, Time
+except ImportError:
+    raise RuntimeError('Model tools directory not found and LINZ.DeformationModel not intalled')
 
 m=Model.Model(joinpath(md,'model'))
 
@@ -158,9 +164,24 @@ END_DESCRIPTION
 
 SeqComp=namedtuple('SeqComp','time factor before after nested')
 small=0.00001
+gdf_files={}
+seqcomps={}
+
+for sequence in sequences:
+    if sequence.component not in seqcomps:
+        seqcomps[sequence.component] = 0
+    seqcomps[sequence.component] += 1
+
+seqcomps={c:'' for c in seqcomps if seqcomps[c] > 1}
 
 for sequence in sequences:
     compname=sequence.component
+    ncomp=0
+    while compname in seqcomps:
+        ncomp += 1
+        compname=sequence.component + '_c{0}'.format(ncomp)
+    seqcomps[compname]=sequence.component
+
     print "Sequence:",compname
 
     subsequences = []
@@ -217,12 +238,20 @@ for sequence in sequences:
 
         for ngf,g in enumerate(sequence.grids):
             gf=joinpath(md,'model',g)
-            gfname='_g{0}'.format(ngf+1) if len(sequence.grids) > 1 else ''
-            sgfname=defname+'_'+compname+sseqname+gfname+'.gdf'
-            cmd=['gridtool','read','csv',gf]
-            cmd.extend(['write_linzgrid','NZGD2000','Deformation grid',sgfname,''])
-            cmd.append(joinpath(bd,sgfname))
-            call(cmd)
+            if gf not in gdf_files:
+                gfname='_g{0}'.format(ngf+1) if len(sequence.grids) > 1 else ''
+                sgfbasename=defname+'_'+compname+sseqname+gfname
+                sgfname=sgfbasename+'.gdf'
+                nsgf=0
+                while sgfname in gdf_files.values():
+                    nsgf += 1
+                    sgfname=sgfbasename+'_f{0}'.format(nsgf)+'.gdf'
+                cmd=['gridtool','read','csv',gf]
+                cmd.extend(['write_linzgrid','NZGD2000','Deformation grid',sgfname,''])
+                cmd.append(joinpath(bd,sgfname))
+                call(cmd)
+                gdf_files[gf]=sgfname
+            sgfname=gdf_files[gf]
             deffile.write(griddef.format(
                 gridfile=sgfname,
                 refdate=sseq[0].strftime('%d-%b-%Y'),
