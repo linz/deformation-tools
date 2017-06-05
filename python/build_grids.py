@@ -338,8 +338,10 @@ class Logger( object ):
             Logger.logfile=open(logfile,'w')
         if wktfile:
             Logger.wktfile=open(wktfile,'w')
+            Logger.wktfile.write("Item|level|wkt\n")
         if gridwkt:
             Logger.wktgridfile=open(gridwkt,'w')
+            Logger.wktgridfile.write("Name|level|nrow|ncol|wkt\n")
         if showgridlines is not None:
             Logger.wktgridlines=showgridlines
 
@@ -1470,6 +1472,14 @@ class PatchGridDef:
                     s.setRefGrid( grid2.builtFilename)
                     subgrids.extend(s.splitToSubgrids(grid_criteria))
             
+        else:
+            resolution=self.spec.cellDimension()
+            subcell_areas=griddef.areasNeedingFinerGrid( 
+                grid_criteria.grid_level_split_criteria, resolution, grid_criteria.subsplit_using_vertical)
+            if subcell_areas is not None:
+                subcell_areas=Util.asMultiPolygon(subcell_areas)
+                Logger.writeWkt("{0} not meeting accuracy requirements".format(self.name),self.level,subcell_areas.to_wkt())
+
         return subgrids
 
     def isTopLevelGrid( self ):
