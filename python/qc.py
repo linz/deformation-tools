@@ -116,16 +116,13 @@ def read_denu( tmpfile, cols=(2,5),header=False,expected=None,delim=None,fillfro
             if len(parts) >= ncol:
                 if fillfrom is not None:
                     id=int(parts[0])
-                    print l
                     while fillfrom < id:
-                        print "Adding {0}".format(fillfrom)
                         denu.append([0.0]*ndata)
                         fillfrom += 1
                     fillfrom=id+1
                 denu.append([float(x)*factor for x in parts[cols[0]:cols[1]]])
     if expected is not None and len(denu) != expected:
         if fillfrom is not None and len(denu) < expected:
-            print "Adding {0} rows".format(expected-len(denu))
             denu.extend([[0.0]*ndata]*(expected-len(denu)))
         else:
             raise RuntimeError('Wrong number of dislocations returned: {0} of {1}\n{2}{3}'.
@@ -283,7 +280,7 @@ def find_patches( pdir, pts ):
     finally:
         os.remove(tn1)
 
-def calc_velocities( gnsvel, eulerdef, points ):
+def calc_velocities( gnsvel, eulerdef, points, qclog ):
     with open(eulerdef) as f:
         eparams=f.readline().split()
         evals=[float(x) for x in eparams]
@@ -294,15 +291,25 @@ def calc_velocities( gnsvel, eulerdef, points ):
             pf.write('{0} {1} {2}\n'.format(i+1,p[1],p[0]))
     ofile=tempfilename()
     call(('gns_velocity_linz',gnsvel,pfile,ofile,'0','0','0','0'))
-    venu=read_denu(ofile,header=True,cols=(3,5),expected=len(points),fillfrom=1,factor=0.001)
-    os.remove(pfile)
-    os.remove(ofile)
+    venu=np.zeros((len(points),3))
+    nbad=0
     erot=euler.euler_rotation(grs80,evals[1],evals[0],evals[2])
-    vcorr=[]
-    for p,v in zip(points,venu):
-        de,dn=erot.velocity(p[0],p[1])
-        vcorr.append([v[0]-de,v[1]-dn,0.0])
-    return np.array(vcorr)
+    with open(ofile) as of:
+        of.readline()
+        for l in of:
+            parts=l.split()
+            if len(parts) < 5:
+                continue
+            try:
+                id=int(parts[0])
+                (lat,lon,ve,vn)=(float(x) for x in parts[1:5])
+                de,dn=erot.velocity(lon,lat)
+                venu[id-1]=[ve*0.001-de,vn*0.001-dn,0.0]
+            except:
+                nbad += 1
+    qclog.printlog("Calculating velocities from ",gnsvel)
+    qclog.printlog(" {0} points could not be calculated".format(nbad))
+    return venu
 
 class QcLog( object ):
 
@@ -337,7 +344,10 @@ class QcLog( object ):
                 csvfile=None,
                 tolerance=0.001,
                 skip=None,
-                listall=False
+                listall=False,
+                date0=None,
+                date=None,
+                append=False
                ):
         try:
             tolerances=list(tolerance)
@@ -348,19 +358,18 @@ class QcLog( object ):
         self.start_test(description)
         self.log.write('Comparing:\n')
         for i,d in enumerate(datasets):
-            self.log.write("    {0}: {1}\n".format(i,d[0]))
-
+            self.log.write("    {0}: {1}\n".format(d[0],d[1]))
 
         # Find rows exceeding tolerance
 
         error=np.array([0.0]*len(points))
         for id0,d0 in enumerate(datasets[:-1]):
             for d1 in datasets[id0+1:]:
-                error=np.maximum(error,np.sqrt(np.sum(np.square(d0[1]-d1[1]),axis=1)))
+                error=np.maximum(error,np.sqrt(np.sum(np.square(d0[2]-d1[2]),axis=1)))
 
         skiprows=[]
         if skip is not None:
-            skiprows=np.nonzero(np.sum(np.square(datasets[0][1]),axis=1) < skip*skip)[0]
+            skiprows=np.nonzero(np.sum(np.square(datasets[0][2]),axis=1) < skip*skip)[0]
             error[skiprows]=0.0
 
         badrows=np.nonzero(error>tolerance)[0]
@@ -380,26 +389,33 @@ class QcLog( object ):
             self.log.write('Maximum of {0} differences is {1:.4f}\n'.format(ntest,np.max(error)))
 
         csvf=None
+        haveheader=False
         if csvfile:
             csvf=os.path.join(self.dir,csvfile+'.csv')
-            try:
-                os.path.remove(csvf)
-            except:
-                pass
-        if nbad and csvf:
+            if not append:
+                try:
+                    os.path.remove(csvf)
+                except:
+                    pass
+            elif os.path.exists(csvf):
+                haveheader=True
+        date=date or ''
+        date0=date0 or ''
+        if (nbad or listall) and csvf:
             if listall:
                 badrows=range(ntest)
-            csvw=csv.writer(open(csvf,'w'))
-            header=['id','lon','lat','diff']
+            csvw=csv.writer(open(csvf,'ab' if append else 'wb'))
+            header=['id','date','date0','lon','lat','diff']
             for i in range(len(datasets)):
-                stri=str(i)
+                stri=datasets[i][0]
                 header += ['de_'+stri,'dn_'+stri,'du_'+stri]
-            csvw.writerow(header)
+            if not haveheader:
+                csvw.writerow(header)
             for ib in badrows:
-                row=[str(ib+1),str(points[ib][0]),str(points[ib][1])]
+                row=[str(ib+1),date,date0,str(points[ib][0]),str(points[ib][1])]
                 data=[error[ib]]
                 for ds in datasets:
-                    data.extend(ds[1][ib])
+                    data.extend(ds[2][ib])
                 row.extend(("{0:.4f}".format(x) for x in data))
                 csvw.writerow(row)
             csvw=None
@@ -427,6 +443,7 @@ parser.add_argument('--n-test-points','-n',type=int,default=ntestpergrid,help='N
 parser.add_argument('--test-patches',action='store_true',help='Test reverse patch .def files')
 parser.add_argument('--test-calcdef',action='store_true',help='Test published model deformation')
 parser.add_argument('--test-velocities',action='store_true',help='Test secular velocity model')
+parser.add_argument('--use-ndm-velocities',action='store_true',help='Use velocity model from NDM for patch/dislocation testing')
 parser.add_argument('--test-linzdef',action='store_true',help='Test SNAP/Landonline binary model dislocations')
 parser.add_argument('--from-date',help="Start date in format YYYY-MM-DD")
 parser.add_argument('--to-date',help="End date in format YYYY-MM-DD")
@@ -462,18 +479,21 @@ else:
     if os.path.exists(cdfmf):
         cdfm=['python',cdfmf]
 if cdfm is not None:
-    cdfm.extend(('-m',os.path.join(modeldir,'model')))
+    cdfm.extend(('--ndp=6','-m',os.path.join(modeldir,'model')))
     cdfm=tuple(cdfm)
 
 points=test_points(ldm,land_area)
 qclog.write_test_points( points )
 
-fmodels=fault_models(args.fault_model_dir,points)
-
-times=test_times(fmodels)
-
-time0=datetime(2000,1,1) if args.from_date is None else datetime.strptime(args.from_date,"%Y-%m-%d")
-time1=times[-1] if args.to_date is None else datetime.strptime(args.to_date,"%Y-%m-%d")
+fmodels=None
+times=None
+time0=None
+time1=None
+if test_patches or test_dislocations:
+    fmodels=fault_models(args.fault_model_dir,points)
+    times=test_times(fmodels)
+    time0=datetime(2000,1,1) if args.from_date is None else datetime.strptime(args.from_date,"%Y-%m-%d")
+    time1=times[-1] if args.to_date is None else datetime.strptime(args.to_date,"%Y-%m-%d")
 
 # CalcDeformation input file (to be deleted at end of run)
 
@@ -506,8 +526,8 @@ if test_patches:
             pdenu = pdenu+p.denu
         pfile=' '.join((p.file for p in plist))
         qclog.compare("Testing reverse patch file "+pdir+"\n     "+pfile,points,
-                      (('Calculated directly from fault models',pfault),
-                       ('Calculated from patch file',pdenu)),
+                      (('flt','Calculated directly from fault models',pfault),
+                       ('grd','Calculated from patch file',pdenu)),
                       csvfile=pcsv,
                       tolerance=(0.001,0.002,0.005,0.01),
                       skip=skip
@@ -522,45 +542,56 @@ if test_calcdef_patch:
     pfault=calc_total_fault_model( fmodels, points, t=t, t0=t0, verbose=args.verbose )
     outfile=tempfilename()
     command=cdfm+('-d',tstr,'-b',t0str,'-o','-ndm',cdin,outfile)
-    print command
+    # print command
     call(command)
     cdenu=read_denu(outfile,cols=(4,7),header=True,expected=len(points),delim=',')
     os.remove(outfile)
     qclog.compare("Testing CalcDeformation.py patches {0} - {1}".format(t0str,tstr),
                       points,
-                      (('Calculated directly from fault models',pfault),
-                       ('Calculated from published model',cdenu)),
+                      (('flt','Calculated directly from fault models',pfault),
+                       ('pub','Calculated from published model',cdenu)),
                       csvfile='calcdef_patch',
                       tolerance=(0.001,0.002,0.005,0.01),
                       listall=args.list_all
                      )
 
 
-if test_velocities or test_dislocations:
-    velocities=calc_velocities(args.gns_velocities,args.ndm_euler_rotation_file, points)
+if test_velocities or (test_dislocations and not args.use_ndm_velocities):
+    velocities=calc_velocities(args.gns_velocities,args.ndm_euler_rotation_file, points, qclog)
+
+if test_velocities or (test_dislocations and args.use_ndm_velocities):
+    outfile=tempfilename()
+    command=cdfm+('--date=2100-01-01','--base-date=2000-01-01','--only=ndm',cdin,outfile)
+    call(command)
+    venu=read_denu(outfile,cols=(4,7),header=True,expected=len(points),delim=',')
+    venu /= 100.0
+    os.remove(outfile)
 
 if test_velocities:
     print "Testing velocity component in CalcDeformation"
-    outfile=tempfilename()
-    command=cdfm+('--date=2001-01-01','--base-date=2000-01-01','--only=ndm',cdin,outfile)
-    call(command)
-    venu=read_denu(outfile,cols=(4,7),header=True,expected=len(points),delim=',')
-    os.remove(outfile)
     qclog.compare("Testing CalcDeformation.py velocities",points,
-                      (('Calculated directly from gns_velocity+euler',velocities),
-                       ('Calculated from published model',venu)),
+                      (('vel','Calculated directly from gns_velocity+euler',velocities),
+                       ('pub','Calculated from published model',venu)),
                       csvfile='ndm_velocities',
                       tolerance=(0.0001,0.0002,0.0005,0.001)
                      )
 
 if test_dislocations:
     pfile=points_file(points)
+    append=False
+    testvel=venu if args.use_ndm_velocities else velocities
+    datestr0=None
+    mdenu0=None
+    bdenu0=None
+    cdenu0=None
     for dt in times:
-        csvf="dislocations_"+dt.strftime("%Y%m%d")
+        # csvf="dislocations_"+dt.strftime("%Y%m%d")
+        csvf="dislocations"
         year=date_as_year(dt)
-        print "Testing dislocations at {0:%Y-%m-%d} {1:.2f}".format(dt,year)
+        datestr="{0:%Y-%m-%d}".format(dt)
+        print "Testing dislocations at {0} {1:.2f}".format(datestr,year)
         # Model dislocations
-        mdenu=velocities*(year-2000.0)
+        mdenu=testvel*(year-2000.0)
         for fm in fmodels:
             mdenu += fm.calc_denu(year,reverse=True)
 
@@ -576,13 +607,28 @@ if test_dislocations:
         call(command)
         cdenu=read_denu(outfile,cols=(4,7),header=True,expected=len(points),delim=',')
         os.remove(outfile)
-        qclog.compare("Testing dislocations at {0:%Y-%m-%d}".format(dt),points,
-                      (('Calculated directly from gns files',mdenu),
-                      ('Calculated from SNAP/Landoline binary file',bdenu),
-                      ('Calculated from published model',cdenu)),
+        qclog.compare("Testing dislocations at {0}".format(datestr),points,
+                      (('gns','Calculated directly from gns files',mdenu),
+                      ('bin','Calculated from SNAP/Landoline binary file',bdenu),
+                      ('pub','Calculated from published model',cdenu)),
                       csvfile=csvf,
-                      tolerance=(0.001,0.002,0.005,0.01)
+                      date=datestr,
+                      tolerance=(0.001,0.002,0.005,0.01),
+                      append=append
                      )
-
-            
-
+        append=True
+        if datestr0 is not None:
+            qclog.compare("Testing dislocations between  {0} and {1}".format(datestr0,datestr),points,
+                          (('gns','Calculated directly from gns files',mdenu-mdenu0),
+                          ('bin','Calculated from SNAP/Landoline binary file',bdenu-bdenu0),
+                          ('pub','Calculated from published model',cdenu-cdenu0)),
+                          csvfile=csvf,
+                          date0=datestr0,
+                          date=datestr,
+                          tolerance=(0.001,0.002,0.005,0.01),
+                          append=append
+                         )
+        datestr0=datestr
+        mdenu0=mdenu
+        bdenu0=bdenu
+        cdenu0=cdenu
