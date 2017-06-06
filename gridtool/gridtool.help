@@ -57,6 +57,7 @@ alignto [csv] parent_grid_file
 
 trimto [buffer n] [csv] parent_grid_file
 trimto [buffer n] wkt wkt_file
+trimto [buffer n] extents xmin ymin xmax ymax
    Trims the grid to not exceed the extents of the parent grid or 
    wkt polygon.  If a buffer is specified the buffer margin is added
    to the extents before trimming.  Note that the grid will not 

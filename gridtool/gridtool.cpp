@@ -523,6 +523,16 @@ static void run_trimto( grid &g, commandlist &commands )
         g.trimto(minx,maxx,miny,maxy,buffer);
         write_spec(g);
     }
+    else if( next_command_is(commands,"extents"))
+    {
+        double minx, maxx, miny, maxy;
+        next_command_value(commands,minx,"Trim extents minimum x");
+        next_command_value(commands,miny,"Trim extents minimum x");
+        next_command_value(commands,maxx,"Trim extents minimum x");
+        next_command_value(commands,maxy,"Trim extents minimum x");
+        g.trimto(minx,maxx,miny,maxy,buffer);
+        write_spec(g);
+    }
     else
     {
         grid galign;
