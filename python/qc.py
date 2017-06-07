@@ -13,6 +13,7 @@ import os
 import re
 import csv
 import numpy as np
+import numbers
 import ellipsoid
 import atexit
 from random import uniform, seed
@@ -342,6 +343,7 @@ class QcLog( object ):
                 points,
                 datasets,
                 csvfile=None,
+                csvsummary=None,
                 tolerance=0.001,
                 skip=None,
                 listall=False,
@@ -349,10 +351,30 @@ class QcLog( object ):
                 date=None,
                 append=False
                ):
-        try:
+
+        if len(datasets) > 2:
+            for i,d0 in enumerate(datasets):
+                for d1 in datasets[i+1:]:
+                    self.compare(
+                        description,
+                        points,
+                        (d0,d1),
+                        csvfile,
+                        csvsummary,
+                        tolerance,
+                        skip,
+                        listall,
+                        date0,
+                        date,
+                        append
+                    )
+                    append=True
+            return
+
+        if isinstance(tolerance,numbers.Number):
+            tolerances=[tolerance]
+        else:
             tolerances=list(tolerance)
-        except:
-            tolerances=(tolerance,)
         tolerance=tolerances[0]
 
         self.start_test(description)
@@ -363,13 +385,13 @@ class QcLog( object ):
         # Find rows exceeding tolerance
 
         error=np.array([0.0]*len(points))
-        for id0,d0 in enumerate(datasets[:-1]):
-            for d1 in datasets[id0+1:]:
-                error=np.maximum(error,np.sqrt(np.sum(np.square(d0[2]-d1[2]),axis=1)))
+        d0,d1=datasets
+        diff=d1[2]-d0[2]
+        error=np.sqrt(np.sum(np.square(diff),axis=1))
 
         skiprows=[]
         if skip is not None:
-            skiprows=np.nonzero(np.sum(np.square(datasets[0][2]),axis=1) < skip*skip)[0]
+            skiprows=np.nonzero(np.sum(np.square(d0[2]),axis=1) < skip*skip)[0]
             error[skiprows]=0.0
 
         badrows=np.nonzero(error>tolerance)[0]
@@ -388,6 +410,33 @@ class QcLog( object ):
         else: 
             self.log.write('Maximum of {0} differences is {1:.4f}\n'.format(ntest,np.max(error)))
 
+        date=date or ''
+        date0=date0 or ''
+        comparison=d1[0]+'-'+d0[0]
+
+        csvf=None
+        haveheader=False
+        if csvsummary:
+            csvf=os.path.join(self.dir,csvsummary+'.csv')
+            if not append:
+                try:
+                    os.path.remove(csvf)
+                except:
+                    pass
+            elif os.path.exists(csvf):
+                haveheader=True
+            csvw=csv.writer(open(csvf,'ab' if append else 'wb'))
+            header=['date','date0','comparison','ntest']
+            header.extend('tol_{0:.3f}'.format(t) for t in tolerances)
+            if not haveheader:
+                csvw.writerow(header)
+            row=[date,date0,comparison,str(ntest)]
+            for tol in tolerances[1:]:
+                nfail=len(np.nonzero(error>tol)[0])
+                row.append(str(nfail))
+            csvw.writerow(row)
+            csvw=None
+
         csvf=None
         haveheader=False
         if csvfile:
@@ -405,18 +454,13 @@ class QcLog( object ):
             if listall:
                 badrows=range(ntest)
             csvw=csv.writer(open(csvf,'ab' if append else 'wb'))
-            header=['id','date','date0','lon','lat','diff']
-            for i in range(len(datasets)):
-                stri=datasets[i][0]
-                header += ['de_'+stri,'dn_'+stri,'du_'+stri]
+            header=['id','date','date0','comparison','lon','lat','diff','de','dn','du']
             if not haveheader:
                 csvw.writerow(header)
             for ib in badrows:
-                row=[str(ib+1),date,date0,str(points[ib][0]),str(points[ib][1])]
-                data=[error[ib]]
-                for ds in datasets:
-                    data.extend(ds[2][ib])
-                row.extend(("{0:.4f}".format(x) for x in data))
+                row=[str(ib+1),date,date0,comparison,str(points[ib][0]),str(points[ib][1])]
+                row.append("{0:.4f}".format(error[ib]))
+                row.extend(("{0:.4f}".format(x) for x in diff[ib]))
                 csvw.writerow(row)
             csvw=None
             self.log.write('     Bad residuals in {0}.csv\n'.format(csvfile))
@@ -485,6 +529,8 @@ if cdfm is not None:
 points=test_points(ldm,land_area)
 qclog.write_test_points( points )
 
+tolerances=(0.001,0.002,0.005,0.01,0.02,0.05,0.10,0.20,0.50,1.0)
+
 fmodels=None
 times=None
 time0=None
@@ -529,7 +575,7 @@ if test_patches:
                       (('flt','Calculated directly from fault models',pfault),
                        ('grd','Calculated from patch file',pdenu)),
                       csvfile=pcsv,
-                      tolerance=(0.001,0.002,0.005,0.01),
+                      tolerance=tolerances,
                       skip=skip
                      )
 
@@ -551,7 +597,7 @@ if test_calcdef_patch:
                       (('flt','Calculated directly from fault models',pfault),
                        ('pub','Calculated from published model',cdenu)),
                       csvfile='calcdef_patch',
-                      tolerance=(0.001,0.002,0.005,0.01),
+                      tolerance=tolerances,
                       listall=args.list_all
                      )
 
@@ -573,7 +619,7 @@ if test_velocities:
                       (('vel','Calculated directly from gns_velocity+euler',velocities),
                        ('pub','Calculated from published model',venu)),
                       csvfile='ndm_velocities',
-                      tolerance=(0.0001,0.0002,0.0005,0.001)
+                      tolerance=tolerances,
                      )
 
 if test_dislocations:
@@ -584,16 +630,24 @@ if test_dislocations:
     mdenu0=None
     bdenu0=None
     cdenu0=None
+    call(('runlnzdef',lnzdef,'2000.0',pfile,outfile))
+    bdenu2k=read_denu(outfile,cols=(3,6),expected=len(points))
+    command=cdfm+('--date=2000-01-01',cdin,outfile)
+    call(command)
+    cdenu2k=read_denu(outfile,cols=(4,7),header=True,expected=len(points),delim=',')
+    os.remove(outfile)
+
     for dt in times:
         # csvf="dislocations_"+dt.strftime("%Y%m%d")
         csvf="dislocations"
+        csvsum="disloc_summary"
         year=date_as_year(dt)
         datestr="{0:%Y-%m-%d}".format(dt)
         print "Testing dislocations at {0} {1:.2f}".format(datestr,year)
         # Model dislocations
         mdenu=testvel*(year-2000.0)
         for fm in fmodels:
-            mdenu += fm.calc_denu(year,reverse=True)
+            mdenu += fm.calc_denu(year)
 
         # SNAP/Landonline binary file dislocations
         outfile=tempfilename()
@@ -609,23 +663,35 @@ if test_dislocations:
         os.remove(outfile)
         qclog.compare("Testing dislocations at {0}".format(datestr),points,
                       (('gns','Calculated directly from gns files',mdenu),
-                      ('bin','Calculated from SNAP/Landoline binary file',bdenu),
-                      ('pub','Calculated from published model',cdenu)),
+                      ('bin','Calculated from SNAP/Landoline binary file',bdenu-bdenu2k),
+                      ('pub','Calculated from published model',cdenu-cdenu2k)),
                       csvfile=csvf,
+                      csvsummary=csvsum,
                       date=datestr,
-                      tolerance=(0.001,0.002,0.005,0.01),
+                      date0='2000-01-01',
+                      tolerance=tolerances,
                       append=append
                      )
         append=True
+        qclog.compare("Testing dislocations at {0}".format(datestr),points,
+                      (('bin','Calculated from SNAP/Landoline binary file',bdenu),
+                      ('pub','Calculated from published model',cdenu)),
+                      csvfile=csvf,
+                      csvsummary=csvsum,
+                      date=datestr,
+                      tolerance=tolerances,
+                      append=append
+                     )
         if datestr0 is not None:
             qclog.compare("Testing dislocations between  {0} and {1}".format(datestr0,datestr),points,
                           (('gns','Calculated directly from gns files',mdenu-mdenu0),
                           ('bin','Calculated from SNAP/Landoline binary file',bdenu-bdenu0),
                           ('pub','Calculated from published model',cdenu-cdenu0)),
                           csvfile=csvf,
+                          csvsummary=csvsum,
                           date0=datestr0,
                           date=datestr,
-                          tolerance=(0.001,0.002,0.005,0.01),
+                          tolerance=tolerances,
                           append=append
                          )
         datestr0=datestr

@@ -151,6 +151,14 @@ class Config( object ):
     # Criteria defining the extents and resolution of grids
     tolerance_factor=PatchGridCriteria.tolerance_factor
 
+    # Splits published grids into approximate size below 
+    # with tolerance to allow slightly bigger to be allowed,
+    # eg split_size=100 with tolerance 0.2 allows up to 120 
+    # before splitting.
+
+    published_grid_split_size=100
+    published_grid_split_tol=None
+
     horizontal_grid_criteria=PatchGridCriteria(
         base_limit_test_column='err',
         base_limit_tolerance=accuracy_standards.NRF.lap*tolerance_factor*1.0e6,
@@ -449,10 +457,10 @@ class GridSpec( object ):
                 ngx=max(int((xmax-xmin)/cellsize[0]+0.5),1)
             if ngy == 1:
                 ngy=max(int((ymax-ymin)/cellsize[1]+0.5),1)
-        self.xmin=xmin
-        self.ymin=ymin
-        self.xmax=xmax
-        self.ymax=ymax
+        self.xmin=float(xmin)
+        self.ymin=float(ymin)
+        self.xmax=float(xmax)
+        self.ymax=float(ymax)
         self.ngx=ngx
         self.ngy=ngy
 
@@ -498,6 +506,16 @@ class GridSpec( object ):
         '''
         cellsize=self.cellSize()
         return max(cellsize[0]/Config.scale_factor[0],cellsize[1]/Config.scale_factor[1])
+
+    def xy( self, gx, gy ):
+        x=self.xmin+float((self.xmax-self.xmin)*gx)/self.ngx;
+        y=self.ymin+float((self.ymax-self.ymin)*gy)/self.ngy;
+        return x,y
+
+    def gxy( self, x, y ):
+        gx=int(math.ceil((x-self.xmin)*self.ngx/(self.xmax-self.xmin)-0.5))
+        gy=int(math.ceil((y-self.ymin)*self.ngy/(self.ymax-self.ymin)-0.5))
+        return gx,gy
 
     def mergeWith( self, other ):
         pt0 = (min(self.xmin,other.xmin),min(self.ymin,other.ymin))
@@ -602,6 +620,30 @@ class GridSpec( object ):
             else:
                 break
         deflist.append(merged)
+
+    @staticmethod
+    def _splitn( nx, ns, tolerance ):
+        ng=max(int(float(nx-1)/ns-tolerance),0)+1
+        nr=int((nx-1)/ng)+1
+        result=[(i,min(i+nr,nx)) for i in range(0,nx,nr)]
+        return result
+
+    def splitGridOnSize( self, splitrows=None, tolerance=None ):
+        if tolerance is None:
+            tolerance=0.5 
+        if splitrows is None:
+            return [self]
+        splitx=self._splitn(self.ngx,splitrows,tolerance)
+        splity=self._splitn(self.ngy,splitrows,tolerance)
+        if len(splitx) <= 1 and len(splity) <= 1:
+            return [self]
+        specs=[]
+        for nxmin,nxmax in splitx:
+            for nymin,nymax in splity:
+                xmin,ymin=self.xy(nxmin,nymin)
+                xmax,ymax=self.xy(nxmax,nymax)
+                specs.append(GridSpec(xmin,ymin,xmax,ymax,nxmax-nxmin,nymax-nymin))
+        return specs
 
 class PatchVersion( object ) :
 
@@ -1237,7 +1279,7 @@ class PatchGridDef:
             self._csv=csvfile
         return self._csv
 
-    def writeCsvFile( self, filename, columns=['de','du','dn'], ndp=4 ):
+    def writeCsvFile( self, filename, columns=['de','du','dn'], ndp=4, subgrid=None ):
         global gridtool
         if self._csv is None or filename != self._csv:
             gridfile=self.builtFilename
@@ -1245,8 +1287,17 @@ class PatchGridDef:
             colnames='+'.join(columns)
             commands=[gridtool,
                       'read','maxcols','3',gridfile,
+                     ]
+            if subgrid:
+                commands.extend([
+                      'trimto','extents',
+                       str(subgrid.xmin),str(subgrid.ymin),
+                       str(subgrid.xmax),str(subgrid.ymax)
+                    ])
+            commands.extend([
                       'write','csv','columns',colnames,'ndp',str(ndp),'dos',filename,
-                      'read','csv',filename]
+                      'read','csv',filename
+                ])
             Logger.write(" ".join(commands),1)
             gt_output=check_output(commands)
             Logger.write(gt_output,1)
@@ -1503,6 +1554,13 @@ class PatchGridDef:
         family=[g for g in gridlist if self.owns(g)]
         family.sort( key=lambda x: (x.level,x.file) )
         return family
+
+    def splitGridSpecOnSize(self,nsplit,tolerance=0.5):
+        specs=self.spec.splitGridOnSize(nsplit,tolerance)
+        if len(specs) > 1:
+            buffer=self.bufferedExtents
+            specs=[s for s in specs if buffer.intersects(s.boundingPolygon())]
+        return specs
 
     def shortStr( self ):
         return "Grid: {0} parent={1} level={2} F/R={3}".format(
@@ -1973,7 +2031,9 @@ def build_deformation_grid_set( grid_set, subpatch='', splitbase=True ):
         Logger.write("Removing redundant grid {0}".format(g.name))
     return gridlist
 
-def build_published_component( patchversions, built_gridsets, comppath, cleandir=False, ndp=4 ):
+def build_published_component( patchversions, built_gridsets, 
+                              comppath, cleandir=False, ndp=4,
+                              splitsize=None, splittol=0.5 ):
     '''
     Creates the component.csv file and grid components used as a published
     component of a LINZ published deformation model
@@ -2000,6 +2060,8 @@ def build_published_component( patchversions, built_gridsets, comppath, cleandir
                 Logger.write("   Removing existing file {0}".format(f))
                 os.remove(fn)
 
+    Logger.write("Splitting large grids to approx size {0} rows/cols tolerance {1}" 
+                 .format(splitsize,splittol))
 
     compcsv=os.path.join(comppath,'component.csv')
 
@@ -2054,63 +2116,76 @@ def build_published_component( patchversions, built_gridsets, comppath, cleandir
                 for tg in toplevelgrids:
                     ir1 = ir0
                     ir0 += len(versionspec.time_model)
-                    for priority, grid in enumerate(gridlist):
+                    priority=0
+                    Logger.write("Publishing grids for top level grid {0}".format(tg.name))
+                    for grid in gridlist:
                         if grid.topLevelGrid() != tg:
                             continue
                         rvs=not grid.isforward if patch_type == 'hybrid' else (patch_type != 'forward')
                         csvdata['reverse_patch']='Y' if rvs else 'N'
                         csvname=os.path.split(grid.builtFilename)[1]
-                        csvname=os.path.splitext(csvname)[0]+'.csv'
+                        csvname=os.path.splitext(csvname)[0]
                         csvname = re.sub(r'^(grid_)?','grid_',csvname)
-                        compcsv=os.path.join(comppath,csvname)
-                        grid.writeCsvFile( compcsv, columns, ndp )
-                        
-                        gd=defgrid.DeformationGrid(compcsv)
-                        min_lon=round(np.min(gd.column('lon')),10)
-                        max_lon=round(np.max(gd.column('lon')),10)
-                        min_lat=round(np.min(gd.column('lat')),10)
-                        max_lat=round(np.max(gd.column('lat')),10)
-                        disp2=None
-                        for c in columns:
-                            col=gd.column(c)
-                            disp2=col*col if disp2 is None else disp2+col*col
-                        compdata=dict(
-                            min_lon=min_lon,
-                            max_lon=max_lon,
-                            min_lat=min_lat,
-                            max_lat=max_lat,
-                            npoints1=gd.array.shape[1],
-                            npoints2=gd.array.shape[0],
-                            max_displacement=round(math.sqrt(np.max(disp2)),5),
-                            file1=csvname,
-                            displacement_type=gs.ordinates,
-                            )
-                        Logger.writeWkt('Published '+csvname,grid.level,
-                                GridSpec(min_lon,min_lat,max_lon,max_lat).boundingPolygonWkt())
-                        
-                        rdate0=0
-                        for ir,r in enumerate(versionspec.time_model):
-                            rdate=r.date.strftime("%Y-%m-%d")
-                            rvalue=r.factor
-                            if ir == 0:
-                                if rvalue==0:
-                                    continue
-                                compdata['time_function']='step'
-                                compdata['time0']=rdate
-                                compdata['time1']=rdate
-                            else:
-                                compdata['time_function']='ramp'
-                                compdata['time0']=rdate0
-                                compdata['time1']=rdate
-                                rvalue -= versionspec.time_model[ir-1].factor
-                            rdate0=rdate
-                            compdata['factor0']=-rvalue if rvs else 0
-                            compdata['factor1']=0 if rvs else rvalue
-                            if not additive:
-                                compdata['component']=ir+ir1
-                                compdata['priority']=priority
-                            csvdata.update(compdata)
-                            ccsv.writerow([csvdata[c] for c in Config.published_component_columns])
+                        subgrids=grid.splitGridSpecOnSize(splitsize,splittol)
+                        if len(subgrids) > 1:
+                            Logger.write("Splitting grid into {0} smaller grids"
+                                         .format(len(subgrids)))
+                            csvname=csvname+"_{0:02d}"
+                        Logger.writeWkt('Published '+csvname+' bounds',grid.level,
+                            grid.bufferedExtents.wkt)
+                        for isubgrid, subgrid in enumerate(subgrids):
+                            subcsvname=csvname.format(isubgrid)+".csv"
+                            subcsvpath=os.path.join(comppath,subcsvname)
+                            Logger.write("Building published grid {0} for extents {1}"
+                                            .format(subcsvname,subgrid))
+                            grid.writeCsvFile( subcsvpath, columns, ndp, subgrid=subgrid )
+                            priority += 1
+                            gd=defgrid.DeformationGrid(subcsvpath)
+                            min_lon=round(np.min(gd.column('lon')),10)
+                            max_lon=round(np.max(gd.column('lon')),10)
+                            min_lat=round(np.min(gd.column('lat')),10)
+                            max_lat=round(np.max(gd.column('lat')),10)
+                            disp2=None
+                            for c in columns:
+                                col=gd.column(c)
+                                disp2=col*col if disp2 is None else disp2+col*col
+                            compdata=dict(
+                                min_lon=min_lon,
+                                max_lon=max_lon,
+                                min_lat=min_lat,
+                                max_lat=max_lat,
+                                npoints1=gd.array.shape[1],
+                                npoints2=gd.array.shape[0],
+                                max_displacement=round(math.sqrt(np.max(disp2)),5),
+                                file1=subcsvname,
+                                displacement_type=gs.ordinates,
+                                )
+                            Logger.writeWkt('Published '+subcsvname,grid.level,
+                                    GridSpec(min_lon,min_lat,max_lon,max_lat).boundingPolygonWkt())
+                            
+                            rdate0=0
+                            for ir,r in enumerate(versionspec.time_model):
+                                rdate=r.date.strftime("%Y-%m-%d")
+                                rvalue=r.factor
+                                if ir == 0:
+                                    if rvalue==0:
+                                        continue
+                                    compdata['time_function']='step'
+                                    compdata['time0']=rdate
+                                    compdata['time1']=rdate
+                                else:
+                                    compdata['time_function']='ramp'
+                                    compdata['time0']=rdate0
+                                    compdata['time1']=rdate
+                                    rvalue -= versionspec.time_model[ir-1].factor
+                                rdate0=rdate
+                                compdata['factor0']=-rvalue if rvs else 0
+                                compdata['factor1']=0 if rvs else rvalue
+                                if not additive:
+                                    compdata['component']=ir+ir1
+                                    compdata['priority']=priority
+                                csvdata.update(compdata)
+                                ccsv.writerow([csvdata[c] for c in Config.published_component_columns])
 
 
 if __name__ == "__main__":
@@ -2204,7 +2279,11 @@ if __name__ == "__main__":
                     gridsets[gs.key]=build_deformation_grid_set( gs, subpatch=subpatch, splitbase=split_base )
 
         if comp_path:
-            build_published_component( patchversions, gridsets, comp_path, args.clean_dir, args.precision )
+            build_published_component( patchversions, gridsets, comp_path, 
+                                      args.clean_dir, args.precision,
+                                      Config.published_grid_split_size,
+                                      Config.published_grid_split_tol
+                                     )
 
     except Exception as ex:
         Logger.write('\n\nFailed with error: {0}'.format(ex.message),level=-1)
