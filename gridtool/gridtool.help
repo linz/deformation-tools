@@ -63,6 +63,9 @@ trimto [buffer n] extents xmin ymin xmax ymax
    to the extents before trimming.  Note that the grid will not 
    be expanded by this.
 
+expandto [csv] parent_grid_file
+   expands the grid to align with the extents of a parent file.  
+
 add [csv] [maxcols n] grid_file [where selection]
 subtract [csv] [maxcols n] grid_file [where selection]
 replace [csv] [maxcols n] grid_file [where selection]

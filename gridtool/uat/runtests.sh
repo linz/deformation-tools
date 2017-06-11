@@ -87,6 +87,10 @@ echo "test 33 - create" | tee -a out/tests.log
 ../gridtool create extents align1.grid 0.25 0.1 columns de+dn write csv out/test33b.csv >> out/tests.log
 ../gridtool create extents wkt test.wkt 0.25 0.1 columns de+dn write csv out/test33c.csv >> out/tests.log
 
+echo "test 34 - expand" | tee -a out/tests.log
+../gridtool read align2.grid expandto align1.grid write out/test34.grid >> out/tests.log
+#../gridtool read out/test31.grid alignto align1.grid write out/test31a.grid >> out/tests.log
+
 diff -q -r -B -b out check
 if [ $? = 0 ]; then
     echo "All tests successfully passed"

@@ -97,6 +97,7 @@ public:
     bool valueAt( point &xy, std::vector<double> &values );
     void add( grid &g, double factor0=1.0, double factor1=1.0, bool markedonly=false );
     void alignto( grid &g );
+    void expandto( grid &g );
     void trimto( grid &g, int buffer=0 );
     void trimto( double minx, double maxx, double miny, double maxy, int buffer=0 );
     void multiplyBy( double factor );

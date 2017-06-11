@@ -505,6 +505,15 @@ static void run_aligntogrid( grid &g, commandlist &commands )
     write_spec(g);
 }
 
+static void run_expandtogrid( grid &g, commandlist &commands )
+{
+    grid galign;
+    string filename = run_read_grid( galign, commands, "align" );
+    cout <<  "Expanding grid to " << filename << endl;
+    g.expandto(galign);
+    write_spec(g);
+}
+
 static void run_trimto( grid &g, commandlist &commands )
 {
     int buffer=0;
@@ -797,6 +806,7 @@ static void run_commands( commandlist &commands )
             else if( op == "subtract" ) run_addgrid(g, commands, op );
             else if( op == "replace" ) run_addgrid(g, commands, op );
             else if( op == "alignto" ) run_aligntogrid( g, commands );
+            else if( op == "expandto" ) run_expandtogrid( g, commands );
             else if( op == "trimto" ) run_trimto( g, commands );
             else if( op == "multiply" ) run_multiply( g, commands );
             else if( op == "evaluate" ) run_evaluate( g, commands );

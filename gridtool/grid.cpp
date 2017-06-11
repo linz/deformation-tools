@@ -783,6 +783,32 @@ void grid::alignto( grid &g )
     resize(rowmin,colmin,rowmax,colmax);
 }
 
+void grid::expandto( grid &g )
+{
+    // Determine the grid corners in terms of the alignment grid
+    // Only really makes sense if grids have consistent x,y axes...
+    int colmin=0;
+    int colmax=m_ncol-1;
+    int rowmin=0;
+    int rowmax=m_nrow-1;
+
+    point corner;
+    point gcorner;
+    point ncorner;
+
+    g.nodexy(point(0,0),corner);
+    gridcoords(corner,ncorner);
+    if(ncorner.x < -0.00001) colmin=int(floor(ncorner.x+0.0001));
+    if(ncorner.y < -0.00001) rowmin=int(floor(ncorner.y+0.0001));
+
+    g.nodexy(point(g.ncol()-1,g.nrow()-1),corner);
+    gridcoords(corner,ncorner);
+    if(colmax < ncorner.x-0.00001) colmax=int(ceil(ncorner.x-0.0001));
+    if(rowmax < ncorner.y-0.00001) rowmax=int(ceil(ncorner.y-0.0001));
+
+    resize(rowmin,colmin,rowmax,colmax);
+}
+
 void grid::trimto( grid &g, int buffer )
 {
     double minx, maxx, miny, maxy;
