@@ -1377,7 +1377,7 @@ class PatchGridDef:
             self._bufferedExtentsWkt=extentfile
         return self._bufferedExtentsWkt
 
-    def mergeIntoParent( self ):
+    def mergeIntoParent( self, saveext=None ):
         '''
         Modify the grid to match transition to the parent grid between
         its extents and its buffered extents.  
@@ -1393,13 +1393,23 @@ class PatchGridDef:
         extwkt=self.extentsWktFile
         bufwkt=self.bufferedExtentsWktFile
         pgridfile=self.parent.builtFilename
+        savefile=None
+        if saveext:
+            savefile=self.fileWithExtension(saveext+'.grid')
+        
         commands=[gridtool,
                   'read','maxcols','3',gridfile,
+                 ]
+        if savefile:
+            commands.extend([
+                  'write',savefile
+                  ])
+        commands.extend([
                   'trimto','buffer','1','wkt',bufwkt,
                   'trimto',pgridfile,
                   'zero','outside',extwkt,'and','edge','1',
                   'add','maxcols','3',pgridfile,'where','outside',extwkt,'and','edge','1',
-                 ]
+                 ])
         if self.refgrid is not None:
             commands.extend([
                   'subtract','maxcols','3',self.refgrid
@@ -1750,8 +1760,8 @@ def split_forward_reverse_patches( trialgrid, grid_criteria, gridlist ):
                              source=g.builtFilename)
             Logger.writeWkt("Outside forward grid {0}_F before merge".format(gf.name),0,gf.spec.boundingPolygonWkt())
             #print "Split: forward gf: {0}".format(gf)
-            gf.mergeIntoParent()
-            Logger.writeWkt("Outside forward grid {0}_F after merge".format(gf.name),0,gf.spec.boundingPolygonWkt())
+            #gf.mergeIntoParent()
+            #Logger.writeWkt("Outside forward grid {0}_F after merge".format(gf.name),0,gf.spec.boundingPolygonWkt())
             #print "Split: forward gf merged: {0}".format(gf)
             forward_grids[g]=gf
             splitgrids.append(gf)
@@ -1796,7 +1806,7 @@ def split_forward_reverse_patches( trialgrid, grid_criteria, gridlist ):
                 raise RuntimeError('Cannot build smoothed forward patch '+fgridfile)
             gf.setSource(fgridfile)
 
-            gf.mergeIntoParent()
+            #gf.mergeIntoParent()
             Logger.writeWkt("Overlapping forward grid {0}_F".format(gf.name),0,gf.spec.boundingPolygonWkt())
             Logger.write('Created forward patch for {0}'.format(fgridfile))
 
@@ -2005,7 +2015,7 @@ def build_deformation_grid_set( grid_set, subpatch='', splitbase=True ):
     # Merge grids into parent grids
 
     for g in gridlist:
-        g.mergeIntoParent()
+        g.mergeIntoParent(saveext='_unmerged')
 
     #for g in gridlist:
     #    Logger.writeWkt("{0} bounds".format(g.name),0,g.spec.boundingPolygonWkt())
