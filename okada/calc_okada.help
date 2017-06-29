@@ -185,6 +185,10 @@ typef depth               latf, lonf
                           dip is down from horizontal.
                           rake reflected so that 0 is right-lateral
                           width_km is replaced with bottom_depth_km
+7     to top of fault     middle of surface projection of top of fault
+                          dip is down from horizontal.
+                          rake reflected so that 0 is right-lateral
+                          width_km is replaced with bottom_depth_km
 
 
 Example fault definition file:
