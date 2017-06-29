@@ -915,7 +915,7 @@ bool grid::colIsZero( int col )
     return true;
 }
 
-void grid::trim( int borderSize, double zerotol )
+void grid::trim( int borderSize, double zerotol, bool expand )
 {
     int rowmin, rowmax, colmin, colmax;
     m_zerotol=zerotol;
@@ -933,6 +933,14 @@ void grid::trim( int borderSize, double zerotol )
     rowmax += borderSize;
     colmin -= borderSize;
     colmax += borderSize;
+
+    if( ! expand )
+    {
+        if( rowmin < 0 ) rowmin=0;
+        if( rowmax > m_nrow-1 ) rowmax=m_nrow-1;
+        if( colmin < 0 ) colmin=0;
+        if( colmax > m_ncol-1 ) colmax=m_ncol-1;
+    }
 
     if( rowmin >= rowmax || colmin >= colmax )
     {

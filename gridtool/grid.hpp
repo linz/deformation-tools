@@ -106,7 +106,7 @@ public:
             double miny, double maxy, double incy,
             std::vector<std::string> columns );
     void extents( double &minx, double &maxx, double &miny, double &maxy );
-    void trim( int borderSize = 0, double zerotol=0.0 );
+    void trim( int borderSize = 0, double zerotol=0.0, bool expand=false );
     std::string fieldName( int iv );
     static std::string format_number(double value, int ndp );
 private:
