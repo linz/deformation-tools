@@ -151,6 +151,11 @@ class Config( object ):
     # Criteria defining the extents and resolution of grids
     tolerance_factor=PatchGridCriteria.tolerance_factor
 
+    # Grids will be discarded if expanding the child grid to cover 
+    # it does not increase the child by more than this amount.
+
+    redundantParentRatio=1.1
+
     # Splits published grids into approximate size below 
     # with tolerance to allow slightly bigger to be allowed,
     # eg split_size=100 with tolerance 0.2 allows up to 120 
@@ -491,6 +496,9 @@ class GridSpec( object ):
     def split( self, splitfactor ):
         return GridSpec( self.xmin, self.ymin, self.xmax, self.ymax, 
                         self.ngx*splitfactor, self.ngy*splitfactor )
+
+    def nodeCount( self ):
+        return (self.ngx+1)*(self.ngy+1)
 
     def cellSize( self ):
         '''
@@ -1279,7 +1287,8 @@ class PatchGridDef:
             self._csv=csvfile
         return self._csv
 
-    def writeCsvFile( self, filename, columns=['de','du','dn'], ndp=4, subgrid=None ):
+    def writeCsvFile( self, filename, columns=['de','du','dn'], ndp=4, 
+                     subgrid=None, trim=False ):
         global gridtool
         if self._csv is None or filename != self._csv:
             gridfile=self.builtFilename
@@ -1293,6 +1302,10 @@ class PatchGridDef:
                       'trimto','extents',
                        str(subgrid.xmin),str(subgrid.ymin),
                        str(subgrid.xmax),str(subgrid.ymax)
+                    ])
+            if trim:
+                commands.extend([
+                    'trim','tolerance','0.00001','leave','1'
                     ])
             commands.extend([
                       'write','csv','columns',colnames,'ndp',str(ndp),'dos',filename,
@@ -1328,6 +1341,12 @@ class PatchGridDef:
 
     def fileWithExtension( self, extension ):
         return Config.filename(name=self.name,extension=extension)
+
+    def setExtents( self, extents, bufferedExtents ):
+        self._extents=extents
+        self._bufferedExtents=bufferedExtents
+        self._extentsWkt=None
+        self._bufferedExtentsWkt=None
 
     @property
     def extents( self ):
@@ -1687,15 +1706,46 @@ class PatchGridList( list ):
         # Remove grids which are completely overlapped by child grid.  Note:
         # should this set the child grid extents to the union with the parent
         # grid extents
+        global gridtool
         gridlist=sorted(self,key=lambda x: x.level)
         removed=PatchGridList()
         for g in gridlist:
             p=g.parent
-            if p is not None and g.spec.contains(p.spec):
-                self.remove(p)
-                removed.append(p)
+            if p is None:
+                continue
+            mspec=g.spec.mergeWith(p.spec)
+            ratio=float(mspec.nodeCount())/float(g.spec.nodeCount())
+            skip=False
+            if ratio > Config.redundantParentRatio:
+                continue
+            Logger.write("Grid {0} candidate for replacement by child grid"
+                         .format(p.name))
+            for other in gridlist:
+                if other != g and other.parent == p:
+                    skip=True
+                    break
+            if skip:
+                Logger.write("    Grid retained as has other children")
+                continue
+            savename=g.fileWithExtension("_unexpanded.grid")
+            commands=[
+                gridtool,
+                'read',g.builtFilename,
+                'write',savename,
+                'expandto',p.builtFilename,
+                'replace',p.builtFilename,
+                'replace',g.builtFilename,
+                'write',g.builtFilename
+                ]
+            extents=g.extents.union(p.extents)
+            buffered=g.bufferedExtents.union(p.bufferedExtents)
+            g.setSource(g.builtFilename)
+            g.setExtents(extents,buffered)
+            self.remove(p)
+            removed.append(p)
+            Logger.write("    grid {0} displaced by {1} (size increased by {2:.2f})"
+                         .format(p.name,g.name,ratio))
         return removed
-
 
 def split_forward_reverse_patches( trialgrid, grid_criteria, gridlist ):
     hybrid_tol=grid_criteria.forward_patch_max_distortion
@@ -2148,7 +2198,7 @@ def build_published_component( patchversions, built_gridsets,
                             subcsvpath=os.path.join(comppath,subcsvname)
                             Logger.write("Building published grid {0} for extents {1}"
                                             .format(subcsvname,subgrid))
-                            grid.writeCsvFile( subcsvpath, columns, ndp, subgrid=subgrid )
+                            grid.writeCsvFile( subcsvpath, columns, ndp, subgrid=subgrid, trim=True )
                             priority += 1
                             gd=defgrid.DeformationGrid(subcsvpath)
                             min_lon=round(np.min(gd.column('lon')),10)
@@ -2215,6 +2265,7 @@ if __name__ == "__main__":
     parser.add_argument('--max-level',type=int,help="Maximum number of split levels to generate (each level increases resolution by 4)")
     parser.add_argument('--base-tolerance',type=float,help="Base level tolerance - depends on base column")
     parser.add_argument('--split-base',action='store_true',help="Base deformation will be split into separate patches if possible")
+    parser.add_argument('--published-grid-size',type=int,default=100,help="Published grids will be split into subgrids of about this size")
     # parser.add_argument('--no-trim-subgrids',action='store_false',help="Subgrids will not have redundant rows/columns trimmed")
     parser.add_argument('--precision',type=int,default=5,help="Precision (ndp) of output grid displacements")
     parser.add_argument('--land-area',help="WKT file containing area land area over which model must be defined")
@@ -2252,6 +2303,8 @@ if __name__ == "__main__":
     if args.base_tolerance:
         Config.horizontal_grid_criteria.update(base_limit_tolerance=args.base_tolerance)
         Config.vertical_grid_criteria.update(base_limit_tolerance=args.base_tolerance)
+
+    Config.published_grid_split_size=args.published_grid_size
         
     if not os.path.isdir(Config.patchpath):
         os.makedirs(Config.patchpath)

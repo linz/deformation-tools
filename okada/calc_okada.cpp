@@ -545,10 +545,9 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
         case 7:
             fs1 /= 2; fs0 = -fs1;
             dip=dip+180.0;
-            fd0 = depth/sin(dip*DTOR);
-            fd1 = bottom/sin(dip*DTOR);
-            fd1 -= fd0;
-            fd0 = 0.0;
+            depth = (depth+bottom)/2.0;
+            fd1 = (bottom-depth)/sin(dip*DTOR);
+            fd0 = -fd1;
             rake=180.0-rake;
             break;
         default:
