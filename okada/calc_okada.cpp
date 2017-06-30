@@ -550,6 +550,8 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
             fd0 = -fd1;
             rake=180.0-rake;
             break;
+            // Next time this is edited look at rewriting as per 
+            // github issue 2.
         default:
             cerr << "Invalid fault type " << type << endl;
             ok=false;
