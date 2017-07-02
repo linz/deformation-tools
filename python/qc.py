@@ -12,6 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__),'..','tools','python'))
 import os
 import re
 import csv
+import math
 import numpy as np
 import numbers
 import ellipsoid
@@ -58,7 +59,7 @@ def load_land_area( polygon_file, qclog ):
     except Exception as ex:
         raise RuntimeError("Cannot load land area definition from "+polygon_file+"\n"+ex.message)
 
-def test_points( ldm, land_area ):
+def test_points( ldm, land_area, ntestpergrid ):
     ranges=[]
     rangestr=set()
     for c in sorted(ldm.components(),key=lambda x: x.name):
@@ -88,6 +89,23 @@ def test_points( ldm, land_area ):
                         break
                 testpts.append(( lon, lat, round(uniform(0.0,1000.0),3)))
                 break
+    return np.array(testpts)
+
+def load_test_points( tpfilename ):
+    testpts=[]
+    with open(tpfilename,'rb') as tpf:
+        csvr=csv.reader(tpf)
+        for r in csvr:
+            try:
+                lon=float(r[1])
+                lat=float(r[2])
+            except:
+                continue
+            try:
+                hgt=float(r[3])
+            except:
+                hgt=0.0
+            testpts.append((lon,lat,hgt))
     return np.array(testpts)
 
 def points_file( pts, format="{0} {1} {2}", header=None ):
@@ -388,6 +406,7 @@ class QcLog( object ):
         d0,d1=datasets
         diff=d1[2]-d0[2]
         error=np.sqrt(np.sum(np.square(diff),axis=1))
+        ds=np.sqrt(np.sum(np.square(diff[:,:2]),axis=1))
 
         skiprows=[]
         if skip is not None:
@@ -454,13 +473,16 @@ class QcLog( object ):
             if listall:
                 badrows=range(ntest)
             csvw=csv.writer(open(csvf,'ab' if append else 'wb'))
-            header=['id','date','date0','comparison','lon','lat','diff','de','dn','du']
+            header=['id','date','date0','comparison','lon','lat','diff','de','dn','du','ds','de0','dn0','du0','de1','dn1','du1']
             if not haveheader:
                 csvw.writerow(header)
             for ib in badrows:
                 row=[str(ib+1),date,date0,comparison,str(points[ib][0]),str(points[ib][1])]
                 row.append("{0:.4f}".format(error[ib]))
                 row.extend(("{0:.4f}".format(x) for x in diff[ib]))
+                row.append("{0:.4f}".format(ds[ib]))
+                row.extend(("{0:.4f}".format(x) for x in d0[2][ib]))
+                row.extend(("{0:.4f}".format(x) for x in d1[2][ib]))
                 csvw.writerow(row)
             csvw=None
             self.log.write('     Bad residuals in {0}.csv\n'.format(csvfile))
@@ -484,6 +506,7 @@ parser.add_argument('--land-area','-l',help='WKT file from which to load land ar
 parser.add_argument('--gns-velocities','-v',default='NDM/GNS_2011_V4_velocity_model/solution.gns',help='GNS velocity model file')
 parser.add_argument('--ndm-euler-rotation-file','-e',default='ndm_eulerdef',help='File containing NDM euler rotation pole')
 parser.add_argument('--n-test-points','-n',type=int,default=ntestpergrid,help='Number of test points per grid area')
+parser.add_argument('--test-points',help='Test point file (default is model based semi-random points)')
 parser.add_argument('--test-patches',action='store_true',help='Test reverse patch .def files')
 parser.add_argument('--test-calcdef',action='store_true',help='Test published model deformation')
 parser.add_argument('--test-velocities',action='store_true',help='Test secular velocity model')
@@ -499,6 +522,7 @@ modeldir=args.model_dir
 patchdir=args.patch_dir
 lnzdef=args.linzdef_file
 qclog=QcLog(args.qc_dir)
+verbose=args.verbose
 
 seed(args.seed)
 
@@ -526,7 +550,14 @@ if cdfm is not None:
     cdfm.extend(('--ndp=6','-m',os.path.join(modeldir,'model')))
     cdfm=tuple(cdfm)
 
-points=test_points(ldm,land_area)
+if args.test_points:
+    if verbose:
+        qclog.printlog('Loading test points from',args.test_points)
+    points=load_test_points(args.test_points)
+else:
+    if verbose:
+        qclog.printlog('Calculating {0} test points per deformation grid file'.format(args.n_test_points))
+    points=test_points(ldm,land_area,args.n_test_points)
 qclog.write_test_points( points )
 
 tolerances=(0.001,0.002,0.005,0.01,0.02,0.05,0.10,0.20,0.50,1.0)
@@ -535,7 +566,7 @@ fmodels=None
 times=None
 time0=None
 time1=None
-if test_patches or test_dislocations:
+if test_patches or test_dislocations or test_calcdef_patch:
     fmodels=fault_models(args.fault_model_dir,points)
     times=test_times(fmodels)
     time0=datetime(2000,1,1) if args.from_date is None else datetime.strptime(args.from_date,"%Y-%m-%d")
@@ -598,6 +629,8 @@ if test_calcdef_patch:
                        ('pub','Calculated from published model',cdenu)),
                       csvfile='calcdef_patch',
                       tolerance=tolerances,
+                      date=tstr,
+                      date0=t0str,
                       listall=args.list_all
                      )
 
