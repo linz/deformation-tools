@@ -1056,8 +1056,6 @@ class FaultModel( object ):
             modelpath=self.modelpath
             params=[calc_okada,'-f','-x','-l','-s','-t',modelpath,missingfile,calcfile]
             Logger.write(" ".join(params),1)
-            sys.stdout.write(" ".join(params)) # ***
-            sys.stdout.write("\n") # ***
             okada_output=check_output(params)
             Logger.write(okada_output,1)
 
@@ -1073,7 +1071,6 @@ class FaultModel( object ):
                     if mode == 'w':
                         cf.write(calcheader)
                     for l in calcf:
-                        sys.stdout.write("Calced: {0}\n".format(l))
                         parts=l.split('\t')
                         key=self._cacheKey(parts[:2])
                         cf.write(key)
