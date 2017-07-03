@@ -625,8 +625,9 @@ bool FaultSet::AddOkada( double lon, double lat, double *dislocation, double *st
         {
             double sf,conv;
             proj->SfConv(x,y,sf,conv);
+            sf=1.0/sf;
             double ccnv=cos(DTOR*conv);
-            double scnv=sin(DTOR*conv);
+            double scnv=-sin(DTOR*conv);
             double de = (denu[0]*ccnv+denu[1]*scnv)/sf;
             double dn = (denu[1]*ccnv-denu[0]*scnv)/sf;
             denu[0]=de;
