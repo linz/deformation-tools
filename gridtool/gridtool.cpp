@@ -478,14 +478,19 @@ static void run_smoothgrid( grid &g, commandlist &commands )
 static void run_addgrid( grid &g, commandlist &commands, string &command )
 {
     grid gadd;
-    string filename = run_read_grid( gadd, commands, command );
+    bool skip=next_command_is(commands,"nothing");
+    string filename = "nothing";
+    if( ! skip )
+    {
+        filename = run_read_grid( gadd, commands, command );
+    }
     bool marked = false;
     if( next_command_is(commands,"where"))
     {
         mark_grid(g,commands,command);
         marked = true;
     }
-    
+    if( skip ) return;
     string action = 
         command == "add" ? "Adding" : 
         command == "subtract" ? "Subtracting" : "Replacing";

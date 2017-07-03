@@ -71,7 +71,8 @@ subtract [csv] [maxcols n] grid_file [where selection]
 replace [csv] [maxcols n] grid_file [where selection]
    Add, subtract, or replace with the values extrapolated from grid_file 
    to the values at each node of the loaded grid.  Has no effect outside the
-   extents of the second grid file.
+   extents of the second grid file.  Note that the special filename "nothing"
+   means do nothing.
 
 multiply factor
    Multiply all values in the grid by the factor
