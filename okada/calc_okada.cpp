@@ -189,8 +189,8 @@ void TMProjection::SfConv( double x, double y, double &sf, double &cnv )
 class FaultSet
 {
 public:
-    FaultSet() : proj(new NullProjection()), factor(1.0), applyConvergence(false) {};
-    FaultSet(Projection *proj) : proj(proj ? proj->clone() : new NullProjection()), factor(1.0), applyConvergence(false) {};
+    FaultSet() : proj(new NullProjection()), factor(1.0), applyConvergence(true) {};
+    FaultSet(Projection *proj) : proj(proj ? proj->clone() : new NullProjection()), factor(1.0), applyConvergence(true) {};
     ~FaultSet();
     bool ReadGNSDefinition( istream &str, int nskip = 0 );
     void setFactor( double fctr ){ factor=fctr; }
@@ -298,6 +298,26 @@ bool FaultSet::ReadGNSDefinition( istream &str, int nskip )
                     proj=new NullProjection();
                 }
                 if( proj ) prjcrds=true;
+            }
+            if(command == "vector orientation")
+            {
+                string vorient;
+                s >> vorient;
+                lower_case(vorient);
+                if( vorient == "geographic" )
+                {
+                   applyConvergence=false; 
+                }
+                else if( vorient == "projection" )
+                {
+                   applyConvergence=true; 
+                }
+                else
+                {
+                    cerr << "Vector orientation must be \"geographic\" or \"projection\"\n" << endl;
+                    ok=false;
+                    continue;
+                }
             }
             if(command == "columns" )
             {
@@ -952,9 +972,9 @@ int main( int argc, char *argv[] )
         }
 
         FaultSet *faults = new FaultSet( proj );
+        faults->setApplyConvergence(applysfconv);
         if( ! faults->ReadGNSDefinition(f, nskip) ) { return 0; }
         faults->setFactor(factor);
-        faults->setApplyConvergence(applysfconv);
         faultlist.push_back(faults);
     }
 

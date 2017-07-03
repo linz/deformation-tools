@@ -269,7 +269,7 @@ def calc_okada( m, pts ):
     print "Calculating fault model file",m
     tn1=points_file(pts,format="{1} {2}")
     tn2=tempfilename()
-    call((calc_okada_image,m,tn1,tn2))
+    call((calc_okada_image,'-f',m,tn1,tn2))
     os.remove(tn1)
     disloc=[]
     try:

@@ -988,19 +988,15 @@ class FaultModel( object ):
 
     def _cacheKey( self, xy ):
         key="{0:.10f}\t{1:.10f}".format(float(xy[0]),float(xy[1]))
-        key=re.sub(r'(\.\d+)0*(\t|$)',r'\1\2',key)
+        key=re.sub(r'(\.\d+?)0*(\t|$)',r'\1\2',key)
         return key
 
     def _cacheFile( self ):
         return Config.filename(name=self.modelname,extension='_grid.cache')
 
-    def _loadGridFromCache( self, spec, gridfile ):
-        Logger.write("_loadGridFromCache {0}".format(spec))
-        keys={}
-        for i,n in enumerate(spec.nodes()):
-            keys[self._cacheKey(n)]=i
+    def _loadValuesFromCache( self, keys ):
         values=[None]*len(keys)
-
+        keyi={k:i for i,k in enumerate(keys)}
         keyre=re.compile('^[^\t]+\t[^\t]+')
         header=None
         if os.path.exists(self._cacheFile()):
@@ -1010,13 +1006,23 @@ class FaultModel( object ):
                     match=keyre.match(l)
                     if match:
                         k=match.group()
-                        if k in keys:
-                            values[keys[k]]=l
+                        if k in keyi:
+                            values[keyi[k]]=l
+        return values
+
+
+    def _loadGridFromCache( self, spec, gridfile ):
+        Logger.write("_loadGridFromCache {0}".format(spec))
+        keys=[]
+        for n in spec.nodes():
+            keys.append(self._cacheKey(n))
+
+        values=self._loadValuesFromCache( keys )
         
         if os.path.exists(gridfile):
             os.remove(gridfile)
 
-        missing=[k for k in keys if values[keys[k]] is None]
+        missing=[k for k,v in zip(keys,values) if v is None]
         if missing:
             Logger.write("{0} missing values".format(len(missing)))
             return missing
@@ -1050,6 +1056,8 @@ class FaultModel( object ):
             modelpath=self.modelpath
             params=[calc_okada,'-f','-x','-l','-s','-t',modelpath,missingfile,calcfile]
             Logger.write(" ".join(params),1)
+            sys.stdout.write(" ".join(params)) # ***
+            sys.stdout.write("\n") # ***
             okada_output=check_output(params)
             Logger.write(okada_output,1)
 
@@ -1065,6 +1073,7 @@ class FaultModel( object ):
                     if mode == 'w':
                         cf.write(calcheader)
                     for l in calcf:
+                        sys.stdout.write("Calced: {0}\n".format(l))
                         parts=l.split('\t')
                         key=self._cacheKey(parts[:2])
                         cf.write(key)

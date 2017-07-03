@@ -37,7 +37,9 @@ Options can include:
 
   -f                 Apply scale factor and convergence if defined for the 
                      projection.  Note that currently this is only applied to
-                     the dislocation components, not the strain..
+                     the dislocation components, not the strain.  This is 
+                     ignored if the model file explicitly defines the 
+                     vector orientation.
 
   -n                 The first field in the test point file is a name field
 
@@ -140,6 +142,19 @@ Projection: definition
    The projection can also be NONE in which case the model coordinates
    and the test point coordinates are in an arbitrary x,y system unrelated
    to a projection.
+
+Where a projection is used an additional parameter can be used
+
+Vector orientation: orientation
+    The orientation can be "geographic" or "projection".  Where it is
+    projection the calculated de and dn values are treated as being in
+    terms of the projection coordinate system and are converted to 
+    a geographic coordinate system.  Note that strain components are 
+    not corrected.
+
+    Where the model is defined in terms of a projection the only reason
+    for treating de,dn as being geographic is if the model was derived
+    by inverting geographic de,dn values.
 
 If no coordinate system is defined then the model uses the equivalent of
 a "Origin" definition based on the latitude and longitude of the first 
