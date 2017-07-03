@@ -1010,6 +1010,12 @@ class FaultModel( object ):
                             values[keyi[k]]=l
         return values
 
+    def _cacheHeader( self ):
+        header=None
+        if os.path.exists(self._cacheFile()):
+            with open(self._cacheFile()) as cf:
+                header=cf.next()
+        return header
 
     def _loadGridFromCache( self, spec, gridfile ):
         Logger.write("_loadGridFromCache {0}".format(spec))
@@ -1027,6 +1033,7 @@ class FaultModel( object ):
             Logger.write("{0} missing values".format(len(missing)))
             return missing
 
+        header = self._cacheHeader()
         with open(gridfile,'w') as gf:
             gf.write(header)
             for v in values:
@@ -1059,11 +1066,7 @@ class FaultModel( object ):
             okada_output=check_output(params)
             Logger.write(okada_output,1)
 
-            header=None
-            if os.path.exists(cachefile):
-                with open(cachefile) as cf:
-                    header=cf.next()
-
+            header=self._cacheHeader()
             with open(calcfile) as calcf:
                 calcheader=calcf.next()
                 mode='w' if calcheader != header else 'a'
