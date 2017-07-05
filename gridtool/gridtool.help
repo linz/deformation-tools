@@ -97,10 +97,11 @@ evaluate [ndp #] [csv] [at] x y [to] output_file
    ndp specifies the number of decimal places in the output data.  csv
    specifies that the input and output use commas as delimiters.  
 
-affected_area selection wkt_output_file
+affected_area selection [noheader] wkt_output_file
    Creates a wkt polygon defining the boundary of the cells affected by 
    a selection file.  A cell is affected if one of its nodes lies within the 
-   selection set.
+   selection set. If noheader is specified then the just the polygon definition
+   is written.
 
 colstats
    Print out the mean, minimum, and maximum value for each column

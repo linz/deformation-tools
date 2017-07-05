@@ -178,7 +178,7 @@ void wkt_extents( const char *wkt_file, double &minx, double &maxx, double &miny
 // Messy function to generate WKT polygon(s) outlining cells affected by marked nodes
 // Not sorting out internal polygons - each ring is output as a separate wkt polygon.
 
-void outline_affected_cells( grid &g, const char *wktfile )
+void outline_affected_cells( grid &g, const char *wktfile, bool header )
 {
     int nrow = g.nrow();
     int ncol = g.ncol();
@@ -192,7 +192,7 @@ void outline_affected_cells( grid &g, const char *wktfile )
     {
         throw runtime_error(string("Cannot open output wkt file ").append(wktfile));
     }
-    os << "wkt_geom" << endl;
+    if( header ) os << "wkt_geom" << endl;
     os << setprecision(12);
 
     // Affected grid cells, offset by 1, to allow a boundary around the edge of unaffected cells.

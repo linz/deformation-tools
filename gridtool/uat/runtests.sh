@@ -37,6 +37,8 @@ echo "test 16 - extents_wkt" | tee -a out/tests.log
 ../gridtool read test1.grid extents_wkt out/gridextents.wkt >> out/tests.log
 echo "test 17 - affected area" | tee -a out/tests.log
 ../gridtool read test1.grid affected_area inside affectedtest.wkt out/affectedout.wkt >> out/tests.log
+echo "test 17a - affected area noheader" | tee -a out/tests.log
+../gridtool read test1.grid affected_area inside affectedtest.wkt noheader out/affectedoutnh.wkt >> out/tests.log
 echo "test 18 - selection with multiple where criteria 1" | tee -a out/tests.log
 ../gridtool test1.grid zero where v1 ">" 20 not v2 ">" 3.5 out/test1_where1.grid >> out/tests.log
 echo "test 19 - selection with multiple where criteria 2" | tee -a out/tests.log

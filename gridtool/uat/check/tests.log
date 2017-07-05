@@ -126,6 +126,11 @@ Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
 Writing outline of cells affected by 17 select nodes to out/affectedout.wkt
+test 17a - affected area noheader
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Writing outline of cells affected by 17 select nodes to out/affectedoutnh.wkt
 test 18 - selection with multiple where criteria 1
 Reading file from test1.grid
 Grid has 8 rows and 7 columns

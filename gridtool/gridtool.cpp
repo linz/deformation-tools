@@ -456,10 +456,11 @@ static void run_zero_grid( grid &g, commandlist &commands )
 static void run_affected_area( grid &g, commandlist &commands )
 {
     mark_grid(g,commands,"affected area operation");
+    bool header=! next_command_is(commands,"noheader");
     string wktfile = next_command(commands,"WKT output file name for affected area operation");
 
     cout << "Writing outline of cells affected by " << g.markCount() << " select nodes to " << wktfile << endl;
-    outline_affected_cells(g,wktfile.c_str());
+    outline_affected_cells(g,wktfile.c_str(),header);
 }
 
 static void run_smoothgrid( grid &g, commandlist &commands ) 
