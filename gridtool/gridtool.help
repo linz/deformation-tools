@@ -120,9 +120,9 @@ edge|inside_edge n:  All values in the with n rows/columns of the edge are affec
 
 where condition: A condition is entered as "where field (<|<=|==|!=|>=|>) value", 
    where field is a field name (either defined on a space separated header line, 
-   or field_1, field_2, ...).  Also can use "where field1+field2+.. op value",
+   or field_1, field_2, ...).  Also can use "where field1|field2|.. op value",
    in which case it compares the root sum of squares of the named field with 
-   the value.  
+   the value. Use |field1| to compare on just the magnitude of field1.
 
 expand distance: Expands (or contracts) the currently marked area by the specified
    number of grid cells

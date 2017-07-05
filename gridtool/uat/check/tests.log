@@ -144,6 +144,12 @@ Grid has 8 rows and 7 columns
 Each point has 2 data values
 Zeroing grid at 5 points
 Writing grid to file out/test5_where3.grid
+test 19b - selection with magnitude where criteria
+Reading file from test5.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Zeroing grid at 6 points
+Writing grid to file out/test5_where4.grid
 test 20 - linzgrid with file based headers
 Reading file from test1.grid
 Grid has 8 rows and 7 columns

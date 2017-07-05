@@ -677,6 +677,7 @@ void grid::markWhere( std::vector<std::string> fields, std::string op, double va
     for( int i=0; i < fields.size(); i++ )
     {
         std::string field=fields[i];
+        if( field == "" ) continue;
         int iv=columnid(fields[i]);
         if( iv < 0 )
         {

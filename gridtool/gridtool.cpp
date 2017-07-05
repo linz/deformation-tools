@@ -302,7 +302,7 @@ static void mark_grid( grid &g, commandlist &commands, string markcommand, grid 
         {
            string field = command;
            if( field == "where" ) field = next_command( commands, string("Field name for ")+markcommand);
-           vector<string> fields=split(field,'+');
+           vector<string> fields=split(field,'|');
            string op = next_command( commands, string("Operation type for ")+markcommand);
            double value;
            next_command_value(commands,value,string("Field value for ")+markcommand);
