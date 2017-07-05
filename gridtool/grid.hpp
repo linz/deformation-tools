@@ -88,7 +88,7 @@ public:
     bool markNearest( const point &p, markaction action=on, double tolerance=0.0 );
     void markEdge( int width, bool inside, markaction action=on);
     void toggleWithin( std::vector<point> &polygon, vector2<bool> &markBuffer );
-    void markWhere( std::string field, std::string op, double value, markaction action=on );
+    void markWhere( std::vector<std::string> fields, std::string op, double value, markaction action=on );
     bool marked( node n ){ return marked(n.row, n.col ); }
     bool marked( int row, int col ){ return m_marked[row][col]; }
     void setMarked( int row, int col, bool value ){ m_marked[row][col] = value; }

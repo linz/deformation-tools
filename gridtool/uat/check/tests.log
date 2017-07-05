@@ -113,7 +113,7 @@ test 15 - trim
 Reading file from test4.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
-Trimming to leave 1 zero rows/cols around border
+Trimming and expanding to ensure 1 zero rows/cols around border
 Rows 5 cols 5 x_range 17.1235 - 25.6173 y_range 8 - 16
 Writing grid to file out/test4_trim1.grid
 test 16 - extents_wkt
@@ -138,6 +138,12 @@ Grid has 8 rows and 7 columns
 Each point has 2 data values
 Zeroing grid at 48 points
 Writing grid to file out/test1_where2.grid
+test 19a - selection with magnitude where criteria
+Reading file from test5.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Zeroing grid at 5 points
+Writing grid to file out/test5_where3.grid
 test 20 - linzgrid with file based headers
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
@@ -314,3 +320,10 @@ test 33 - create
 Writing grid to file out/test33a.csv
 Writing grid to file out/test33b.csv
 Writing grid to file out/test33c.csv
+test 34 - expand
+Reading file from align2.grid
+Grid has 6 rows and 7 columns
+Each point has 2 data values
+Expanding grid to align1.grid
+Rows 26 cols 31 x_range 15 - 30 y_range 4 - 16.5
+Writing grid to file out/test34.grid

@@ -665,13 +665,26 @@ void grid::toggleWithin( vector<point> &polygon, vector2<bool> &markBuffer )
 }
 
 
-void grid::markWhere( std::string field, std::string op, double value, markaction action )
+void grid::markWhere( std::vector<std::string> fields, std::string op, double value, markaction action )
 {
-    int iv = columnid( field );
-    if( iv < 0 )
+    std::vector<int> colids;
+    bool magnitude=false;
+    if( fields.size() > 1 )
     {
-        throw runtime_error(string("Invalid field ") + field + " referenced in grid::markWhere" );
+        magnitude=true;
+        value *= value;
     }
+    for( int i=0; i < fields.size(); i++ )
+    {
+        std::string field=fields[i];
+        int iv=columnid(fields[i]);
+        if( iv < 0 )
+        {
+            throw runtime_error(string("Invalid field ") + field + " referenced in grid::markWhere" );
+        }
+        colids.push_back(iv);
+    }
+
     enum ops { LT, LE, EQ, GE, GT, NE } optype;
     if( op == "<" || op == "lt" ) optype = LT;
     else if ( op == "<=" || op == "le" ) optype = LE;
@@ -683,9 +696,25 @@ void grid::markWhere( std::string field, std::string op, double value, markactio
     {
         throw runtime_error(string("Invalid operation ") + op + " referenced in grid::markWhere" );
     }
+    int nc=colids.size();
     for( int row = 0; row < m_nrow; row++ ) for( int col = 0; col < m_ncol; col++ )
-    {
-        double v = values(row,col)[iv];
+    { 
+        std::vector<double>::pointer vp=values(row,col);
+        double v;
+        if( magnitude )
+        {
+            v=0.0;
+            for( int ic = 0; ic < nc; ic++ )
+            {
+                int colid=colids[ic];
+                v += vp[colid]*vp[colid];
+            }
+
+        }
+        else
+        {
+            v = vp[colids[0]];
+        }
         bool match = false;
         switch (optype) 
         {

@@ -302,10 +302,11 @@ static void mark_grid( grid &g, commandlist &commands, string markcommand, grid 
         {
            string field = command;
            if( field == "where" ) field = next_command( commands, string("Field name for ")+markcommand);
+           vector<string> fields=split(field,'+');
            string op = next_command( commands, string("Operation type for ")+markcommand);
            double value;
            next_command_value(commands,value,string("Field value for ")+markcommand);
-           g.markWhere(field,op,value,action);
+           g.markWhere(fields,op,value,action);
         }
         if( next_command_is(commands, "not") )
         {
@@ -598,10 +599,10 @@ static void run_trim( grid &g, commandlist &commands )
     {
         next_command_value(commands,zerotol,"Trim tolerance");
     }
-    if( next_command_is(commands,"leave") ) expand=false;
+    if( next_command_is(commands,"noexpand") ) expand=false;
     next_command_value(commands,borderSize,"Trim border size");
-    cout << "Trimming to " 
-        << (expand ? "ensure" : "leave") << " "
+    cout << "Trimming" 
+        << (expand ? " and expanding" : "") << " to ensure "
         << borderSize << " zero rows/cols around border" << endl;
     g.trim(borderSize,zerotol,expand);
     write_spec(g);

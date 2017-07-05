@@ -41,6 +41,8 @@ echo "test 18 - selection with multiple where criteria 1" | tee -a out/tests.log
 ../gridtool test1.grid zero where v1 ">" 20 not v2 ">" 3.5 out/test1_where1.grid >> out/tests.log
 echo "test 19 - selection with multiple where criteria 2" | tee -a out/tests.log
 ../gridtool test1.grid zero where v1 gt 20 and v2 le 3.5 out/test1_where2.grid >> out/tests.log
+echo "test 19a - selection with magnitude where criteria" | tee -a out/tests.log
+../gridtool read test5.grid zero where v1+v2 "<" 5 write out/test5_where3.grid >> out/tests.log
 echo "test 20 - linzgrid with file based headers" | tee -a out/tests.log
 ../gridtool read test1.grid write_linzgrid NZGD2000 file header.txt out/test1_linzgrid.txt >> out/tests.log
 echo "test 21 - linzgrid with inline headers" | tee -a out/tests.log
