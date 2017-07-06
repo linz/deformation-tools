@@ -93,14 +93,17 @@ public:
     bool marked( int row, int col ){ return m_marked[row][col]; }
     void setMarked( int row, int col, bool value ){ m_marked[row][col] = value; }
     int markCount();
+    void fillMarked();
+    void reverseMarked();
     void processMarked( void(*func)(grid &g, node &n, void *data), void *data = 0);
     bool valueAt( point &xy, std::vector<double> &values );
     void add( grid &g, double factor0=1.0, double factor1=1.0, bool markedonly=false );
+    void add( double value, bool markedonly=false );
     void alignto( grid &g );
     void expandto( grid &g );
     void trimto( grid &g, int buffer=0 );
     void trimto( double minx, double maxx, double miny, double maxy, int buffer=0 );
-    void multiplyBy( double factor );
+    void multiplyBy( double factor, bool markedonly );
     void resize( int rowmin, int colmin, int rowmax, int colmax );
     void create( double minx, double maxx, double incx,
             double miny, double maxy, double incy,

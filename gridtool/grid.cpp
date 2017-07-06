@@ -734,6 +734,73 @@ void grid::markWhere( std::vector<std::string> fields, std::string op, double va
 
 }
 
+void grid::fillMarked()
+{
+    grid::vector2<bool> filled;
+    filled.resize(m_nrow);
+    for( int row = 0; row < m_nrow; row++ )
+    {
+        filled[row].assign(m_ncol,true);
+        filled[row][0]=m_marked[row][0];
+        filled[row][m_ncol-1]=m_marked[row][m_ncol-1];
+    }
+    filled[0]=m_marked[0];
+    filled[m_nrow-1]=m_marked[m_nrow-1];
+
+    bool finished=false;
+    while( ! finished )
+    {
+        finished=true;
+        for( int row = 0; row < m_nrow; row++ ) 
+        {
+            int col0 = 1;
+            int col1 = m_ncol-2;
+            for( ; col0 < m_ncol-1; col0++,col1-- )
+            {
+                if( filled[row][col0] && ! filled[row][col0-1] && ! m_marked[row][col0] )
+                {
+                    finished=false;
+                    filled[row][col0]=false;
+                }
+                if( filled[row][col1] && ! filled[row][col1+1] && ! m_marked[row][col1] )
+                {
+                    finished=false;
+                    filled[row][col1]=false;
+                }
+            }
+        }
+        for( int col = 0; col < m_ncol; col++ )
+        {
+            int row0 = 1;
+            int row1 = m_nrow-2;
+            for( ; row0 < m_nrow-1; row0++,row1-- )
+            {
+                if( filled[row0][col] && ! filled[row0-1][col] && ! m_marked[row0][col] )
+                {
+                    finished=false;
+                    filled[row0][col]=false;
+                }
+                if( filled[row1][col] && ! filled[row1+1][col] && ! m_marked[row1][col] )
+                {
+                    finished=false;
+                    filled[row1][col]=false;
+                }
+            }
+        }
+    }
+    for( int row = 0; row < m_nrow; row++ )
+    {
+        m_marked[row]=filled[row];
+    }
+}
+
+void grid::reverseMarked()
+{
+    for( int row = 0; row < m_nrow; row++ ) for( int col = 0; col < m_ncol; col++ )
+    {
+        m_marked[row][col] = ! m_marked[row][col];
+    }
+}
 
 void grid::processMarked( void(*func)(grid &g, node &n, void *data), void *data)
 {
@@ -744,15 +811,30 @@ void grid::processMarked( void(*func)(grid &g, node &n, void *data), void *data)
     }
 }
 
-void grid::multiplyBy( double factor )
+void grid::multiplyBy( double factor, bool markedonly )
 {
     for( int row = 0; row < m_nrow; row++ ) 
         for( int col = 0; col < m_ncol; col++ )
         {
+            if( markedonly && ! marked(row,col) ) continue;
             vector<double>::pointer v = values(row,col);
             for( int iv = 0; iv <  m_nvalue; iv++ )
             {
                 v[iv] *= factor;
+            }
+        }
+}
+
+void grid::add( double value, bool markedonly )
+{
+    for( int row = 0; row < m_nrow; row++ ) 
+        for( int col = 0; col < m_ncol; col++ )
+        {
+            if( markedonly && ! marked(row,col) ) continue;
+            vector<double>::pointer v = values(row,col);
+            for( int iv = 0; iv <  m_nvalue; iv++ )
+            {
+                v[iv] += value;
             }
         }
 }

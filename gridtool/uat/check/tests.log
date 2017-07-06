@@ -155,6 +155,24 @@ Grid has 8 rows and 7 columns
 Each point has 2 data values
 Zeroing grid at 6 points
 Writing grid to file out/test5_where4.grid
+test 19d - add on selection
+Reading file from test6.grid
+Grid has 8 rows and 7 columns
+Each point has 1 data values
+Adding 10 at  selected grid values
+Writing grid to file out/test6_where5.grid
+test 19d - reverse selection
+Reading file from test6.grid
+Grid has 8 rows and 7 columns
+Each point has 1 data values
+Adding 10 at  selected grid values
+Writing grid to file out/test6_where6.grid
+test 19e - fill selection
+Reading file from test6.grid
+Grid has 8 rows and 7 columns
+Each point has 1 data values
+Adding 10 at  selected grid values
+Writing grid to file out/test6_where7.grid
 test 20 - linzgrid with file based headers
 Reading file from test1.grid
 Grid has 8 rows and 7 columns

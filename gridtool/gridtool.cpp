@@ -308,18 +308,35 @@ static void mark_grid( grid &g, commandlist &commands, string markcommand, grid 
            next_command_value(commands,value,string("Field value for ")+markcommand);
            g.markWhere(fields,op,value,action);
         }
-        if( next_command_is(commands, "not") )
+        bool needmore=false;
+        while( 1 )
         {
-            action = grid::off;
+            if( next_command_is(commands, "not") || next_command_is(commands, "minus") )
+            {
+                action = grid::off;
+                needmore=true;
+                break;
+            }
+            else if( next_command_is(commands,"and") || next_command_is(commands,"plus"))
+            {
+                action = grid::on;
+                needmore=true;
+                break;
+            }
+            else if( next_command_is(commands,"reversed") )
+            {
+                g.reverseMarked();
+            }
+            else if( next_command_is(commands,"filled") )
+            {
+                g.fillMarked();
+            }
+            else
+            {
+                break;
+            }
         }
-        else if( next_command_is(commands,"and"))
-        {
-            action = grid::on;
-        }
-        else
-        {
-            break;
-        }
+        if( ! needmore ) break;
     }
 }
 
@@ -479,28 +496,52 @@ static void run_smoothgrid( grid &g, commandlist &commands )
 
 static void run_addgrid( grid &g, commandlist &commands, string &command )
 {
-    grid gadd;
+    double addvalue;
     bool skip=next_command_is(commands,"nothing");
-    string filename = "nothing";
-    if( ! skip )
-    {
-        filename = run_read_grid( gadd, commands, command );
-    }
-    bool marked = false;
-    if( next_command_is(commands,"where"))
-    {
-        mark_grid(g,commands,command);
-        marked = true;
-    }
-    if( skip ) return;
     string action = 
         command == "add" ? "Adding" : 
         command == "subtract" ? "Subtracting" : "Replacing";
-    cout << action << (marked ? " selected" : "")
-        << " grid values from grid " << filename << endl;
-    double factor0 = command == "replace" ? 0 : 1;
-    double factor1 = command == "subtract" ? -1 : 1;
-    g.add(gadd,factor0,factor1,marked);
+
+    if( next_command_is(commands,"value") )
+    {
+        double value;
+        next_command_value(commands,value,"Value to add to grid");
+        bool marked=false;
+        if( next_command_is( commands, "where" ) )
+        {
+            mark_grid(g,commands,command);
+            marked=true;
+        }
+        cout << action << " " << value << " at " << (marked ? " selected" : "all")
+            << " grid values" << endl;
+        if( command == "subtract" ) { value=-value; }
+        else if( command == "replace" ) { g.multiplyBy(0.0,marked); }
+        g.add(value,marked);
+    }
+    else
+    {
+        grid gadd;
+        string filename = "nothing";
+        if( ! skip )
+        {
+            filename = run_read_grid( gadd, commands, command );
+        }
+        bool marked = false;
+        if( next_command_is(commands,"where"))
+        {
+            mark_grid(g,commands,command);
+            marked = true;
+        }
+        if( skip ) return;
+        string action = 
+            command == "add" ? "Adding" : 
+            command == "subtract" ? "Subtracting" : "Replacing";
+        cout << action << (marked ? " selected" : "")
+            << " grid values from grid " << filename << endl;
+        double factor0 = command == "replace" ? 0 : 1;
+        double factor1 = command == "subtract" ? -1 : 1;
+        g.add(gadd,factor0,factor1,marked);
+    }
 }
 
 static void run_aligntogrid( grid &g, commandlist &commands )
@@ -572,8 +613,16 @@ static void run_multiply( grid &g, commandlist &commands )
         msg << "Invalid multiplication factor " << sfactor << " in multiply command";
         throw runtime_error(msg.str());
     }
-    cout << "Multiplying grid by " << factor << endl;
-    g.multiplyBy( factor );
+    bool marked=false;
+    if( next_command_is( commands, "where" ) )
+    {
+        mark_grid(g,commands,"multiply");
+        marked=true;
+    }
+    cout << "Multiplying grid by " << factor 
+        << (marked ? " at selected nodes" : "")
+        << endl;
+    g.multiplyBy( factor, marked );
 }
 
 static void run_resize( grid &g, commandlist &commands )

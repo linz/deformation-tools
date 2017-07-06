@@ -106,9 +106,10 @@ affected_area selection [noheader] wkt_output_file
 colstats
    Print out the mean, minimum, and maximum value for each column
 
-A selection of grid points is defined by a series of commands joined by "and".
-or "not".  Selections preceded with "and" are added, those preceded with "not" 
-are removed.  Selection commands are one of:
+A selection of grid points is defined by a series of commands joined by "plus".
+or "minus".  Selections preceded with "plus" are added, those preceded with "minus" 
+are removed.  The reversed and filled options are not preceded by plus or minuse.
+Selection commands are one of:
 
 inside|outside wkt_file: File consists of one or more WKT linestring or polygon 
    definitions. Inside/outside of each ring is used.
@@ -131,4 +132,8 @@ expand distance: Expands (or contracts) the currently marked area by the specifi
 on_grid [csv] grid_file: Marks points that are on another grid.  For add, subtract,
    and replace commands the [csv] option is not required if the grid file is the
    same as that being added, subtracted, or replaced.
+
+reversed: Reverse the marked/umarked nodes
+
+filled: Fills unmarked nodes surrounded by filled nodes
 
