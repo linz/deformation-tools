@@ -1516,7 +1516,7 @@ class PatchGridDef:
                  ])
         commands.extend([
             'subtract','maxcols','3',pgridfile,
-            'affected_area','where',colparam,'>',tolparam,'noheader',affectedwkt
+            'affected_area','where',colparam,'>',tolparam,'filled','noheader',affectedwkt
             ])
         Logger.writeGridCommand(commands,1)
         gt_output=check_output(commands)
@@ -1991,7 +1991,7 @@ def split_forward_reverse_patches( trialgrid, grid_criteria, gridlist ):
             'write',rgridfile,
             'read',rgridfile,
             'subtract',pgridfile,
-            'affected_area','where',colparam,'>',tolparam,'noheader',affectedwkt
+            'affected_area','where',colparam,'>',tolparam,'filled','noheader',affectedwkt
             ]
         Logger.writeGridCommand(commands,1)
         gt_output=check_output(commands)
