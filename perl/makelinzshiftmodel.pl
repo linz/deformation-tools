@@ -31,38 +31,44 @@ use lib $FindBin::RealBin.'/perllib';
 use Getopt::Std;
 use Packer;
 
-my $prgdir = $FindBin::RealBin;
+my $prgdir = $FindBin::Bin;
 
 my $syntax = <<EOD;
 
 Syntax: [options] source_file binary_file
 
 Options are:
-   -f format (either LINZSHIFT1B or LINZSHIFT1L)
-   -g grid format (eg GRID2B)
-   -t trig format (eg TRIG2B)
+   -f format (LINZSHIFT1B, LINZSHIFT1L, LINZSHIFT2B, LINZSHIFT2L)
 
 EOD
 
 my %opts;
-getopts('f:g:t:',\%opts);
+getopts('f:',\%opts);
 my $forceformat = $opts{f};
-my $fgridformat = $opts{g};
-my $ftrigformat = $opts{t};
-
-@ARGV > 1 || die $syntax;
 
 my $endianness = {
    LINZSHIFT1B =>
      { sig => "LINZ shift model v1.0B\r\n\x1A",
-       gridparam => '-f '.($fgridformat || 'GRID2B'),
-       trigparam => '-f '.($ftrigformat || 'TRIG2B'),
+       gridparam => '-f GRID2B',
+       trigparam => '-f TRIG2B',
        bigendian => 1
        },
    LINZSHIFT1L =>
      { sig => "LINZ shift model v1.0L\r\n\x1A",
-       gridparam => '-f '.($fgridformat || 'GRID2L'),
-       trigparam => '-f '.($ftrigformat || 'TRIG2L'),
+       gridparam => '-f GRID2L',
+       trigparam => '-f TRIG2L',
+       bigendian => 0
+       },
+   LINZSHIFT2B =>
+     { sig => "LINZ shift model v2.0B\r\n\x1A",
+       gridparam => '-f GRID2B',
+       trigparam => '-f TRIG2B',
+       bigendian => 1
+       },
+   LINZSHIFT2L =>
+     { sig => "LINZ shift model v2.0L\r\n\x1A",
+       gridparam => '-f GRID2L',
+       trigparam => '-f TRIG2L',
        bigendian => 0
        },
    };
@@ -72,7 +78,7 @@ my $ntmpfile = 1000;
 
 
 my %model_param = qw/
-    FORMAT         (LINZSHIFT1B|LINZSHIFT1L)
+    FORMAT         (LINZSHIFT1B|LINZSHIFT1L|LINZSHIFT2B|LINZSHIFT2L)
     VERSION_NUMBER \d+\.\d+
     COORDSYS       \w+
     DESCRIPTION    .*
@@ -82,6 +88,13 @@ my %comp_param = qw/
     MODEL_TYPE         (trig|grid)
     NEGATIVE           (yes|no)
     DESCRIPTION        .*
+    /;
+
+my %comp_param2 = qw/
+    MODEL_TYPE         (trig|grid)
+    DESCRIPTION        .*
+    FACTOR           \-?\d+(?:\.\d+)?
+    GROUP_ID       \d+
     /;
 
 my $def_model;
@@ -127,13 +140,15 @@ sub LoadDefinition {
          if( $rectype eq 'SHIFT_MODEL_MODEL' ) {
             die "Only one SHIFT_MODEL_MODEL can be defined\n" if $curmod;
             $curmod = { type=>$rectype, name=>$value, params=>\%model_param,
-                        sequences=>[] };
+                        sequences=>[], filename=>$deffile };
             $curobj = $curmod;
             }
          else {
             die "Must define SHIFT_MODEL_MODEL before $rectype\n" if ! $curmod;
-            $curcomp = { type=>$rectype, source=>$value, params=>\%comp_param,
-                        components=>[], sequence=>$curseq };
+            my $cparams=$curmod->{FORMAT} =~ /2/ ? \%comp_param2 : \%comp_param;
+            $curcomp = { type=>$rectype, source=>$value, params=>$cparams, 
+                        components=>[], sequence=>$curseq,
+                        GROUP_ID=>0, FACTOR=>1.0 };
             push(@{$curmod->{components}}, $curcomp );
             $curobj = $curcomp;
             }
@@ -161,6 +176,16 @@ sub LoadDefinition {
    close(DEF);
    return $curmod;
    }
+
+sub ModelFile
+{
+    my($model,$filename)=@_;
+    return $filename if -e $filename;
+    my $modeldir=$model->{filename};
+    return $filename if $modeldir !~ /[\\\/]/;
+    $modeldir =~ s/[^\\\/]*$//;
+    return $modeldir.$filename;
+}
    
 sub TempFileName {
    my $tmpfilename;
@@ -251,9 +276,10 @@ sub BuildTrigComponent {
    }
 
 sub BuildComponent {
-   my ($comp,$endian) = @_;
+   my ($model,$comp,$endian) = @_;
    my $source = $comp->{source};
    my ($filename, $params) = split(' ',$source,2);
+   $filename=ModelFile($model,$filename);
    die "Cannot find component source file $filename\n" if ! -r $filename;
 
    my $type = $comp->{MODEL_TYPE};
@@ -305,7 +331,7 @@ sub BuildAllComponents {
    my ($model,$endian) = @_;
    
       foreach my $c (@{$model->{components}}) {
-         &BuildComponent($c,$endian);
+         &BuildComponent($model,$c,$endian);
          $model->{range} = &ExpandRange( $model->{range}, $c->{sourcefile}->{range} );
          }
    }
@@ -344,6 +370,9 @@ sub WriteModelBinary {
 
    # Print out component data ...
 
+   my $version=1;
+   $version = $1 if $model->{FORMAT} =~ /(\d+)[BL]$/;
+
    foreach my $c (@{$model->{components}}) {
        my $sf = $c->{sourcefile};
        open(SF,"<$sf->{name}") || 
@@ -370,7 +399,9 @@ sub WriteModelBinary {
        print OUT $pack->double( @{$c->{sourcefile}->{range}} );
        print OUT $pack->short( lc($c->{MODEL_TYPE}) eq 'trig' ? 1 : 0 );
        print OUT $pack->short( $c->{sourcefile}->{ndim} );
-       print OUT $pack->short( lc($c->{NEGATIVE}) eq 'no' ? 0 : 1 );
+       print OUT $pack->short( lc($c->{NEGATIVE}) eq 'no' ? 0 : 1 ) if $version <= 1;
+       print OUT $pack->short( $c->{GROUP_ID} || 0 ) if $version > 1;
+       print OUT $pack->double( $c->{FACTOR} || 0.0 ) if $version > 1;
        print OUT $pack->long( $c->{sourcefile}->{loc} );
      }
 
@@ -391,6 +422,13 @@ __END__
 # or more usefully an ascii source file from which the binary can be built.
 # The latter is preferable, as it will ensure that all components are built
 # with the same endian-ness.
+#
+# The format can be one LINZSHIFT1B,LINZSHIFT1L,LINZSHIFT2B,LINZSHIFT2L
+# 
+# If it is a version 2 format then the component can include a GROUP_ID
+# and FACTOR field in place of NEGATIVE.
+# Where there are consecutive components with the same id only the first
+# matching component will be used
 
 # An example follows:
 
