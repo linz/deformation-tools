@@ -494,6 +494,39 @@ static void run_smoothgrid( grid &g, commandlist &commands )
     else smoothgrid(g,3);
 }
 
+static void run_setvalue( grid &g, commandlist &commands )
+{
+    int nvalue=g.nvalue();
+    double lon, lat;
+    double tolerance=0.0;
+    std::vector<double> values;
+    values.assign(nvalue,0.0);
+    if( next_command_is(commands,"tolerance") )
+    {
+        next_command_value(commands,tolerance,"Tolerance for setting point");
+    }
+    next_command_value(commands,lon,"Longitude to set value");
+    next_command_value(commands,lat,"Latitude to set value");
+    for( int iv=0; iv < nvalue; iv++ )
+    {
+        double v;
+        next_command_value(commands,v,"Value to set");
+        values[iv]=v;
+    }
+    grid::point p(lon,lat);
+    grid::node n;
+    if( g.nearest(p,n,tolerance) )
+    {
+        g.nodexy(n,p);
+        cout << "Setting value at (" << p.x << "," << p.y << ")" << endl;
+        g.setValues(n,values);
+    }
+    else
+    {
+        cout << "No grid point found within " << tolerance << " of (" << lon << "," << lat << ")" << endl;
+    }
+}
+
 static void run_addgrid( grid &g, commandlist &commands, string &command )
 {
     double addvalue;
@@ -871,6 +904,7 @@ static void run_commands( commandlist &commands )
             else if( op == "multiply" ) run_multiply( g, commands );
             else if( op == "evaluate" ) run_evaluate( g, commands );
             else if( op == "resize" ) run_resize( g, commands );
+            else if( op == "set_value" ) run_setvalue( g, commands );
             else if( op == "stats" ) run_stats( g );
             else if( op == "trim" ) run_trim( g, commands );
             else if( op == "affected_area" ) run_affected_area( g, commands );

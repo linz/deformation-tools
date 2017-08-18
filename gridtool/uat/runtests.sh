@@ -103,6 +103,10 @@ echo "test 34 - expand" | tee -a out/tests.log
 ../gridtool read align2.grid expandto align1.grid write out/test34.grid >> out/tests.log
 #../gridtool read out/test31.grid alignto align1.grid write out/test31a.grid >> out/tests.log
 
+echo "test 34 - set_value" | tee -a out/tests.log
+../gridtool read test1.grid set_value 25.6172835 10 123.456 -99.021 write out/test34a.grid >> out/tests.log
+../gridtool read test1.grid set_value tolerance 0.02 25.6172835 10.1 123.456 -99.021 write out/test34b.grid >> out/tests.log
+
 diff -q -r -B -b out check
 if [ $? = 0 ]; then
     echo "All tests successfully passed"

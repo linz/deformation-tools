@@ -439,7 +439,7 @@ bool grid::nearest( const point &p, node &n, double tolerance )
 
     bool result = true;
     if( tolerance > 0.0 && 
-            (fabs(gc-ic) > tolerance || fabs(gr-ir) > tolerance) )
+            (fabs(gxy.x-ic) > tolerance || fabs(gxy.y-ir) > tolerance) )
     {
         result=false;
     }
@@ -496,6 +496,15 @@ bool grid::nodexy( const node &n, point &p )
 std::vector<double>::pointer grid::values( const node &n )
 {
     return &m_values[n.row][n.col*m_nvalue];
+}
+
+void grid::setValues( const node &n, const std::vector<double> &values )
+{
+    int iv0=n.col*m_nvalue;
+    for( int iv=0; iv < m_nvalue; iv++ )
+    {
+        m_values[n.row][iv0+iv]=values[iv];
+    }
 }
 
 bool grid::valueAt( point &xy, vector<double> &v )

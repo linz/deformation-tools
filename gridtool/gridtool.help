@@ -66,6 +66,12 @@ trimto [buffer n] extents xmin ymin xmax ymax
 expandto [csv] parent_grid_file
    expands the grid to align with the extents of a parent file.  
 
+set_value [tolerance t] x y v1 .. vn
+   Sets the value(s) at the node nearest to x,y.  If tolerance is 
+   specified then the value is only set if the node is within the 
+   tolerance of x, y.  v1..vn are the values, which must match the
+   number of data values at each node of the grid.
+
 add [csv] [maxcols n] grid_file [where selection]
 subtract [csv] [maxcols n] grid_file [where selection]
 replace [csv] [maxcols n] grid_file [where selection]

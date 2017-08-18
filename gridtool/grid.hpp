@@ -71,6 +71,7 @@ public:
     std::vector<double>::pointer values( int row, int col )
         { return values(node(row,col));}
     std::vector<double>::pointer values( const node &n );
+    void setValues( const node &n, const std::vector<double> &values );
     int columnid( const std::string &colname );
     void colstats( int icol, double *mean, double *min, double *max );
     // tolerance is the fraction of a grid cell away from xy that 

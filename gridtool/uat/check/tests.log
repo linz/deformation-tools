@@ -356,3 +356,14 @@ Each point has 2 data values
 Expanding grid to align1.grid
 Rows 26 cols 31 x_range 15 - 30 y_range 4 - 16.5
 Writing grid to file out/test34.grid
+test 34 - set_value
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Setting value at (25.6173,10)
+Writing grid to file out/test34a.grid
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+No grid point found within 0.02 of (25.6173,10.1)
+Writing grid to file out/test34b.grid
