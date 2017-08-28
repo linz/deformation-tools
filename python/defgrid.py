@@ -76,10 +76,23 @@ class Grid( object ):
             levels = (0.003,0.01,0.03,0.1,0.3,1.0,3.0)
         return levels
 
+    def getData( self, col ):
+        if type(col) is list:
+            data=self.column(col[0])*0.0
+            for c in col:
+                data=data+self.column(c)*self.column(c)
+            data=np.sqrt(data)
+            label='len_'+'_'.join(str(c) for c in col)
+        elif type(col) is int:
+            data=self.array[:,:,col]
+            label=self.columns[col] if self.columns else 'Col '+str(col)
+        else:
+            data = self.column(col)
+            label=col
+        return label, data
+
     def contour( self, col=-1, colours=None, levels=None, percentiles=None, returnContours=False ):
-        index = self.getIndex(col)
-        label=self.columns[index] if self.columns else 'Col '+str(index)
-        data = self.array[:,:,index]
+        label,data=self.getData(col)
         levels = self._calcLevels( data, levels, percentiles )
         if not colours:
             colours = ('cyan','blue')
@@ -97,9 +110,7 @@ class Grid( object ):
         return result
 
     def contourf( self, col=-1, colours=None, levels=None, percentiles=None, multiple=None, absolute=False, returnContours=False ):
-        index = self.getIndex(col)
-        label=self.columns[index] if self.columns else 'Col '+str(index)
-        data = self.array[:,:,index]
+        label,data=self.getData(col)
         if multiple:
             data = data * multiple
         if absolute:
@@ -161,8 +172,12 @@ class Grid( object ):
                 f.write("{0:d}|{1:f}|{2:s}\n".format(id,contour.level,contour.wkt()))
 
     def regionsExceedingLevel( self, col, limit, multiple=None, absolute=False ):
+        '''
+        Returns polygons where a column exceeds a value.  If multiple columns
+        are provided as a list then uses the sum of squared values of the columns
+        '''
         from shapely.geometry import Polygon
-        data = self.column(col)
+        label,data=self.getData(col)
         if multiple:
             cmax=np.max(data*multiple)
         else:
