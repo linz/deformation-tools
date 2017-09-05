@@ -9,6 +9,9 @@ import os.path
 import re
 import subprocess
 from datetime import datetime
+import math
+from shapely import wkt, affinity
+from shapely.geometry import MultiPoint
 
 sys.path.insert(0,'/home/ccrook/projects_git/python-linz-deformationmodel')
 from LINZ.DeformationModel.Model import Model
@@ -78,6 +81,10 @@ def main():
     parser.add_argument('--format',choices=('linzdef','ntv2'),default='linzdef',help="Patch model format")
     parser.add_argument('--version',help="Deformation model for which patch applies, default is current version")
     parser.add_argument('--ordinates',choices=('3d','horizontal','vertical'),default='3d',help="Ordinates required")
+    parser.add_argument('--extents-tolerance',type=float,default=0.0,help='Minimum change to include in extents')
+    parser.add_argument('--extents-buffer',type=float,default=2000.0,help='Buffer for extents')
+    parser.add_argument('--extents-simplification',type=float,default=1000.0,help='Simplification for extents')
+    
 
     args=parser.parse_args()
     modeldir=args.model_dir
@@ -90,12 +97,17 @@ def main():
         raise RuntimeError('Build directory {0} does not exist or is not a directory'
                            .format(builddir))
 
+    extents_tolerance=args.extents_tolerance
+    extents_buffer=args.extents_buffer
+    extents_simplification=args.extents_simplification
+
     model=Model(modeldir)
     version=args.version
     if version is None:
         version=model.version()
     datumcode=model.metadata('datum_code')
     modelname=model.metadata('model_name')
+
 
     patchname=args.patch_name
     if patchname is None:
@@ -104,6 +116,7 @@ def main():
 
     deffile=os.path.join(builddir,patchname+'.def')
     binfile=os.path.join(builddir,patchname+'.bin')
+    affectedfile=os.path.join(builddir,patchname+'.extents.wkt')
     gdfname=os.path.join(builddir,patchname+'_g{0:03d}.gdf')
 
     ngrid=0
@@ -120,6 +133,7 @@ def main():
             ))
 
         revcomps=model.reversePatchComponents(args.version)
+        extentsfiles=[]
         for factor,c in revcomps:
             ncomp += 1
             spatial=c.spatialModel
@@ -137,6 +151,7 @@ def main():
             for g in reversed(gridfiles):
                 ngrid += 1
                 gdf=gdfname.format(ngrid)
+                wktf=gdf+'.wkt'
                 commands=[
                     gridtool,
                     'read','csv',g,
@@ -146,8 +161,13 @@ def main():
                     'Grid file '+os.path.basename(g),
                     'resolution','0.0001',
                     'columns','+'.join(ordinates),
-                    gdf]
+                    gdf,
+                    'affected_area',
+                    'where','|'+'|'.join(ordinates)+'|','!=',str(extents_tolerance),
+                    'noheader',wktf
+                    ]
                 subprocess.call(commands)
+                extentsfiles.append(wktf)
                 deff.write(patch_component(
                     grid_file=os.path.basename(gdf),
                     group_id=ncomp,
@@ -158,6 +178,26 @@ def main():
 
     subprocess.call([makeshiftpl,'-f','LINZSHIFT2B',deffile,binfile])
 
+    extentspolys=[]
+    for wktf in extentsfiles:
+        poly=wkt.loads(open(wktf).read())
+        extentspolys.append(poly)
+    centroid=MultiPoint([p.centroid for p in extentspolys]).centroid
+    yscale=100000.0
+    xscale=yscale*math.cos(math.radians(centroid.y))
+    union=None
+    for p in extentspolys:
+        g=affinity.scale(p,xfact=xscale,yfact=yscale,origin=centroid)
+        g=g.buffer(extents_buffer,resolution=4)
+        g=g.simplify(extents_simplification)
+        if union is None:
+            union=g
+        else:
+            union=union.union(g)
+    union=union.simplify(extents_simplification)
+    extents=affinity.scale(union,xfact=1.0/xscale,yfact=1.0/yscale,origin=centroid)
+    with open(affectedfile,'w') as wktf:
+        wktf.write(extents.wkt)
 
 if __name__ == "__main__":
     main()
