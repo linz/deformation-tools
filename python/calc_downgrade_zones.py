@@ -112,6 +112,7 @@ def main():
     parser.add_argument('parameters',nargs='*',help='Parameters substituted into file')
     parser.add_argument('-b','--buffer',type=float,default=2000.0,help="Buffer applied to final polygon")
     parser.add_argument('-s','--simplify',type=float,default=1000.0,help="Simplification tolerance applied to final polygon")
+    parser.add_argument('-d','--decimal-places',type=int,default=5,help="Number of decimal places in WKT")
     args=parser.parse_args()
 
     params={}
@@ -183,6 +184,7 @@ def main():
 
     buffer=args.buffer
     simplify=args.simplify
+    ndp=args.decimal_places
     with open(args.zone_file,'w') as zf:
         for z in zones:
             polys=compilePolys(zones[z])
@@ -191,7 +193,13 @@ def main():
                 if not p.is_valid:
                     print "Skipping invalid zone {0} poly".format(zone_code)
                     continue
-                zf.write("{0}|Zone {0}|{1}|\n".format(z,p.wkt))
+                pwkt=p.wkt
+                pwkt=re.sub(r'(\.\d{{{0}}})\d+'.format(ndp),r'\1',pwkt)
+                pgn=wkt.loads(pwkt)
+                if not pgn.is_valid:
+                    pgn=pgn.buffer(0.0)
+                    pwkt=pgn.wkt
+                zf.write("{0}|Zone {0}|{1}|\n".format(z,pwkt))
 
 if __name__=="__main__":
     main()
