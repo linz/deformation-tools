@@ -862,7 +862,7 @@ class PatchVersion( object ) :
                     nested=nested,
                     time_model=PatchVersion._buildTimeModel(time_model),
                     criteria_overrides=copy.copy(overrides)))
-            except Exception as ex:
+            except RuntimeError as ex:
                 raise RuntimeError("Error in {0}: {1}"
                                    .format(patchfile,ex.message))
 
@@ -889,7 +889,7 @@ class PatchVersion( object ) :
         if ntime % 2 != 0:
             raise RuntimeError("TimeModel must consist of paired date and value")
         for i in range(0,ntime,2):
-            fdate=self._parseDate(time_model[i])
+            fdate=PatchVersion._parseDate(time_model[i])
             try:
                 factor=float(time_model[i+1])
             except:
@@ -1026,7 +1026,7 @@ class FaultModel( object ):
                     pass
             if not eventdate:
                 raise RuntimeError("Event record at start of {0} does not end with a valid date"
-                                   .format(modelfile))
+                                   .format(self.modelpath))
             self.description=description
             self.eventname=eventname
             self.eventdate=eventdate
