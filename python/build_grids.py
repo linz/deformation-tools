@@ -426,6 +426,7 @@ class Util( object ):
             if type(areas) == Polygon:
                 areas=[areas]
             if type(areas) == list:
+                areas=[a for a in areas if not a.is_empty]
                 areas=MultiPolygon(areas)
         if not areas.is_valid:
             Logger.write("Attempting to fix invalid geometry in asMultiPolygon")
