@@ -349,6 +349,7 @@ class Logger( object ):
     wktfile=None
     wktgridfile=None
     wktgridlines=False
+    wktid=0
     
     verbose=False
 
@@ -358,10 +359,10 @@ class Logger( object ):
             Logger.logfile=open(logfile,'w')
         if wktfile:
             Logger.wktfile=open(wktfile,'w')
-            Logger.wktfile.write("Item|level|wkt\n")
+            Logger.wktfile.write("id|item|level|wkt\n")
         if gridwkt:
             Logger.wktgridfile=open(gridwkt,'w')
-            Logger.wktgridfile.write("Name|level|nrow|ncol|wkt\n")
+            Logger.wktgridfile.write("name|level|nrow|ncol|wkt\n")
         if showgridlines is not None:
             Logger.wktgridlines=showgridlines
 
@@ -414,7 +415,8 @@ class Logger( object ):
     def writeWkt( item, level, wkt ):
         if not Logger.wktfile:
             return
-        Logger.wktfile.write("{0}|{1}|{2}\n".format(item,level,wkt))
+        Logger.wktid += 1
+        Logger.wktfile.write("{0}|{1}|{2}|{3}\n".format(Logger.wktid,item,level,wkt))
         Logger.wktfile.flush()
 
 
@@ -714,9 +716,9 @@ class PatchVersion( object ) :
         eventdate=None
         patchdir=os.path.dirname(patchfile)
         patchname=os.path.splitext(os.path.basename(patchfile))[0]
-        default_model_filename=patchname
-        model_filename=None
-        loaded_model_filename=None
+        default_model_filename=[patchname]
+        model_filename=[]
+        loaded_model_files=[]
         model=None
         patch_type=None
         hybrid_tol=None
@@ -756,8 +758,8 @@ class PatchVersion( object ) :
                                 raise RuntimeError('Patch cannot define multiple dates')
                             continue
 
-                        if command == 'model':
-                            model_filename=value
+                        if command == 'modelfile':
+                            model_filename.append(value)
                             continue
 
                         if command == 'version':
@@ -769,10 +771,10 @@ class PatchVersion( object ) :
                                     raise RuntimeError("Patch versions out of order: {1} <= {2}"
                                                        .format(value,version))
                                 model_filename=model_filename or default_model_filename
-                                model_filename=os.path.join(patchdir,model_filename)
-                                if model_filename != loaded_model_filename:
-                                    loaded_model_filename=model_filename
-                                    model=FaultModel(model_filename)
+                                model_files=[os.path.join(patchdir,f) for f in model_filename]
+                                if model_files != loaded_model_files:
+                                    loaded_model_files=model_files
+                                    model=FaultModel(model_files,patchname)
                                 patchversions.append(PatchVersion(
                                     patchname=patchname,
                                     event=event,
@@ -783,6 +785,8 @@ class PatchVersion( object ) :
                                     nested=nested,
                                     time_model=PatchVersion._buildTimeModel(time_model),
                                     criteria_overrides=copy.copy(overrides)))
+                                default_model_filename=model_filename
+                                model_filename=[]
                             version=value
                             continue
                         elif version is None:
@@ -849,10 +853,10 @@ class PatchVersion( object ) :
 
             try:
                 model_filename=model_filename or default_model_filename
-                model_filename=os.path.join(patchdir,model_filename)
-                if model_filename != loaded_model_filename:
-                    loaded_model_filename=model_filename
-                    model=FaultModel(model_filename)
+                model_files=[os.path.join(patchdir,f) for f in model_filename]
+                if model_files != loaded_model_files:
+                    loaded_model_files=model_files
+                    model=FaultModel(model_files,patchname)
                 patchversions.append(PatchVersion(
                     patchname=patchname,
                     event=event,
@@ -988,20 +992,27 @@ class PatchVersion( object ) :
 
 class FaultModel( object ):
 
-    def __init__( self, modelfile ):
+    def __init__( self, modelfiles, modelname=None ):
+        self.modelname=modelname
         self.modelpath=None
-        self.modelname=None
         self.eventname=None
         self.eventdate=None
         self.description=None
+        self.modelmtime=None
         self.hybridTolerance=None
-        for template in Config.model_filename_templates:
-            mf=template.format(modelfile)
-            if os.path.exists(mf):
-                self.modelpath=mf
-                break
-        if self.modelpath is None:
-            raise RuntimeError('Cannot find fault model file {0}'.format(modelfile))
+        
+        modelpaths=[]
+        for f in modelfiles:
+            mp=None
+            for template in Config.model_filename_templates:
+                mf=template.format(f)
+                if os.path.exists(mf):
+                    mp=mf
+                    break
+            if mp is None:
+                raise RuntimeError('Cannot find fault model file {0}'.format(modelfile))
+            modelpaths.append(mp)
+        self.modelpath='+'.join(modelpaths)
         self.loadModelFile()
 
 
@@ -1010,27 +1021,37 @@ class FaultModel( object ):
         Loads a fault model definition
         '''
         
-        self.modelname=os.path.splitext(os.path.basename(self.modelpath))[0]
-        with open(self.modelpath) as f:
-            event = f.readline()
-            model = f.readline()
-            version = f.readline()
-            description = event+' '+model+' '+version
-            match=re.search(r'^\s*(\S.*?)\s*(\d{1,2})\s+(\w{3})\w*\s+(\d{4})\s*$',event)
-            eventdate = None
-            if match:
-                eventname=match.group(1)
-                try:
-                    datestr=match.group(2)+' '+match.group(3)+' '+match.group(4)
-                    eventdate = datetime.datetime.strptime(datestr,'%d %b %Y')
-                except:
-                    pass
-            if not eventdate:
-                raise RuntimeError("Event record at start of {0} does not end with a valid date"
-                                   .format(self.modelpath))
-            self.description=description
-            self.eventname=eventname
-            self.eventdate=eventdate
+        first=True
+        mtime=None
+        for mp in self.modelpath.split('+'):
+            with open(mp) as f:
+                event = f.readline()
+                model = f.readline()
+                version = f.readline()
+                description = event+' '+model+' '+version
+                match=re.search(r'^\s*(\S.*?)\s*(\d{1,2})\s+(\w{3})\w*\s+(\d{4})\s*$',event)
+                eventdate = None
+                if match:
+                    eventname=match.group(1)
+                    try:
+                        datestr=match.group(2)+' '+match.group(3)+' '+match.group(4)
+                        eventdate = datetime.datetime.strptime(datestr,'%d %b %Y')
+                    except:
+                        pass
+                if not eventdate:
+                    raise RuntimeError("Event record at start of {0} does not end with a valid date"
+                                       .format(mp))
+                modtime=os.path.getmtime(mp)
+                if mtime is None or mtime < modtime:
+                    mtime=modtime
+            if first:
+                first=False
+                self.description=description
+                self.eventname=eventname
+                self.eventdate=eventdate
+            if self.modelname is None:
+                self.modelname=os.path.splitext(os.path.basename(mp))[0]
+            self.modelmtime=mtime
 
     def _cacheKey( self, xy ):
         key="{0:.10f}\t{1:.10f}".format(float(xy[0]),float(xy[1]))
@@ -1156,7 +1177,7 @@ class FaultModel( object ):
             if os.path.getmtime(gridfile) > os.path.getmtime(metafile):
                 built=False
             if built:
-                if os.path.getmtime(modelpath) > os.path.getmtime(gridfile):
+                if self.modelmtime > os.path.getmtime(gridfile):
                     built=False
         if built:
             #print "          Using cached file {0}".format(gridfile)
