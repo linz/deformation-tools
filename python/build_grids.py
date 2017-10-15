@@ -663,7 +663,7 @@ class GridSpec( object ):
                     break
             if overlap:
                 deflist.remove(overlap)
-                merged=self.mergeWith(overlap)
+                merged=merged.mergeWith(overlap)
             else:
                 break
         deflist.append(merged)
@@ -1760,13 +1760,21 @@ class PatchGridList( list ):
                         level,buffered_areas.to_wkt())
 
         merged_specs=[]
-        for a in buffered_areas:
+        Logger.write('Splitting {0}/{1} into subgrids'.format(pname,subpatch))
+        for ia,a in enumerate(buffered_areas):
+            Logger.write('   Subgrid polygon {1} with extents {0}'.format(a.bounds,ia))
             if not a.intersects(areas):
+                Logger.write('   Does not intersect required extents - skipping')
                 continue
             bounds = GridSpec.fromBounds(a.bounds).expand(cellsize)
+            Logger.write('   Bounds expanded to cell size {0}'.format(bounds))
             if keepWithin is not None:
                 bounds=bounds.intersectWith(keepWithin)
-            bounds=bounds.alignedTo(cellsize)
+                # Logger.write('   Bounds trimmed to required area {0}'.format(bounds))
+                bounds=bounds.alignedTo(cellsize)
+                # Logger.write('   Bounds realigned to cell size {0}'.format(bounds))
+            Logger.writeWkt('   Aligned polygon {2} subgrid {0}/{1}'.format(pname,subpatch,ia),
+                            level,bounds.boundingPolygonWkt())
             bounds.mergeIntoList( merged_specs )
 
         merged_specs.sort(key=lambda x: x.area(), reverse=True)
