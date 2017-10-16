@@ -851,9 +851,15 @@ void grid::add( double value, bool markedonly )
 void grid::add( grid &g, double factor0, double factor1, bool markedonly )
 {
     int nv = nvalue();
-    if( g.nvalue() != nv)
+    std::vector<int> colids;
+    for( int i=0; i<m_nvalue; i++ )
     {
-        throw runtime_error("Incompatible grid values in grid::add");
+        int iv=g.columnid(fieldName(i));
+        if( iv < 0 )
+        {
+            throw runtime_error("Incompatible grid values in grid::add");
+        }
+        colids.push_back(iv);
     }
     vector<double> gv;
     point xy;
@@ -868,7 +874,7 @@ void grid::add( grid &g, double factor0, double factor1, bool markedonly )
                 vector<double>::pointer tv = values(row,col);
                 for( int iv = 0; iv < nv; iv++ )
                 {
-                    tv[iv] = factor0 * tv[iv] + factor1 * gv[iv];
+                    tv[iv] = factor0 * tv[iv] + factor1 * gv[colids[iv]];
                 }
             }
         }
