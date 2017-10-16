@@ -462,13 +462,13 @@ class Util( object ):
                             raise RuntimeError()
                     areas.append((len(l),p))
                 except:
-                    raise
                     Logger.write("Invalid wkt at line {0} of affected area wkt file {1}"
                                  .format(i,wktfile))
+                    raise
         area=areas[0][1]
         for np,p in areas[1:]:
             if not area.contains(p):
-                areas=area.union(p)
+                area=area.union(p)
         return Util.asMultiPolygon(area)
 
 class GridSpec( object ):
@@ -658,7 +658,7 @@ class GridSpec( object ):
         while True:
             overlap = None
             for def1 in deflist:
-                if self.overlaps(def1):
+                if merged.overlaps(def1):
                     overlap=def1
                     break
             if overlap:
@@ -1380,9 +1380,16 @@ class PatchGridDef:
                        str(subgrid.xmax),str(subgrid.ymax)
                     ])
             if trim:
+                parentfile=None
+                if self.parent:
+                    parentfile=self.parent.builtFilename
+                if parentfile:
+                    commands.extend(['subtract',parentfile])
                 commands.extend([
-                    'trim','tolerance','0.00001','noexpand','1'
+                    'trim','columns',colnames,'tolerance','0.00001','noexpand','1'
                     ])
+                if parentfile:
+                    commands.extend(['add',parentfile])
             commands.extend([
                       'write','csv','columns',colnames,'ndp',str(ndp),'dos',filename,
                       'read','csv',filename
@@ -2032,7 +2039,7 @@ def split_forward_reverse_patches( trialgrid, grid_criteria, gridlist ):
         rgrid.setRefGrid(refgridfile)
         affected=Util.affectedAreaFromWkt(affectedwkt)
         rgrid.setExtents(affected,affected)
-        Logger.writeWkt("{0} area for parent merge".format(rgrid.name),
+        Logger.writeWkt("Reverse grid {0} affected area".format(rgrid.name),
                         rgrid.level,affected.to_wkt())
         Logger.write('Created reverse patch for {0}'.format(g.name))
         Logger.writeWkt("Reverse grid {0}".format(rgrid.name),0,g.spec.boundingPolygonWkt())
