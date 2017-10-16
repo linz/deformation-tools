@@ -678,16 +678,23 @@ static void run_trim( grid &g, commandlist &commands )
     int borderSize;
     bool expand=true;
     double zerotol;
+    string columns="*";
+    if( next_command_is(commands,"columns"))
+    {
+        columns = next_command(commands,"Columns of grid data to use for trimming");
+    }
     if( next_command_is(commands,"tolerance"))
     {
         next_command_value(commands,zerotol,"Trim tolerance");
     }
+    vector<int> colids;
+    grid_columns( g, columns, colids );
     if( next_command_is(commands,"noexpand") ) expand=false;
     next_command_value(commands,borderSize,"Trim border size");
     cout << "Trimming" 
         << (expand ? " and expanding" : "") << " to ensure "
         << borderSize << " zero rows/cols around border" << endl;
-    g.trim(borderSize,zerotol,expand);
+    g.trim(borderSize,zerotol,&colids,expand);
     write_spec(g);
 }
 

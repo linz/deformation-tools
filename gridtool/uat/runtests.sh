@@ -33,6 +33,10 @@ echo "test 14 - resize 2" | tee -a out/tests.log
 ../gridtool test1.grid resize -2 -3 10 11 out/test1_resize2.grid >> out/tests.log
 echo "test 15 - trim" | tee -a out/tests.log
 ../gridtool test4.grid trim 1 out/test4_trim1.grid >> out/tests.log
+echo "test 15a - trim tolerance" | tee -a out/tests.log
+../gridtool test4.grid trim tolerance 1.0 1 out/test4_trim2.grid >> out/tests.log
+echo "test 15b - trim columns" | tee -a out/tests.log
+../gridtool test4.grid trim columns v1 1 out/test4_trim3.grid >> out/tests.log
 echo "test 16 - extents_wkt" | tee -a out/tests.log
 ../gridtool read test1.grid extents_wkt out/gridextents.wkt >> out/tests.log
 echo "test 17 - affected area" | tee -a out/tests.log

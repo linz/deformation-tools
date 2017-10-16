@@ -337,7 +337,7 @@ void grid_columns( grid &g, string columns, vector<int> &colids )
     {
         for( int i=0; i<g.nvalue(); i++ ) colids.push_back(i);
     }
-    else
+    else if( columns != "none" )
     {
         string::size_type pos = 0;
         string::size_type len = columns.size();

@@ -87,7 +87,7 @@ resize [relative] rowmin colmin rowmax colmax
    Resize to only include rows between rowmin and rowmax and columns
    between colmin and colmax
 
-trim [tolerance #.###] [leave] bordersize
+trim [columns col1+col2...][tolerance #.###] [leave] bordersize
    Trim off zero rows and columns from edge of grid, leaving at least
    borderSize zero rows and columns.  If borderSize is greater than 0
    and "leave" is not specified then the grid may be expanded to ensure 

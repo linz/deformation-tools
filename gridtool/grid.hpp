@@ -110,16 +110,16 @@ public:
             double miny, double maxy, double incy,
             std::vector<std::string> columns );
     void extents( double &minx, double &maxx, double &miny, double &maxy );
-    void trim( int borderSize = 0, double zerotol=0.0, bool expand=false );
+    void trim( int borderSize = 0, double zerotol=0.0, std::vector<int> *colids=0, bool expand=false );
     std::string fieldName( int iv );
     static std::string format_number(double value, int ndp );
 private:
     void initiallize();
     void create( int nrow, int ncol, int nvalue );
     void gridcoords( const point &wxy, point &gxy );
-    bool valueIsZero( int row, int col );
-    bool rowIsZero( int row );
-    bool colIsZero( int col );
+    bool valueIsZero( int row, int col, std::vector<int> &colids );
+    bool rowIsZero( int row, std::vector<int> &colids );
+    bool colIsZero( int col, std::vector<int> &colids );
     void setupFields();
 
     std::string m_header;

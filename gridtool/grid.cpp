@@ -1017,38 +1017,49 @@ void grid::resize( int rowmin, int colmin, int rowmax, int colmax )
     m_y0 = xy0.y;
 }
 
-bool grid::valueIsZero( int row, int col )
+bool grid::valueIsZero( int row, int col, std::vector<int> &colids )
 {
     vector<double>::pointer pv = values(row,col);
-    for( int iv = 0; iv < m_nvalue; iv++ ) if( fabs(*(pv++)) > m_zerotol) return false;
+    for( vector<int>::iterator i = colids.begin(); i != colids.end(); i++ )
+    {
+        if( fabs(pv[*i]) > m_zerotol) return false;
+    }
     return true;
 }
 
-bool grid::rowIsZero( int row )
+bool grid::rowIsZero( int row, std::vector<int> &colids )
 {
-    for( int col = 0; col < m_ncol; col++ ) if( ! valueIsZero(row,col) ) return false;
+    for( int col = 0; col < m_ncol; col++ ) if( ! valueIsZero(row,col,colids) ) return false;
     return true;
 }
 
-bool grid::colIsZero( int col )
+bool grid::colIsZero( int col, std::vector<int> &colids )
 {
-    for( int row = 0; row < m_nrow; row++ ) if( ! valueIsZero(row,col) ) return false;
+    for( int row = 0; row < m_nrow; row++ ) if( ! valueIsZero(row,col,colids) ) return false;
     return true;
 }
 
-void grid::trim( int borderSize, double zerotol, bool expand )
+void grid::trim( int borderSize, double zerotol, std::vector<int> *colids, bool expand )
 {
     int rowmin, rowmax, colmin, colmax;
+    std::vector<int> tolcols;
+
+    if( ! colids )
+    {
+        for( int i=0; i<m_nvalue; i++ ) tolcols.push_back(i);
+        colids=&tolcols;
+    }
     m_zerotol=zerotol;
-    for( rowmin = 0; rowmin < m_nrow; rowmin++ ) if( ! rowIsZero(rowmin)) break;
+    if( colids )
+    for( rowmin = 0; rowmin < m_nrow; rowmin++ ) if( ! rowIsZero(rowmin,*colids)) break;
     if( rowmin == m_nrow )
     {
         throw runtime_error("grid::trim failed: all grid values are zero");
     }
-    for( rowmax = m_nrow-1; rowmax >= 0; rowmax-- ) if( ! rowIsZero(rowmax)) break;
+    for( rowmax = m_nrow-1; rowmax >= 0; rowmax-- ) if( ! rowIsZero(rowmax,*colids)) break;
 
-    for( colmin = 0; colmin < m_ncol; colmin++ ) if( ! colIsZero(colmin)) break;
-    for( colmax = m_ncol-1; colmax >= 0; colmax--) if( ! colIsZero(colmax)) break;
+    for( colmin = 0; colmin < m_ncol; colmin++ ) if( ! colIsZero(colmin,*colids)) break;
+    for( colmax = m_ncol-1; colmax >= 0; colmax--) if( ! colIsZero(colmax,*colids)) break;
 
     rowmin -= borderSize;
     rowmax += borderSize;
