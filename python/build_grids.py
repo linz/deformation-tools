@@ -295,6 +295,7 @@ END_DESCRIPTION
         Config.patchroot=patchroot
         Config.patchpath=os.path.dirname(patchroot)
         Config.patchname=os.path.basename(patchroot)
+        Config.component=Config.patchname
 
     @staticmethod
     def filename( name=None, extension=None ):
@@ -762,6 +763,10 @@ class PatchVersion( object ) :
                             model_filename.append(value)
                             continue
 
+                        if command == 'componentname':
+                            component=value
+                            continue
+
                         if command == 'version':
                             if not re.match(r'^[12]\d\d\d[01]\d[0123]\d$',value):
                                 raise RuntimeError("Invalid deformation model version {0} - must by YYYYDDMM"
@@ -777,6 +782,7 @@ class PatchVersion( object ) :
                                     model=FaultModel(model_files,patchname)
                                 patchversions.append(PatchVersion(
                                     patchname=patchname,
+                                    component=component,
                                     event=event,
                                     eventdate=eventdate,
                                     model=model,
@@ -859,6 +865,7 @@ class PatchVersion( object ) :
                     model=FaultModel(model_files,patchname)
                 patchversions.append(PatchVersion(
                     patchname=patchname,
+                    component=component,
                     event=event,
                     eventdate=eventdate,
                     model=model,
@@ -937,6 +944,7 @@ class PatchVersion( object ) :
 
     def __init__( self, 
                     patchname=None,
+                    component=None,
                     model=None,
                     version=None,
                     event=None,
@@ -946,6 +954,7 @@ class PatchVersion( object ) :
                     time_model=None,
                     criteria_overrides={} ):
         self.patchname=patchname
+        self.component=component or patchname
         self.model=model
         self.event=event or model.eventname
         self.eventdate=eventdate or model.eventdate
@@ -1818,9 +1827,7 @@ class PatchGridList( list ):
         list.remove(self,grid)
 
     def removeRedundantGrids( self ):
-        # Remove grids which are completely overlapped by child grid.  Note:
-        # should this set the child grid extents to the union with the parent
-        # grid extents
+        # Remove grids which are completely overlapped by child grid.  
         global gridtool
         gridlist=sorted(self,key=lambda x: x.level)
         removed=PatchGridList()
@@ -2210,12 +2217,6 @@ def build_deformation_grid_set( grid_set, subpatch='', splitbase=True ):
         Logger.dumpGridList("Grids after hybrid/merge",gridlist)
 
     # Optimize grids.  Remove parent grids completely overlapped by child grid.
-    # This could be expanded to include previous implementation which removed levels which
-    # are not significantly more extensive than child levels.
-    #
-    # Also could consider splitting grid level into multiple grids so that redundant areas of
-    # the grid can be discarded (when much of the grid is outside the buffered extents over 
-    # which it differs from its parent.
 
     for g in gridlist.removeRedundantGrids():
         Logger.write("Removing redundant grid {0}".format(g.name))
@@ -2232,7 +2233,7 @@ def build_published_component( patchversions, built_gridsets,
     lastversion=patchversions[-1]
     modeldesc=lastversion.model.description
     eventdate=lastversion.eventdate
-    patchdir='patch_'+lastversion.patchname
+    patchdir='patch_'+lastversion.component
 
     # If the model date doesn't contain a date, then append it
     if not re.search(r'[12]\d\d\d[01]\d[0123]\d',patchdir):
@@ -2241,23 +2242,36 @@ def build_published_component( patchversions, built_gridsets,
     comppath = os.path.join( comppath, 'model', patchdir )
 
     Logger.write("Writing published model submodel {0}".format(comppath))
+    
+    grid_prefix=re.sub(r'^(grid_)?','grid_',Config.patchname)+'_'
     if not os.path.isdir(comppath):
         os.makedirs(comppath)
-    if cleandir:
-        for f in os.listdir(comppath):
-            fn=os.path.join(comppath,f)
-            if not os.path.isdir(fn):
-                Logger.write("   Removing existing file {0}".format(f))
-                os.remove(fn)
+
+    for f in os.listdir(comppath):
+        fn=os.path.join(comppath,f)
+        if not os.path.isdir(fn) and (cleandir or f.startswith(grid_prefix)):
+            Logger.write("   Removing existing file {0}".format(f))
+            os.remove(fn)
 
     Logger.write("Splitting large grids to approx size {0} rows/cols tolerance {1}" 
                  .format(splitsize,splittol))
 
     compcsv=os.path.join(comppath,'component.csv')
 
+    existing_grids=[]
+    if os.path.exists(compcsv):
+        with open(compcsv,"r") as ccsvf:
+            ccsv=csv.DictReader(ccsvf)
+            for csvdata in ccsv:
+                file=csvdata.get('file1','')
+                if os.path.exists(os.path.join(comppath,file)):
+                    existing_grids.append(csvdata)
+
     with open(compcsv,"w") as ccsvf:
         ccsv=csv.writer(ccsvf)
         ccsv.writerow(Config.published_component_columns)
+        for csvdata in existing_grids:
+            ccsv.writerow([csvdata.get(c,'') for c in Config.published_component_columns])
         csvdata=dict(
             version_added=0,
             version_revoked=0,
@@ -2380,7 +2394,7 @@ if __name__ == "__main__":
     # Process arguments
 
     parser=argparse.ArgumentParser(description='Build set of grids for deformation patch')
-    parser.add_argument('patch_file',help='Model file(s) used to calculate deformation, passed to calc_okada')
+    parser.add_argument('patch_file',help='Patch file used to define deformation')
     parser.add_argument('calc_file_root',help='Base name used for calculation files')
     # parser.add_argument('--shift-model-path',help="Create a linzshiftmodel in the specified directory")
     parser.add_argument('--submodel-path',help="Create publishable component in the specified directory")
