@@ -1,24 +1,27 @@
 #!/usr/bin/python
-#
-# Script to calculate the zones in which orders are downgraded.  Takes as input
-# a file defining zones with records of the format
-# zone_code "grid" gridfile column tolerance [buffer=#] [simplify=#] [error_factor=#]
-# zone_code "wkt" wkt_file [buffer=#] [simplify=#]
-#
-# Values in ".." are literal text (entered without the "s)
-# zone_code is a code defining the zone being defined, which in turn defines the orders
-# that are downgraded (see downgrade definition file)
-# 
-# error_factor is a factor by which the value from the grid is multiplied in order to 
-# determine the value that will be compared with the tolerance.  The assumption is that 
-# the error of the calculated value (ie the error of the deformation model which impacts
-# on the order of the mark) is roughly proportional to the value itself.  The values used
-# are the relative errors, the relative vector error for the horizontal component and the 
-# tilt for the vertical component.
-#
-# Buffer and simplification values are used to transform shapes to simpler objects
-# to improve efficiency in using the resulting zones.
-#
+
+description='''
+Script to calculate the zones in which orders are downgraded.  Takes as input
+a file defining zones with records of the format
+zone_code "grid" gridfile column tolerance [buffer=#] [simplify=#] [error_factor=#]
+zone_code "wkt" wkt_file [buffer=#] [simplify=#]
+zone_code "fault_model" fault_wkt_file [buffer=#] [minwidth=#]
+
+Values in ".." are literal text (entered without the "s)
+zone_code is a code defining the zone being defined, which in turn defines the orders
+that are downgraded (see downgrade definition file)
+
+error_factor is a factor by which the value from the grid is multiplied in order to 
+determine the value that will be compared with the tolerance.  The assumption is that 
+the error of the calculated value (ie the error of the deformation model which impacts
+on the order of the mark) is roughly proportional to the value itself.  The values used
+are the relative errors, the relative vector error for the horizontal component and the 
+tilt for the vertical component.
+
+Buffer and simplification values are used to transform shapes to simpler objects
+to improve efficiency in using the resulting zones.
+'''
+
 # The defined shapes are all assumed to be polygons.  For each zone code the components are 
 # combined using a spatial union (likely to generate a multipolygon), then split into individual
 # polygons for the final WKT definition.  Only the exterior of each polygon is used - holes
@@ -31,7 +34,7 @@ import argparse
 import math
 import csv
 import re
-from shapely.geometry import Polygon, MultiPolygon
+from shapely.geometry import Polygon, MultiPolygon, MultiPoint
 from shapely import affinity
 from shapely import wkt
 import defgrid
@@ -48,7 +51,7 @@ def exteriors( shape ):
 
 def bufferPoly( pgn, buffer, simplify ):
     if buffer <=0 and simplify <= 0:
-        return
+        return pgn
     c=pgn.centroid
     yscl=100000.0
     xscl=yscl*math.cos(math.radians(c.y))
@@ -78,9 +81,74 @@ def wktPolys( wktfile, buffer=0.0, simplify=0.0 ):
             geoms.extend(geom)
         return compilePolys(geoms)
 
-def compilePolys( geoms ):
+def faultPolys( wktfile, buffer, minwidth=None ):
+    crdre=r'(?:\-?\d+(?:\.\d+)?\s+\-?\d+(?:\.\d+)\s+\-?\d+(?:\.\d+))'
+    rectre=re.compile(r'\(('+crdre+r'(\s*\,\s*'+crdre+r'){4})\)')
+    minwidth=buffer/10
+    geoms=[]
+    with open(wktfile) as wktf:
+        header=wktf.next()
+        for segdef in wktf:
+            segdef=segdef.strip()
+            if segdef == '':
+                continue
+            match=rectre.search(segdef)
+            if not match:
+                print "Invalid fault segment: {0}".format(segdef)
+                continue
+            crddef=match.group(1)
+            crds=[]
+            for crd in crddef.split(','):
+                crds.append([float(x) for x in crd.split()])
+
+            line1=[crds[0],crds[1]]
+            line2=[crds[3],crds[2]]
+            z1=-crds[0][2]
+            z2=-crds[3][2]
+            if z1 >= buffer and z2 >= buffer:
+                continue
+            if z1 > buffer or z2 > buffer:
+                if z1 > z2:
+                    z1,z2=z2,z1
+                    line1,line2=line2,line1
+                intp=lambda x1, x2: ((z1-buffer)*x2+(buffer-z2)*x1)/(z1-z2)
+                line2=[
+                    [intp(line1[0][0],line2[0][0]),intp(line1[0][1],line2[0][1])],
+                    [intp(line1[1][0],line2[1][0]),intp(line1[1][1],line2[1][1])]
+                    ]
+                z2=buffer
+            w1=math.sqrt(max(0.0,buffer*buffer-z1*z1))
+            w2=math.sqrt(max(0.0,buffer*buffer-z2*z2))
+            x0=(line1[0][0]+line1[1][0]+line2[0][0]+line2[1][0])/4.0
+            y0=(line1[0][1]+line1[1][1]+line2[0][1]+line2[1][1])/4.0
+            xf=100000.0*math.cos(math.radians(y0))
+            yf=100000.0
+            toxy=lambda crd: [(crd[0]-x0)*xf,(crd[1]-y0)*yf]
+            toll=lambda crd: [crd[0]/xf+x0,crd[1]/yf+y0]
+            line1=[toxy(c) for c in line1]
+            line2=[toxy(c) for c in line2]
+            dw=math.hypot(line1[0][0]-line2[0][0],line1[0][1]-line2[0][1])
+            if max(w1*2,w2*2,w1+w2+dw) < minwidth:
+                continue
+            dl=math.hypot(line1[0][0]-line1[1][0],line1[0][1]-line1[1][1])
+            dx=(line1[1][0]-line1[0][0])/dl
+            dy=(line1[1][1]-line1[0][1])/dl
+            crds=[]
+            for w,l in zip((w1,w2),(line1,line2)):
+                for f,p in zip((-1,1),l):
+                    crds.append(toll([p[0]+f*w*dx-w*dy,p[1]+f*w*dy+w*dx]))
+                    crds.append(toll([p[0]+f*w*dx+w*dy,p[1]+f*w*dy-w*dx]))
+            geoms.append(MultiPoint(crds).convex_hull)
+    return compilePolys(geoms, True)
+
+def compilePolys( geoms, keep_holes=False ):
     union=None
     ntries=5
+
+    if keep_holes:
+        ext=lambda x: [x] if type(x) == Polygon else x
+    else:
+        ext=exteriors
     
     while ntries > 0:
         ntries -= 1
@@ -100,19 +168,21 @@ def compilePolys( geoms ):
         if not failed:
             break
 
-    result=exteriors(union)
+    result=ext(union)
     for p in failed:
-        result.extend(exteriors(p))
+        result.extend(ext(p))
     return result
 
 def main():
-    parser=argparse.ArgumentParser(description='Compile downgrade polygon zones')
+    parser=argparse.ArgumentParser(description=description)
     parser.add_argument('zone_def_file',help='File defining components to include in zones')
     parser.add_argument('zone_file',help='Output zone definition file')
     parser.add_argument('parameters',nargs='*',help='Parameters substituted into file')
     parser.add_argument('-b','--buffer',type=float,default=2000.0,help="Buffer applied to final polygon")
     parser.add_argument('-s','--simplify',type=float,default=1000.0,help="Simplification tolerance applied to final polygon")
     parser.add_argument('-d','--decimal-places',type=int,default=5,help="Number of decimal places in WKT")
+    parser.add_argument('-w','--wkt-only',action='store_true',help="Output file is simple list of wkt shapes")
+    parser.add_argument('-m','--multipolygon',action='store_true',help="Polygons for each zone are compiled to multipolygon")
     args=parser.parse_args()
 
     params={}
@@ -158,8 +228,11 @@ def main():
                         else:
                             raise RuntimeError("Invalid item "+item)
                     geoms=gridPolys(gridfile,column,tolerance/factor,buffer,simplify)
-                elif len(parts) >= 3 and parts[1] == "wkt":
+                elif len(parts) >= 3 and parts[1] == "wkt" or parts[1] == "fault_model":
                     zone_code,skip,wktfile=parts[:3]
+                    buffer=2000.0
+                    simplify=1000.0
+                    minwidth=None
                     for p in parts[3:]:
                         if '=' not in p:
                             raise RuntimeError("Invalid component "+p)
@@ -169,9 +242,14 @@ def main():
                             buffer=value
                         elif item=='simplify':
                             simplify=value
+                        elif item=='minwidth':
+                            minwidth=value
                         else:
                             raise RuntimeError("Invalid item "+item)
-                    geoms=wktPolys(wktfile,buffer,simplify)
+                    if parts[1] == "wkt":
+                        geoms=wktPolys(wktfile,buffer,simplify)
+                    else:
+                        geoms=faultPolys(wktfile,buffer,minwidth)
                 else:
                     raise RuntimeError('Invalid data, not grid or shape definition')
                 if zone_code not in zones:
@@ -185,11 +263,16 @@ def main():
     buffer=args.buffer
     simplify=args.simplify
     ndp=args.decimal_places
+    template="{1}\n" if args.wkt_only else "{0}|Zone {0}|{1}\n"
     with open(args.zone_file,'w') as zf:
         for z in zones:
-            polys=compilePolys(zones[z])
+            polys=zones[z]
             polys=[bufferPoly(p,buffer,simplify) for p in polys]
-            for p in compilePolys(polys):
+            if len(polys) > 1:
+                polys=compilePolys(zones[z])
+            if args.multipolygon:
+                polys=[MultiPolygon(polys)]
+            for p in polys:
                 if not p.is_valid:
                     print "Skipping invalid zone {0} poly".format(zone_code)
                     continue
@@ -199,7 +282,7 @@ def main():
                 if not pgn.is_valid:
                     pgn=pgn.buffer(0.0)
                     pwkt=pgn.wkt
-                zf.write("{0}|Zone {0}|{1}|\n".format(z,pwkt))
+                zf.write(template.format(z,pwkt))
 
 if __name__=="__main__":
     main()
