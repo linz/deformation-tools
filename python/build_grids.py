@@ -148,8 +148,12 @@ class Config( object ):
     # Conversion metres to degrees
     scale_factor=(1.0e-5/math.cos(math.radians(40)),1.0e-5)
 
-    # Areas outside 
+    # Buffered land area - defines where land/sea tolerances apply
     land_areas=None
+
+    # Fault zone - grids are not broken down to sub areas which lie within this
+    # assume movement is too random/chaotic to be worth detailed modelling.
+    fault_zone=None
 
     # Criteria defining the extents and resolution of grids
     tolerance_factor=PatchGridCriteria.tolerance_factor
@@ -304,16 +308,28 @@ END_DESCRIPTION
         return os.path.join(Config.patchpath,name)+extension
 
     @staticmethod
-    def loadLandAreas( polygon_file ):
+    def _loadArea( polygon_file, area_type='area' ):
         from shapely.wkt import loads
+        area=None
         try:
             with open(polygon_file) as laf:
                 wkt=laf.read()
-                Config.land_areas=loads(wkt)
-            Logger.write( "Using land area definition from "+polygon_file)
-            return
+                area=loads(wkt)
+            Logger.write( "Using {0} definition from {1}"
+                         .format(area_type,polygon_file))
+            Logger.write( "Bounds {0}".format(area.bounds))
         except:
-            raise RuntimeError("Cannot load land area definition from "+polygon_file)
+            raise RuntimeError("Cannot load {0} definition from {1}"
+                         .format(area_type,polygon_file))
+        return area
+
+    @staticmethod
+    def loadLandAreas( polygon_file ):
+        Config.land_areas=Config._loadArea(polygon_file,'land area')
+
+    @staticmethod
+    def loadFaultZone( polygon_file ):
+        Config.fault_zone=Config._loadArea(polygon_file,'fault zone')
 
     @staticmethod
     def writeTo( log ):
@@ -1665,6 +1681,10 @@ class PatchGridDef:
                 # Now split each subgrid and add to the total list of grids
 
                 for s in subcells:
+                    extents=s.bufferedExtents
+                    if Config.fault_zone and extents and Config.fault_zone.contains(extents):
+                        Logger.write("Not building {0} as within fault zone".format(s.name))
+                        continue
                     s.setRefGrid( grid2.builtFilename)
                     subgrids.extend(s.splitToSubgrids(grid_criteria))
             
@@ -2259,6 +2279,7 @@ def build_published_component( patchversions, built_gridsets,
     compcsv=os.path.join(comppath,'component.csv')
 
     existing_grids=[]
+    errorlist=[]
     if os.path.exists(compcsv):
         with open(compcsv,"r") as ccsvf:
             ccsv=csv.DictReader(ccsvf)
@@ -2340,6 +2361,10 @@ def build_published_component( patchversions, built_gridsets,
                             Logger.write("Building published grid {0} for extents {1}"
                                             .format(subcsvname,subgrid))
                             grid.writeCsvFile( subcsvpath, columns, ndp, subgrid=subgrid, trim=True )
+                            if not os.path.exists(subcsvpath):
+                                fname=os.path.basename(subcsvpath)
+                                errorlist.append('Could not build '+fname+': check build log')
+                                continue
                             priority += 1
                             gd=defgrid.DeformationGrid(subcsvpath)
                             min_lon=round(np.min(gd.column('lon')),10)
@@ -2370,6 +2395,7 @@ def build_published_component( patchversions, built_gridsets,
                                 rvalue=r.factor
                                 if ir == 0:
                                     if rvalue==0:
+                                        rdate0=rdate
                                         continue
                                     compdata['time_function']='step'
                                     compdata['time0']=rdate
@@ -2388,6 +2414,7 @@ def build_published_component( patchversions, built_gridsets,
                                 csvdata.update(compdata)
                                 ccsv.writerow([csvdata[c] for c in Config.published_component_columns])
 
+    return errorlist
 
 if __name__ == "__main__":
 
@@ -2409,7 +2436,8 @@ if __name__ == "__main__":
     parser.add_argument('--published-grid-size',type=int,default=100,help="Published grids will be split into subgrids of about this size")
     # parser.add_argument('--no-trim-subgrids',action='store_false',help="Subgrids will not have redundant rows/columns trimmed")
     parser.add_argument('--precision',type=int,default=5,help="Precision (ndp) of output grid displacements")
-    parser.add_argument('--land-area',help="WKT file containing area land area over which model must be defined")
+    parser.add_argument('--land-area',help="WKT file containing land area over which model must be defined")
+    parser.add_argument('--fault-zone',help="WKT file containing zone of faulting in which fitting faulting is pointless and model is smoothed") 
     # parser.add_argument('--parcel-shift',action='store_true',help="Configure for calculating parcel_shift rather than rigorous deformation patch")
     # parser.add_argument('--test-settings',action='store_true',help="Configure for testing - generate lower accuracy grids")
     parser.add_argument('--write-grid-lines',action='store_true',help="xx.grid.wkt contains grid cell lines rather than polygon")
@@ -2464,7 +2492,10 @@ if __name__ == "__main__":
     try:
         if args.land_area:
             Config.loadLandAreas(args.land_area)
-                    
+
+        if args.fault_zone:
+            Config.loadFaultZone(args.fault_zone)
+
         patchversions=PatchVersion.loadPatchDefinition(args.patch_file)
 
         gridsets={}
@@ -2483,11 +2514,14 @@ if __name__ == "__main__":
                     gridsets[gs.key]=build_deformation_grid_set( gs, subpatch=subpatch, splitbase=split_base )
 
         if comp_path:
-            build_published_component( patchversions, gridsets, comp_path, 
+            errorlist=build_published_component( patchversions, gridsets, comp_path, 
                                       args.clean_dir, args.precision,
                                       Config.published_grid_split_size,
                                       Config.published_grid_split_tol
                                      )
+        if errorlist:
+            for e in errorlist:
+                Logger.write("Build error: {0}".format(e),level=-1)
 
     except Exception as ex:
         Logger.write('\n\nFailed with error: {0}'.format(ex.message),level=-1)
