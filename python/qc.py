@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 from collections import namedtuple
 from subprocess import call
 from ellipsoid import grs80
+from distutils.spawn import find_executable as which
 import euler
 
 calc_okada_image=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),'okada','calc_okada')
@@ -48,21 +49,24 @@ def remove_temp_files():
 
 atexit.register(remove_temp_files)
 
-def load_land_area( polygon_file, qclog ):
+def load_area( polygon_file, area_type, qclog ):
     from shapely.wkt import loads
     try:
         with open(polygon_file) as laf:
             wkt=laf.read()
             land_area=loads(wkt)
-        qclog.printlog( "Using land area definition from "+polygon_file)
+        qclog.printlog( "Using {0} definition from {1}".format(area_type,polygon_file))
         return land_area
     except Exception as ex:
-        raise RuntimeError("Cannot load land area definition from "+polygon_file+"\n"+ex.message)
+        raise RuntimeError("Cannot load {0} definition from {1}\n{2}"
+                           .format(area_type,polygon_file,ex.message))
 
-def test_points( ldm, land_area, ntestpergrid ):
+def test_points( ldm, include_areas=None, points_per_grid=10, version=None ):
     ranges=[]
     rangestr=set()
     for c in sorted(ldm.components(),key=lambda x: x.name):
+        if version is not None and c.versionAdded != version:
+            continue
         sm=c.spatialModel
         for m in sm.models():
             grange=[m.min_lon,m.min_lat,m.max_lon,m.max_lat]
@@ -75,14 +79,21 @@ def test_points( ldm, land_area, ntestpergrid ):
         xmin,ymin,xmax,ymax=r
         if xmax > 180:
             xmax=180
-        for i in range(ntestpergrid):
+        for i in range(points_per_grid):
             tries=20
             while True:
                 lon= round(uniform(xmin,xmax),5)
                 lat= round(uniform(ymin,ymax),5)
-                if land_area is not None:
+                if include_areas:
                     from shapely.geometry import Point
-                    if not land_area.contains(Point(lon,lat)):
+                    pt=Point(lon,lat)
+                    ok=True
+                    for use_inside,area in include_areas:
+                        inside=area.contains(pt)
+                        if (inside and not use_inside) or (not inside and use_inside):
+                            ok=False
+                            break
+                    if not ok:
                         tries -= 1
                         if tries > 0:
                             continue
@@ -165,7 +176,7 @@ def parse_date( datestr ):
 
 def fault_models( modeldir, points ):
 
-    class FaultModel(namedtuple('FaultModel','file ramp denu')):
+    class FaultModel(namedtuple('FaultModel','file version ramp denu')):
 
         def factor(self, t=None, reverse=False):
             if isinstance(t,datetime):
@@ -186,12 +197,13 @@ def fault_models( modeldir, points ):
                 factor -= ramp[-1].factor
             return factor
 
-        def calc_denu(self,t=None,t0=None,reverse=False,verbose=False):
+        def calc_denu(self,t=None,t0=None,reverse=False,qclog=None):
             factor=self.factor(t,reverse)
             if t0 is not None:
                 factor -= self.factor(t0,reverse)
-            if verbose:
-                print "Using {0} times {1:.4f}".format(os.path.basename(self.file),factor)
+            if qclog:
+                qclog.printlog("Using {0} times {1:.4f}".format(os.path.basename(self.file),factor),
+                           verbose=1)
             return self.denu*factor
 
     class TimeStep(namedtuple('TimeStep','time year factor')):
@@ -215,6 +227,7 @@ def fault_models( modeldir, points ):
             pfile=os.path.splitext(mfile)[0]+'.patch'
             timemodel=[]
             inmodel=False
+            version=None
             with open(pfile) as rf:
                 for l in rf:
                     if re.match(r'^\s*(\#|$)',l):
@@ -238,15 +251,19 @@ def fault_models( modeldir, points ):
                         if ts is not None:
                             timemodel.append(ts)
                         inmodel=True
+                    elif command == 'version':
+                        version=value
             denu=calc_okada(mfile,points)
-            models.append(FaultModel(mfile,timemodel,denu))
+            models.append(FaultModel(mfile,version,timemodel,denu))
 
     return models
 
 
-def test_times( models ):
+def test_times( models, version=None ):
     transitions=set()
     for m in models:
+        if version is not None and m.version != version:
+            continue
         d0=None
         for step in m.ramp:
                 tdate=step.time
@@ -260,9 +277,8 @@ def test_times( models ):
                 transitions.add(d0-timedelta(days=1))
         if d0:
             transitions.add(d0+timedelta(days=1))
-
-    times=[x for x in transitions]
-    return sorted(times)
+    times=sorted(list(transitions))
+    return times
 
 def calc_okada( m, pts ):
     global calc_okada_image
@@ -332,18 +348,29 @@ def calc_velocities( gnsvel, eulerdef, points, qclog ):
 
 class QcLog( object ):
 
-    def __init__( self, qcdir ):
+    def __init__( self, qcdir, prefix='', verbose=0 ):
         if not os.path.isdir(qcdir):
             os.makedirs(qcdir)
-        qclog=open(os.path.join(qcdir,'qc.log'),'w')
+        prefix=prefix or ''
+        if prefix:
+            prefix=re.sub(r'_?$','_',prefix)
         self.dir=qcdir
+        self.prefix=prefix
+        self.verbose=verbose if type(verbose) == int else 1 if verbose else 0
+        qclog=open(self.qcfilename('qc.log'),'w')
         self.log=qclog
         self.log.write("Running deformation QC tests\n")
         self.log.write("Runtime: "+datetime.now().strftime('%Y-%m-%d %H:%M:%S')+'\n')
 
-    def printlog( self, *messages ):
-        self.log.write(' '.join(messages))
-        self.log.write('\n')
+    def qcfilename( self, filename ):
+        return os.path.join(self.dir,self.prefix+filename)
+
+    def printlog( self, *messages, **options ):
+        verbose=options.get('verbose',0)
+        verbose=verbose if type(verbose) == int else 1 if verbose else 0
+        if verbose <= self.verbose:
+            self.log.write(' '.join(messages))
+            self.log.write('\n')
 
     def start_test(self,message):
         self.log.write("\n")
@@ -351,7 +378,8 @@ class QcLog( object ):
         self.log.write("\n")
 
     def write_test_points(self,points):
-        csvw=csv.writer(open(os.path.join(self.dir,'test_points.csv'),'w'))
+        tpfilename=self.qcfilename('test_points.csv')
+        csvw=csv.writer(open(tpfilename,'w'))
         csvw.writerow(('id','lon','lat'))
         for i,p in enumerate(points):
             csvw.writerow((str(i),str(p[0]),str(p[1])))
@@ -407,6 +435,7 @@ class QcLog( object ):
         diff=d1[2]-d0[2]
         error=np.sqrt(np.sum(np.square(diff),axis=1))
         ds=np.sqrt(np.sum(np.square(diff[:,:2]),axis=1))
+        dh=np.abs(diff[:,2])
 
         skiprows=[]
         if skip is not None:
@@ -436,7 +465,7 @@ class QcLog( object ):
         csvf=None
         haveheader=False
         if csvsummary:
-            csvf=os.path.join(self.dir,csvsummary+'.csv')
+            csvf=self.qcfilename(csvsummary+'.csv')
             if not append:
                 try:
                     os.path.remove(csvf)
@@ -459,7 +488,7 @@ class QcLog( object ):
         csvf=None
         haveheader=False
         if csvfile:
-            csvf=os.path.join(self.dir,csvfile+'.csv')
+            csvf=self.qcfilename(csvfile+'.csv')
             if not append:
                 try:
                     os.path.remove(csvf)
@@ -473,24 +502,25 @@ class QcLog( object ):
             if listall:
                 badrows=range(ntest)
             csvw=csv.writer(open(csvf,'ab' if append else 'wb'))
-            header=['id','date','date0','comparison','lon','lat','diff','de','dn','du','ds','de0','dn0','du0','de1','dn1','du1']
+            header=['id','date','date0','comparison','lon','lat','diff','dh','dv','de','dn','du','de0','dn0','du0','de1','dn1','du1']
             if not haveheader:
                 csvw.writerow(header)
             for ib in badrows:
                 row=[str(ib+1),date,date0,comparison,str(points[ib][0]),str(points[ib][1])]
                 row.append("{0:.4f}".format(error[ib]))
-                row.extend(("{0:.4f}".format(x) for x in diff[ib]))
                 row.append("{0:.4f}".format(ds[ib]))
+                row.append("{0:.4f}".format(dh[ib]))
+                row.extend(("{0:.4f}".format(x) for x in diff[ib]))
                 row.extend(("{0:.4f}".format(x) for x in d0[2][ib]))
                 row.extend(("{0:.4f}".format(x) for x in d1[2][ib]))
                 csvw.writerow(row)
             csvw=None
             self.log.write('     Bad residuals in {0}.csv\n'.format(csvfile))
 
-def calc_total_fault_model( fmodels, points, t=None, t0=None, reverse=False, verbose=False ):
+def calc_total_fault_model( fmodels, points, t=None, t0=None, reverse=False, qclog=None ):
     pfault=np.array([[0.0,0.0,0.0]]*len(points))
     for fm in fmodels:
-        pfault += fm.calc_denu(t=t,t0=t0,reverse=reverse,verbose=verbose)
+        pfault += fm.calc_denu(t=t,t0=t0,reverse=reverse,qclog=qclog)
     return pfault
 
 from argparse import ArgumentParser
@@ -498,21 +528,27 @@ parser=ArgumentParser('QC checking of deformation models and products - confirm 
 # parser.add_argument('def_files',nargs='*',help='List of shift .def files from which to construct zip files')
 parser.add_argument('--seed','-s',default='Consistent random seed',help='String to seed "random" number generator')
 parser.add_argument('--qc-dir','-q',default='qc',help='Directory to write qc results to')
+parser.add_argument('--qc-prefix',default='',help='Prefix applied to qc results files')
 parser.add_argument('--patch-dir','-p',default='reverse_patch',help='Directory to scan for .def files')
 parser.add_argument('--linzdef-file','-d',help='Binary LINZDEF deformation file (SNAP/Landonline)')
+parser.add_argument('--binshift-file',help='Binary reverse patch shift model file (Landonline)')
+parser.add_argument('--binshift-component',default='HV',help='Components of shift to test (H, V, or HV)')
 parser.add_argument('--model-dir','-m',default='published',help='Directory from which to read the deformation model')
 parser.add_argument('--fault-model-dir','-f',default='model',help='Directory from which to read fault models')
 parser.add_argument('--land-area','-l',help='WKT file from which to load land areas - used to restrict test points')
+parser.add_argument('--fault-zone','-z',help='WKT file from which to load fault zone within which no points are created')
 parser.add_argument('--gns-velocities','-v',default='NDM/GNS_2011_V4_velocity_model/solution.gns',help='GNS velocity model file')
 parser.add_argument('--ndm-euler-rotation-file','-e',default='ndm_eulerdef',help='File containing NDM euler rotation pole')
 parser.add_argument('--n-test-points','-n',type=int,default=ntestpergrid,help='Number of test points per grid area')
+parser.add_argument('--test-version',help='Version of model to test (tests components created by the version, default is latest')
 parser.add_argument('--test-points',help='Test point file (default is model based semi-random points)')
 parser.add_argument('--test-patches',action='store_true',help='Test reverse patch .def files')
-parser.add_argument('--test-calcdef',action='store_true',help='Test published model deformation')
+parser.add_argument('--test-csvmodel',action='store_true',help='Test published model deformation')
+parser.add_argument('--test-binmodel-gns',action='store_true',help='Compare binary file with GNS source as well as with CSV model')
 parser.add_argument('--test-velocities',action='store_true',help='Test secular velocity model')
 parser.add_argument('--use-ndm-velocities',action='store_true',help='Use velocity model from NDM for patch/dislocation testing')
 parser.add_argument('--test-linzdef',action='store_true',help='Test SNAP/Landonline binary model dislocations')
-parser.add_argument('--from-date',help="Start date in format YYYY-MM-DD")
+parser.add_argument('--from-date',help="Start date in format YYYY-MM- D")
 parser.add_argument('--to-date',help="End date in format YYYY-MM-DD")
 parser.add_argument('--verbose',action='store_true',help="More verbose output")
 parser.add_argument('--list-all',action='store_true',help="Include all points in CSV outputs")
@@ -521,34 +557,50 @@ args=parser.parse_args()
 modeldir=args.model_dir
 patchdir=args.patch_dir
 lnzdef=args.linzdef_file
-qclog=QcLog(args.qc_dir)
+binshift=args.binshift_file
 verbose=args.verbose
+qclog=QcLog(args.qc_dir,verbose=verbose, prefix=args.qc_prefix)
 
 seed(args.seed)
 
 test_patches=args.test_patches
-test_calcdef_patch=args.test_calcdef
+test_csvmodel=args.test_csvmodel
 test_velocities=args.test_velocities
-test_dislocations=lnzdef is not None
+test_binmodel=lnzdef is not None
+test_binmodel_gns=args.test_binmodel_gns
+test_binshift=binshift is not None
+binshift_components=args.binshift_component.upper()
 
-land_area=None
+include_areas=[]
 if args.land_area is not None:
-    land_area=load_land_area( args.land_area, qclog)
+    include_areas.append((True,load_area( args.land_area, 'land area', qclog)))
+fault_zone=None
+if args.fault_zone is not None:
+    include_areas.append((False,load_area( args.fault_zone,'fault zone',qclog)))
 
 #sys.path.append(os.path.join(modeldir,'tools'))
 from LINZ.DeformationModel.Model import Model
 ldm=Model(os.path.join(modeldir,'model'))
+test_version=ldm.version()
+if args.test_version is not None:
+    test_version=args.test_version
+    if test_version == 'all':
+        test_version=None
+if test_version is not None:
+    qclog.printlog('Testing components added at version {0}'.format(test_version))
 
+# Set up calcdeformation program
 cdfm=None
-if os.path.exists('/usr/bin/calcdeformation'):
-    cdfm=['/usr/bin/calcdeformation']
-else:
+if which('calcdeformation'):
+    cdfm=[which('calcdeformation')]
+if cdfm is None:
     cdfmf=os.path.join(modeldir,'tools','calcdeformation.py')
     if os.path.exists(cdfmf):
         cdfm=['python',cdfmf]
-if cdfm is not None:
-    cdfm.extend(('--ndp=6','-m',os.path.join(modeldir,'model')))
-    cdfm=tuple(cdfm)
+if cdfm is None:
+    raise RuntimeError('Cannot find calcdeformation executable from python-linz-deformationmodel project')
+cdfm.extend(('--ndp=6','-m',os.path.join(modeldir,'model')))
+cdfm=tuple(cdfm)
 
 if args.test_points:
     if verbose:
@@ -557,7 +609,7 @@ if args.test_points:
 else:
     if verbose:
         qclog.printlog('Calculating {0} test points per deformation grid file'.format(args.n_test_points))
-    points=test_points(ldm,land_area,args.n_test_points)
+    points=test_points(ldm,include_areas=include_areas,points_per_grid=args.n_test_points,version=test_version)
 qclog.write_test_points( points )
 
 tolerances=(0.001,0.002,0.005,0.01,0.02,0.05,0.10,0.20,0.50,1.0)
@@ -566,11 +618,17 @@ fmodels=None
 times=None
 time0=None
 time1=None
-if test_patches or test_dislocations or test_calcdef_patch:
+times=[]
+if test_patches or test_binmodel or test_csvmodel:
     fmodels=fault_models(args.fault_model_dir,points)
-    times=test_times(fmodels)
-    time0=datetime(2000,1,1) if args.from_date is None else datetime.strptime(args.from_date,"%Y-%m-%d")
-    time1=times[-1] if args.to_date is None else datetime.strptime(args.to_date,"%Y-%m-%d")
+    times=test_times(fmodels,version=test_version)
+    if args.from_date is not None or args.to_date is not None:
+        times=[
+            times[0] if args.from_date is None else datetime.strptime(args.from_date,"%Y-%m-%d"),
+            times[-1] if args.to_date is None else datetime.strptime(args.to_date,"%Y-%m-%d")
+            ]
+    time0=times[0]
+    time1=times[-1]
 
 # CalcDeformation input file (to be deleted at end of run)
 
@@ -578,9 +636,8 @@ cdin=points_file(points,format="{0},{1},{2},{3}",header="id,lon,lat,hgt")
 
 # Test patch against the published deformation model, and the fault source models.
 
-# Compile 
-
 if test_patches:
+    raise RuntimeError('test_patches option not currently functional')
     patches=find_patches(patchdir,points)
     pgroups={}
     for p in patches:
@@ -610,35 +667,37 @@ if test_patches:
                       skip=skip
                      )
 
-if test_calcdef_patch:
-    t=time1
+if test_csvmodel:
     t0=time0
-    tstr=t.strftime('%Y-%m-%d')
     t0str=t0.strftime('%Y-%m-%d')
-    print "Testing calcdeformation.py patches from {0} to {1}".format(t0str,tstr)
-    pfault=calc_total_fault_model( fmodels, points, t=t, t0=t0, verbose=args.verbose )
-    outfile=tempfilename()
-    command=cdfm+('-d',tstr,'-b',t0str,'-o','-ndm',cdin,outfile)
-    # print command
-    call(command)
-    cdenu=read_denu(outfile,cols=(4,7),header=True,expected=len(points),delim=',')
-    os.remove(outfile)
-    qclog.compare("Testing CalcDeformation.py patches {0} - {1}".format(t0str,tstr),
-                      points,
-                      (('flt','Calculated directly from fault models',pfault),
-                       ('pub','Calculated from published model',cdenu)),
-                      csvfile='calcdef_patch',
-                      tolerance=tolerances,
-                      date=tstr,
-                      date0=t0str,
-                      listall=args.list_all
-                     )
+    append=False
+    for t in times[1:]:
+        tstr=t.strftime('%Y-%m-%d')
+        print "Testing calcdeformation.py patches from {0} to {1}".format(t0str,tstr)
+        pfault=calc_total_fault_model( fmodels, points, t=t, t0=t0, qclog=qclog )
+        outfile=tempfilename()
+        command=cdfm+('-d',tstr,'-b',t0str,'-o','-ndm',cdin,outfile)
+        # print command
+        call(command)
+        cdenu=read_denu(outfile,cols=(4,7),header=True,expected=len(points),delim=',')
+        os.remove(outfile)
+        qclog.compare("Testing CalcDeformation.py patches {0} - {1}".format(t0str,tstr),
+                          points,
+                          (('flt','Calculated directly from fault models',pfault),
+                           ('pub','Calculated from published model',cdenu)),
+                          csvfile='calcdef_patch',
+                          tolerance=tolerances,
+                          date=tstr,
+                          date0=t0str,
+                          listall=args.list_all,
+                          append=append
+                         )
+        append=True
 
-
-if test_velocities or (test_dislocations and not args.use_ndm_velocities):
+if test_velocities or (test_binmodel and not args.use_ndm_velocities):
     velocities=calc_velocities(args.gns_velocities,args.ndm_euler_rotation_file, points, qclog)
 
-if test_velocities or (test_dislocations and args.use_ndm_velocities):
+if test_velocities or (test_binmodel and args.use_ndm_velocities):
     outfile=tempfilename()
     command=cdfm+('--date=2100-01-01','--base-date=2000-01-01','--only=ndm',cdin,outfile)
     call(command)
@@ -655,8 +714,11 @@ if test_velocities:
                       tolerance=tolerances,
                      )
 
-if test_dislocations:
+if test_binmodel:
+    if not which('runlnzdef'):
+        raise RuntimeError('Require runlnzdef program from the Landonline dbl4u code')
     pfile=points_file(points)
+    outfile=tempfilename()
     append=False
     testvel=venu if args.use_ndm_velocities else velocities
     datestr0=None
@@ -672,15 +734,15 @@ if test_dislocations:
 
     for dt in times:
         # csvf="dislocations_"+dt.strftime("%Y%m%d")
-        csvf="dislocations"
-        csvsum="disloc_summary"
+        csvf="binmodel"
+        csvsum="binmodel_summary"
         year=date_as_year(dt)
         datestr="{0:%Y-%m-%d}".format(dt)
         print "Testing dislocations at {0} {1:.2f}".format(datestr,year)
         # Model dislocations
         mdenu=testvel*(year-2000.0)
         for fm in fmodels:
-            mdenu += fm.calc_denu(year)
+            mdenu += fm.calc_denu(year,qclog=qclog)
 
         # SNAP/Landonline binary file dislocations
         outfile=tempfilename()
@@ -694,10 +756,14 @@ if test_dislocations:
         call(command)
         cdenu=read_denu(outfile,cols=(4,7),header=True,expected=len(points),delim=',')
         os.remove(outfile)
+        comparison=[
+                   ('bin','Calculated from SNAP/Landonline binary file',bdenu-bdenu2k),
+                   ('pub','Calculated from published model',cdenu-cdenu2k)
+                   ]
+        if test_binmodel_gns:
+            comparison.insert(0,('gns','Calculated directly from gns files',mdenu))
         qclog.compare("Testing dislocations at {0}".format(datestr),points,
-                      (('gns','Calculated directly from gns files',mdenu),
-                      ('bin','Calculated from SNAP/Landoline binary file',bdenu-bdenu2k),
-                      ('pub','Calculated from published model',cdenu-cdenu2k)),
+                      comparison,
                       csvfile=csvf,
                       csvsummary=csvsum,
                       date=datestr,
@@ -707,7 +773,7 @@ if test_dislocations:
                      )
         append=True
         qclog.compare("Testing dislocations at {0}".format(datestr),points,
-                      (('bin','Calculated from SNAP/Landoline binary file',bdenu),
+                      (('bin','Calculated from SNAP/Landonline binary file',bdenu),
                       ('pub','Calculated from published model',cdenu)),
                       csvfile=csvf,
                       csvsummary=csvsum,
@@ -715,11 +781,16 @@ if test_dislocations:
                       tolerance=tolerances,
                       append=append
                      )
+        append=True
         if datestr0 is not None:
+            comparison=[
+                       ('bin','Calculated from SNAP/Landonline binary file',bdenu-bdenu0),
+                       ('pub','Calculated from published model',cdenu-cdenu0)
+                       ]
+            if test_binmodel_gns:
+                comparison.insert(0,('gns','Calculated directly from gns files',mdenu-mdenu0))
             qclog.compare("Testing dislocations between  {0} and {1}".format(datestr0,datestr),points,
-                          (('gns','Calculated directly from gns files',mdenu-mdenu0),
-                          ('bin','Calculated from SNAP/Landoline binary file',bdenu-bdenu0),
-                          ('pub','Calculated from published model',cdenu-cdenu0)),
+                          comparison,
                           csvfile=csvf,
                           csvsummary=csvsum,
                           date0=datestr0,
@@ -727,7 +798,36 @@ if test_dislocations:
                           tolerance=tolerances,
                           append=append
                          )
+            append=True
         datestr0=datestr
         mdenu0=mdenu
         bdenu0=bdenu
         cdenu0=cdenu
+
+# Test reverse patch binary
+if test_binshift:
+    if not which('runshift'):
+        raise RuntimeError('Require runshift program from the Landonline dbl4u code')
+    pfile=points_file(points)
+    outfile=tempfilename()
+    call(('runshift','-p',binshift,pfile,outfile))
+    bshift=read_denu(outfile,cols=(3,6),expected=len(points))
+    command=cdfm+('-p',cdin,outfile)
+    call(command)
+    cshift=read_denu(outfile,cols=(4,7),header=True,expected=len(points),delim=',')
+    os.remove(outfile)
+    if 'H' not in binshift_components:
+        bshift[:,:2]=0.0
+        cshift[:,:2]=0.0
+    if 'V' not in binshift_components:
+        bshift[:,2:]=0.0
+        cshift[:,2:]=0.0
+    csvf='shift'
+        
+    print "Testing shift model components {0}".format(binshift_components)
+    qclog.compare("Testing shift model components {0}".format(binshift_components),points,
+                  (('bin','Calculated from Landonline binary shift file',bshift),
+                  ('pub','Calculated from published model',cshift)),
+                  csvfile=csvf,
+                  tolerance=tolerances,
+                 )

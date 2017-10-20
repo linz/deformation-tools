@@ -2278,6 +2278,7 @@ def build_published_component( patchversions, built_gridsets,
 
     compcsv=os.path.join(comppath,'component.csv')
 
+    basecomponent=0
     existing_grids=[]
     errorlist=[]
     if os.path.exists(compcsv):
@@ -2287,6 +2288,9 @@ def build_published_component( patchversions, built_gridsets,
                 file=csvdata.get('file1','')
                 if os.path.exists(os.path.join(comppath,file)):
                     existing_grids.append(csvdata)
+                component=int(csvdata.get('component','0'))
+                if component >= basecomponent:
+                    basecomponent=component
 
     with open(compcsv,"w") as ccsvf:
         ccsv=csv.writer(ccsvf)
@@ -2323,7 +2327,7 @@ def build_published_component( patchversions, built_gridsets,
             description=modeldesc
         )
         
-        ir0=1
+        ir0=basecomponent+1
         for nv in range(len(patchversions)):
             versionspec=patchversions[nv]
             csvdata['version_added']=versionspec.version
@@ -2409,7 +2413,7 @@ def build_published_component( patchversions, built_gridsets,
                                 compdata['factor0']=-rvalue if rvs else 0
                                 compdata['factor1']=0 if rvs else rvalue
                                 if not additive:
-                                    compdata['component']=ir+ir1
+                                    compdata['component']=ir+ir1+basecomponent
                                     compdata['priority']=priority
                                 csvdata.update(compdata)
                                 ccsv.writerow([csvdata[c] for c in Config.published_component_columns])
