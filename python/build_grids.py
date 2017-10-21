@@ -155,6 +155,10 @@ class Config( object ):
     # assume movement is too random/chaotic to be worth detailed modelling.
     fault_zone=None
 
+    # Reverse patch area - minimum area within which a reverse patch will be used
+    # if building a hybrid patch
+    reverse_patch_area=None
+
     # Criteria defining the extents and resolution of grids
     tolerance_factor=PatchGridCriteria.tolerance_factor
 
@@ -330,6 +334,10 @@ END_DESCRIPTION
     @staticmethod
     def loadFaultZone( polygon_file ):
         Config.fault_zone=Config._loadArea(polygon_file,'fault zone')
+
+    @staticmethod
+    def loadReversePatchArea( polygon_file ):
+        Config.reverse_patch_area=Config._loadArea(polygon_file,'reverse patch area')
 
     @staticmethod
     def writeTo( log ):
@@ -1904,6 +1912,9 @@ def split_forward_reverse_patches( trialgrid, grid_criteria, gridlist ):
         if g.level > grid_criteria.forward_patch_max_level:
             Logger.write("Adding buffered extents from {0}".format(g.name))
             reverse_grid_extents.append(g.bufferedExtents)
+    if Config.reverse_patch_area:
+        Logger.write("Adding configuration reverse patch extents")
+        reverse_grid_extents.append(Config.reverse_patch_area)
     if reverse_grid_extents:
         reverse_grid_extents.append(reverse_extents)
         reverse_extents=unary_union(reverse_grid_extents)
@@ -2442,6 +2453,7 @@ if __name__ == "__main__":
     parser.add_argument('--precision',type=int,default=5,help="Precision (ndp) of output grid displacements")
     parser.add_argument('--land-area',help="WKT file containing land area over which model must be defined")
     parser.add_argument('--fault-zone',help="WKT file containing zone of faulting in which fitting faulting is pointless and model is smoothed") 
+    parser.add_argument('--reverse-patch-area',help="WKT file defining the area within which a reverse patch is used") 
     # parser.add_argument('--parcel-shift',action='store_true',help="Configure for calculating parcel_shift rather than rigorous deformation patch")
     # parser.add_argument('--test-settings',action='store_true',help="Configure for testing - generate lower accuracy grids")
     parser.add_argument('--write-grid-lines',action='store_true',help="xx.grid.wkt contains grid cell lines rather than polygon")
@@ -2499,6 +2511,9 @@ if __name__ == "__main__":
 
         if args.fault_zone:
             Config.loadFaultZone(args.fault_zone)
+
+        if args.reverse_patch_area:
+            Config.loadReversePatchArea(args.reverse_patch_area)
 
         patchversions=PatchVersion.loadPatchDefinition(args.patch_file)
 

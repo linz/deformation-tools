@@ -16,6 +16,7 @@ import sys
 import argparse
 from datetime import datetime
 from subprocess import call
+from distutils.spawn import find_executable as which
 
 argparser=argparse.ArgumentParser('Build a LINZDEF deformation file from a published deformation model')
 argparser.add_argument('model_dir',help='Base directory of model, containing model and tools directories')
@@ -48,6 +49,12 @@ except ImportError:
     raise RuntimeError('Model tools directory not found and LINZ.DeformationModel not intalled')
 
 m=Model.Model(joinpath(md,'model'))
+
+makescriptname='makelinzdefmodel.pl'
+makescript=which(makescriptname)
+if not makescript:
+    raise RuntimeError('Cannot find linzdef perl script {0}'.format(makescriptname))
+makescript=os.path.realpath(makescript)
 
 header= '''
 DEFORMATION_MODEL NZGD2000 deformation model
@@ -263,6 +270,6 @@ deffile.close()
 
 print "Building binary deformation files"
 os.chdir(bd)
-call(['makelinzdefmodel.pl','-f','LINZDEF2B',defname+'.def',defname+'b.bin'])
-call(['makelinzdefmodel.pl','-f','LINZDEF2L',defname+'.def',defname+'l.bin'])
+call([makescript,'-f','LINZDEF2B',defname+'.def',defname+'b.bin'])
+call([makescript,'-f','LINZDEF2L',defname+'.def',defname+'l.bin'])
 
