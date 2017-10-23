@@ -174,7 +174,7 @@ def parse_date( datestr ):
             pass
     raise ValueError("Cannot parse date \"{0}\"".format(datestr))
 
-def fault_models( modeldir, points ):
+def fault_models( modeldir, points, calcmodel=True ):
 
     class FaultModel(namedtuple('FaultModel','file version ramp denu')):
 
@@ -253,7 +253,9 @@ def fault_models( modeldir, points ):
                         inmodel=True
                     elif command == 'version':
                         version=value
-            denu=calc_okada(mfile,points)
+            denu=None
+            if calcmodel:
+                denu=calc_okada(mfile,points)
             models.append(FaultModel(mfile,version,timemodel,denu))
 
     return models
@@ -457,6 +459,7 @@ class QcLog( object ):
             print '**** {0} of {1} differences exceed tolerance {2} (max {3:.4f})'.format(nbad,ntest,tolerance,np.max(error))
         else: 
             self.log.write('Maximum of {0} differences is {1:.4f}\n'.format(ntest,np.max(error)))
+            print '** All {1} differences within tolerance {2} (max {3:.4f})'.format(nbad,ntest,tolerance,np.max(error))
 
         date=date or ''
         date0=date0 or ''
@@ -567,7 +570,7 @@ test_patches=args.test_patches
 test_csvmodel=args.test_csvmodel
 test_velocities=args.test_velocities
 test_binmodel=lnzdef is not None
-test_binmodel_gns=args.test_binmodel_gns
+test_binmodel_gns=args.test_binmodel_gns and test_binmodel
 test_binshift=binshift is not None
 binshift_components=args.binshift_component.upper()
 
@@ -619,8 +622,10 @@ times=None
 time0=None
 time1=None
 times=[]
-if test_patches or test_binmodel or test_csvmodel:
-    fmodels=fault_models(args.fault_model_dir,points)
+calcmodel=test_patches or test_binmodel_gns or test_csvmodel
+needtimes=calcmodel or test_binmodel
+if needtimes or calcmodel:
+    fmodels=fault_models(args.fault_model_dir,points,calcmodel)
     times=test_times(fmodels,version=test_version)
     if args.from_date is not None or args.to_date is not None:
         times=[
@@ -740,9 +745,11 @@ if test_binmodel:
         datestr="{0:%Y-%m-%d}".format(dt)
         print "Testing dislocations at {0} {1:.2f}".format(datestr,year)
         # Model dislocations
-        mdenu=testvel*(year-2000.0)
-        for fm in fmodels:
-            mdenu += fm.calc_denu(year,qclog=qclog)
+        mdenu=None
+        if test_binmodel_gns:
+            mdenu=testvel*(year-2000.0)
+            for fm in fmodels:
+                mdenu += fm.calc_denu(year,qclog=qclog)
 
         # SNAP/Landonline binary file dislocations
         outfile=tempfilename()
@@ -756,22 +763,22 @@ if test_binmodel:
         call(command)
         cdenu=read_denu(outfile,cols=(4,7),header=True,expected=len(points),delim=',')
         os.remove(outfile)
-        comparison=[
+        if test_binmodel_gns:
+            comparison=[
+                   ('gns','Calculated directly from gns files',mdenu),
                    ('bin','Calculated from SNAP/Landonline binary file',bdenu-bdenu2k),
                    ('pub','Calculated from published model',cdenu-cdenu2k)
                    ]
-        if test_binmodel_gns:
-            comparison.insert(0,('gns','Calculated directly from gns files',mdenu))
-        qclog.compare("Testing dislocations at {0}".format(datestr),points,
-                      comparison,
-                      csvfile=csvf,
-                      csvsummary=csvsum,
-                      date=datestr,
-                      date0='2000-01-01',
-                      tolerance=tolerances,
-                      append=append
-                     )
-        append=True
+            qclog.compare("Testing dislocations at {0} relative to 2000-10-01".format(datestr),points,
+                          comparison,
+                          csvfile=csvf,
+                          csvsummary=csvsum,
+                          date=datestr,
+                          date0='2000-01-01',
+                          tolerance=tolerances,
+                          append=append
+                         )
+            append=True
         qclog.compare("Testing dislocations at {0}".format(datestr),points,
                       (('bin','Calculated from SNAP/Landonline binary file',bdenu),
                       ('pub','Calculated from published model',cdenu)),
