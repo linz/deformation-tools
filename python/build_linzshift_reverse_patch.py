@@ -78,7 +78,6 @@ def main():
     parser.add_argument('model_dir',help="Model directory")
     parser.add_argument('build_dir',help="Patch build directory")
     parser.add_argument('patch_name',nargs="?",help="Patch file name")
-    parser.add_argument('--format',choices=('linzdef','ntv2'),default='linzdef',help="Patch model format")
     parser.add_argument('--version',help="Deformation model for which patch applies, default is current version")
     parser.add_argument('--ordinates',choices=('3d','horizontal','vertical'),default='3d',help="Ordinates required")
     parser.add_argument('--extents-tolerance',type=float,default=0.0,help='Minimum change to include in extents')
@@ -89,9 +88,7 @@ def main():
     args=parser.parse_args()
     modeldir=args.model_dir
     builddir=args.build_dir
-    format=args.format
-    if format != 'linzdef':
-        raise RuntimeError('Currently only linzdef format is supported')
+    format='linzdef'
 
     if not os.path.isdir(builddir):
         raise RuntimeError('Build directory {0} does not exist or is not a directory'
