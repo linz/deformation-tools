@@ -13,7 +13,6 @@ import math
 from shapely import wkt, affinity
 from shapely.geometry import MultiPoint
 
-sys.path.insert(0,'/home/ccrook/projects_git/python-linz-deformationmodel')
 from LINZ.DeformationModel.Model import Model
 
 gridtool=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),'gridtool','gridtool')
@@ -74,7 +73,7 @@ output_ordinates={
 def main():
     import argparse
 
-    parser=argparse.ArgumentParser("Build reverse patch definition file")
+    parser=argparse.ArgumentParser("Build LINZ binary format reverse patch definition file")
     parser.add_argument('model_dir',help="Model directory")
     parser.add_argument('build_dir',help="Patch build directory")
     parser.add_argument('patch_name',nargs="?",help="Patch file name")

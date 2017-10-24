@@ -102,6 +102,7 @@ echo "test 33 - create" | tee -a out/tests.log
 ../gridtool create 25.0 29.0 0.25 -42.0 -41.0 0.1 columns de+dn write csv out/test33a.csv >> out/tests.log
 ../gridtool create extents align1.grid 0.25 0.1 columns de+dn write csv out/test33b.csv >> out/tests.log
 ../gridtool create extents wkt test.wkt 0.25 0.1 columns de+dn write csv out/test33c.csv >> out/tests.log
+../gridtool create gridspec 25.0 -42.0 29.0 -41.0 8 4  columns de+dn write csv out/test33d.csv >> out/tests.log
 
 echo "test 34 - expand" | tee -a out/tests.log
 ../gridtool read align2.grid expandto align1.grid write out/test34.grid >> out/tests.log

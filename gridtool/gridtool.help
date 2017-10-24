@@ -16,10 +16,12 @@ read [csv] [maxcols n] grid_file
    Loads a new grid file.  Maximum number of columns can limit the number
    of data columns read (ie count of data columns after lon/lat)
 
-create minx max xspacing miny maxy yspacing columns xxx
+create minx maxx xspacing miny maxy yspacing columns xxx
+create gridspec minx miny maxx maxy ngx ngy columns xxx
 create extents [csv] gridfile xspacing yspacing columns xxxx
 create extents wkt wktfile xspacing yspacing columns xxxx
    Creates a new grid based on the extents and x/y spacing. 
+   ngx, ngy is the number of grid cells in the x/y direction.
    xxx is a list of column names in the new grid, separated by +
 
 write [csv] [columns xx] [ndp #] [dos] grid_file [where selection]

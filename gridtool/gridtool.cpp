@@ -216,12 +216,23 @@ static void run_create_grid( grid &g, commandlist &commands )
         minx = incx*floor(minx/incx);
         miny = incy*floor(miny/incy);
     }
+    else if( next_command_is(commands,"gridspec"))
+    {
+        int ngx, ngy;
+        next_command_value(commands,minx,"Grid minimum longitude");
+        next_command_value(commands,miny,"Grid minimum latitude");
+        next_command_value(commands,maxx,"Grid maximum longitude");
+        next_command_value(commands,maxy,"Grid maximum latitude");
+        next_command_value(commands,ngx,"Number of longitude cells");
+        next_command_value(commands,ngy,"Number of latitude cells");
+        incx=(maxx-minx)/ngx;
+        incy=(maxy-miny)/ngy;
+    }
     else
     {
         next_command_value(commands,minx,"Grid minimum longitude");
         next_command_value(commands,maxx,"Grid maximum longitude");
         next_command_value(commands,incx,"Grid longitude spacing");
-
         next_command_value(commands,miny,"Grid minimum latitude");
         next_command_value(commands,maxy,"Grid maximum latitude");
         next_command_value(commands,incy,"Grid latitude spacing");

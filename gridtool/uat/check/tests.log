@@ -116,6 +116,20 @@ Each point has 2 data values
 Trimming and expanding to ensure 1 zero rows/cols around border
 Rows 5 cols 5 x_range 17.1235 - 25.6173 y_range 8 - 16
 Writing grid to file out/test4_trim1.grid
+test 15a - trim tolerance
+Reading file from test4.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Trimming and expanding to ensure 1 zero rows/cols around border
+Rows 4 cols 3 x_range 19.2469 - 23.4938 y_range 8 - 14
+Writing grid to file out/test4_trim2.grid
+test 15b - trim columns
+Reading file from test4.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Trimming and expanding to ensure 1 zero rows/cols around border
+Rows 5 cols 4 x_range 17.1235 - 23.4938 y_range 8 - 16
+Writing grid to file out/test4_trim3.grid
 test 16 - extents_wkt
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
@@ -349,6 +363,7 @@ test 33 - create
 Writing grid to file out/test33a.csv
 Writing grid to file out/test33b.csv
 Writing grid to file out/test33c.csv
+Writing grid to file out/test33d.csv
 test 34 - expand
 Reading file from align2.grid
 Grid has 6 rows and 7 columns
