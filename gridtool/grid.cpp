@@ -73,8 +73,8 @@ void grid::create( double minx, double maxx, double incx,
             double miny, double maxy, double incy,
             std::vector<std::string> columns )
 {
-    int ngrdx=(int) ceil((maxx-minx)/incx+0.999);
-    int ngrdy=(int) ceil((maxy-miny)/incy+0.999);
+    int ngrdx=(int) floor((maxx-minx)/incx+0.99999);
+    int ngrdy=(int) floor((maxy-miny)/incy+0.99999);
 
     ngrdx++;
     ngrdy++;
