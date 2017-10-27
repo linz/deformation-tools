@@ -6,6 +6,7 @@ import argparse
 import math
 import os
 import os.path
+import random
 import re
 import struct
 import subprocess
@@ -157,7 +158,7 @@ def calcDlonDlat( lon, lat, de, dn ):
     return de/dedln, dn/dndlt
 
 def runCommand( command ):
-    subprocess.call(command)
+    subprocess.check_output(command)
 
 def main():
     import argparse
@@ -166,6 +167,8 @@ def main():
     parser.add_argument('model_dir',help="Model directory")
     parser.add_argument('build_dir',help="Patch build directory")
     parser.add_argument('patch_name',nargs="?",help="Patch file name")
+    parser.add_argument('-p','--test-points',help="Test point file")
+    parser.add_argument('-n','--n-test-points',type=int,default=10,help="Number of test points per grid")
     parser.add_argument('--version',help="Deformation model for which patch applies, default is current version")
     parser.add_argument('-c','--created',default=date.today().strftime("%Y%m%d"),help='Created date')
     parser.add_argument('-A','--australian',action='store_true',help='Build australian format binary')
@@ -175,7 +178,8 @@ def main():
     args=parser.parse_args()
     modeldir=args.model_dir
     builddir=args.build_dir
-    format='linzdef'
+    test_point_file=args.test_points
+    n_test_points=args.n_test_points
 
     if not os.path.isdir(builddir):
         raise RuntimeError('Build directory {0} does not exist or is not a directory'
@@ -304,11 +308,20 @@ def main():
 
     levels=[compgrids[c] for c in reversed(sorted(compgrids))]
 
+    # Create test point files for each grid
+
+    if test_point_file:
+        with open(test_point_file,'w') as tpf:
+            tpf.write('lon,lat\n')
+            for g in ntv2GridList(levels):
+                for i in range(n_test_points):
+                    lon=random.uniform(g.xmin,g.xmax)
+                    lat=random.uniform(g.ymin,g.ymax)
+                    tpf.write("{0:.5f},{1:.5f}\n".format(lon,lat))
 
     # Could build in option for splitting and trimming here - would reduce
     # grid size significantly for Kaikoura deformation with strong SW-NE trend
 
-    printLevels(levels)
 
     # Now generate NTv2 grids
     gridlist=ntv2GridList(levels)
