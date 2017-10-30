@@ -14,9 +14,9 @@ import sys
 from datetime import datetime,date
 from shapely import wkt, affinity
 from shapely.geometry import MultiPoint
+from ellipsoid import grs80
 
 from LINZ.DeformationModel.Model import Model
-from LINZ.Geodetic.Ellipsoid import GRS80
 
 gridtool=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),'gridtool','gridtool')
 if not os.path.exists(gridtool):
@@ -25,6 +25,39 @@ if not os.path.exists(gridtool):
 class GridExtents( object ):
 
     defaultTolerance=0.0000001
+
+    @staticmethod
+    def fromFile( gridfile ):
+        with open(gridfile) as gf:
+            header=gf.readline()
+            xmin=None
+            ymin=None
+            xmax=None
+            ymax=None
+            xinc=None
+            yinc=None
+            for l in gf:
+                l=l.strip()
+                if l:
+                    x,y=(float(x) for x in l.split(',')[:2])
+                    if xmin is None:
+                        xmin=x
+                        xmax=x
+                        ymin=y
+                        ymax=y
+                        x0=x
+                        y0=y
+                    else:
+                        if x < xmin: xmin=x
+                        elif x > xmax: xmax=x
+                        if y < ymin: ymin=y
+                        elif y > ymax: ymax=y
+                        if xinc is None and x != x0: xinc=x-x0
+                        if yinc is None and y != y0: yinc=y-y0
+        if xinc is None or yinc is None:
+            return None
+        cellsize=(round(xinc,8),round(yinc,8))
+        return GridExtents(0,xmin,ymin,xmax,ymax,cellsize,gridfile)
 
     def __init__( self, compid, xmin, ymin, xmax, ymax, cellsize, gridfile ):
         self.compid=compid
@@ -154,8 +187,8 @@ calc_dndlt=None
 
 def calcDlonDlat( lon, lat, de, dn ):
     if lat != calc_lat:
-        calc_dedln,calc_dndlt=GRS80.metres_per_degree(lat)
-    return de/dedln, dn/dndlt
+        calc_dedln,calc_dndlt=grs80.metres_per_degree(lon,lat)
+    return de/calc_dedln, dn/calc_dndlt
 
 def runCommand( command ):
     subprocess.check_output(command)
@@ -242,13 +275,15 @@ def main():
 
         # Compile component gridfiles for each level, trimming zeros and aligning
         # to parent grid. Final grids have parent subtracted, so are zero 
-        # outside extents of grid. This will allow them to be added together 
-        # at the next step.
+        # outside extents of grid and can be added to build the total deformation.
+        # This allows separate levels to be easily combined, eg co + post seismic.
 
+        pfiles={}
         for level,extents in enumerate(levels):
             for e in extents:
                 cfile=os.path.join(builddir,'ntv2_tmp_{0}_L{1}_{2}.csv'.format(e.compid,level,e.id))
-                pfile=e.parent.compiled_gridfile if e.parent is not None else None
+                rfile=cfile
+                pfile=pfiles.get(e.parent)
                 spec=[str(x) for x in e.gridspec()]
                 command=[gridtool,'create','gridspec']
                 command.extend(spec)
@@ -257,19 +292,23 @@ def main():
                     command.extend(('add','csv',pfile))
                 for gf in e.gridfiles:
                     command.extend(('replace','csv',gf))
+                command.extend(('write','csv',cfile))
                 if pfile:
+                    rfile=os.path.join(builddir,'ntv2_tmp_{0}_L{1}_{2}_r.csv'.format(e.compid,level,e.id))
                     command.extend((
                         'subtract','csv',pfile,
-                        'trim','tolerance','0.000001','noexpand','1'))
-                command.extend(('write','csv',cfile))
+                        'trim','tolerance','0.000001','noexpand','1',
+                        'write','csv',rfile))
                 runCommand(command)
-                if not os.path.exists(cfile):
+                if not os.path.exists(rfile):
                     raise RuntimeError("Failed to create compiled grid {0}".format(cfile))
+                pfiles[e]=cfile
                 e.compiled_gridfile=cfile
                 cellsize=e.cellsize
                 if cellsize not in levelgrids:
                     levelgrids[cellsize]=[]
-                levelgrids[cellsize].append(e.compiledGrid())
+                compgrid=GridExtents.fromFile(rfile)
+                levelgrids[cellsize].append(compgrid)
                 # Remove temporary files
                 for gf in e.gridfiles:
                     if gf not in sourcegrids:
@@ -277,14 +316,19 @@ def main():
             
     # Now compile by adding component grids for each level
 
+
     levels=[levelgrids[c] for c in reversed(sorted(levelgrids))]
     compileExtents(levels)
     compgrids={}
+    gridmap={}
     for level,extents in enumerate(levels):
         for e in extents:
             cfile=os.path.join(builddir,'ntv2_tmp_L{1}_{2}.csv'
                                .format(e.compid,level,e.id))
-            pfile=e.parent.compiled_gridfile if e.parent is not None else None
+            pfile=None
+            pgrid=gridmap.get(e.parent)
+            if pgrid is not None:
+                pfile=pgrid.gridfiles[0]
             spec=[str(x) for x in e.gridspec()]
             command=[gridtool,'create','gridspec']
             command.extend(spec)
@@ -293,18 +337,20 @@ def main():
                 command.extend(('add','csv',gf))
             if pfile:
                 command.extend((
-                    'subtract','csv',pfile,
                     'trim','tolerance','0.000001','noexpand','1',
+                    'alignto','csv',pfile,
                     'add','csv',pfile))
             command.extend(('write','csv',cfile))
             runCommand(command)
             if not os.path.exists(cfile):
                 raise RuntimeError("Failed to create compiled grid {0}".format(cfile))
-            e.compiled_gridfile=cfile
             cellsize=e.cellsize
             if cellsize not in compgrids:
                 compgrids[cellsize]=[]
-            compgrids[cellsize].append(e.compiledGrid())
+            compgrid=GridExtents.fromFile(cfile)
+            compgrid.parent=pgrid
+            gridmap[e]=compgrid
+            compgrids[cellsize].append(compgrid)
 
     levels=[compgrids[c] for c in reversed(sorted(compgrids))]
 
@@ -312,12 +358,12 @@ def main():
 
     if test_point_file:
         with open(test_point_file,'w') as tpf:
-            tpf.write('lon,lat\n')
+            # tpf.write('lon\tlat\n')
             for g in ntv2GridList(levels):
                 for i in range(n_test_points):
                     lon=random.uniform(g.xmin,g.xmax)
                     lat=random.uniform(g.ymin,g.ymax)
-                    tpf.write("{0:.5f},{1:.5f}\n".format(lon,lat))
+                    tpf.write("{0:.5f}\t{1:.5f}\n".format(lon,lat))
 
     # Could build in option for splitting and trimming here - would reduce
     # grid size significantly for Kaikoura deformation with strong SW-NE trend
@@ -338,33 +384,34 @@ def main():
     dformat=endian+'8sd'
     gsformat=endian+'ffff'
 
-    ntv2created=(ntv2created+'       ')[:8]
-    ntv2version=(version+'       ')[:8]
+    #ntv2created=(ntv2created+'       ')[:8]
+    #ntv2version=(version+'       ')[:8]
+    ntv2version='NTv2.0  '
 
-    with open(patchname+'.asc','w') as nt,open(patchname+'.gsb','wb') as nb:
-        nt.write("{0:8s}{1:3d}\n".format('NUM_OREC',11))
-        nt.write("{0:8s}{1:3d}\n".format('NUM_SREC',11))
-        nt.write("{0:8s}{1:3d}\n".format('NUM_FILE',len(gridlist)))
-        nt.write("{0:8s}{1:8s}\n".format('GS_TYPE','SECONDS'))
-        nt.write("{0:8s}{1:8s}\n".format('VERSION',ntv2version))
-        nt.write("{0:8s}{1:8s}\n".format('SYSTEM_F','GRS80'))
-        nt.write("{0:8s}{1:8s}\n".format('SYSTEM_T','GRS80'))
-        nt.write("{0:8s}{1:12.3f}\n".format('MAJOR_F',GRS80.a))
-        nt.write("{0:8s}{1:12.3f}\n".format('MINOR_F',GRS80.b))
-        nt.write("{0:8s}{1:12.3f}\n".format('MAJOR_T',GRS80.a))
-        nt.write("{0:8s}{1:12.3f}\n".format('MINOR_T',GRS80.b))
+    with open(patchname+'.gsa','w') as nt,open(patchname+'.gsb','wb') as nb:
+        nt.write("{0:8s} {1:3d}\n".format('NUM_OREC',11))
+        nt.write("{0:8s} {1:3d}\n".format('NUM_SREC',11))
+        nt.write("{0:8s} {1:3d}\n".format('NUM_FILE',len(gridlist)))
+        nt.write("{0:8s} {1:8s}\n".format('GS_TYPE','SECONDS'))
+        nt.write("{0:8s} {1:8s}\n".format('VERSION',ntv2version))
+        nt.write("{0:8s} {1:8s}\n".format('SYSTEM_F','NZGD2000'))
+        nt.write("{0:8s} {1:8s}\n".format('SYSTEM_T','NZGD2000'))
+        nt.write("{0:8s} {1:12.3f}\n".format('MAJOR_F',grs80.a))
+        nt.write("{0:8s} {1:12.3f}\n".format('MINOR_F',grs80.b))
+        nt.write("{0:8s} {1:12.3f}\n".format('MAJOR_T',grs80.a))
+        nt.write("{0:8s} {1:12.3f}\n".format('MINOR_T',grs80.b))
 
         nb.write(struct.pack(iformat,'NUM_OREC',11))
         nb.write(struct.pack(iformat,'NUM_SREC',11))
         nb.write(struct.pack(iformat,'NUM_FILE',len(gridlist)))
         nb.write(struct.pack(sformat,'GS_TYPE ','SECONDS '))
         nb.write(struct.pack(sformat,'VERSION ',ntv2version))
-        nb.write(struct.pack(sformat,'SYSTEM_F','GRS80   '))
-        nb.write(struct.pack(sformat,'SYSTEM_T','GRS80   '))
-        nb.write(struct.pack(dformat,'MAJOR_F ',GRS80.a))
-        nb.write(struct.pack(dformat,'MINOR_F ',GRS80.b))
-        nb.write(struct.pack(dformat,'MAJOR_T ',GRS80.a))
-        nb.write(struct.pack(dformat,'MINOR_T ',GRS80.b))
+        nb.write(struct.pack(sformat,'SYSTEM_F','NZGD2000   '))
+        nb.write(struct.pack(sformat,'SYSTEM_T','NZGD2000   '))
+        nb.write(struct.pack(dformat,'MAJOR_F ',grs80.a))
+        nb.write(struct.pack(dformat,'MINOR_F ',grs80.b))
+        nb.write(struct.pack(dformat,'MAJOR_T ',grs80.a))
+        nb.write(struct.pack(dformat,'MINOR_T ',grs80.b))
 
         ntgridname={}
         for grid in gridlist:
@@ -377,7 +424,7 @@ def main():
             lon1 *= 3600.0
             lat1 *= 3600.0
             loninc=(lon1-lon0)/nlon
-            latinc=(lon1-lon0)/nlat
+            latinc=(lat1-lat0)/nlat
             npt=(nlon+1)*(nlat+1)
 
             gridfiles=grid.gridfiles
@@ -385,17 +432,17 @@ def main():
                 raise RuntimeError('Invalid grid extents for NTv2 file - grids not compiled')
             gridfile=gridfiles[0]
 
-            nt.write("{0:8s}{1:8s}\n".format('SUB_NAME',name))
-            nt.write("{0:8s}{1:8s}\n".format('PARENT',pname))
-            nt.write("{0:8s}{1:8s}\n".format('CREATED',ntv2created))
-            nt.write("{0:8s}{1:8s}\n".format('UPDATED',ntv2created))
-            nt.write("{0:8s}{1:15.6f}\n".format('S_LAT',lat0))
-            nt.write("{0:8s}{1:15.6f}\n".format('N_LAT',lat1))
-            nt.write("{0:8s}{1:15.6f}\n".format('E_LONG',-lon1))
-            nt.write("{0:8s}{1:15.6f}\n".format('W_LONG',-lon0))
-            nt.write("{0:8s}{1:15.6f}\n".format('LAT_INC',latinc))
-            nt.write("{0:8s}{1:15.6f}\n".format('LONG_INC',loninc))
-            nt.write("{0:8s}{1:6d}\n".format('GS_COUNT',npt))
+            nt.write("{0:8s} {1:8s}\n".format('SUB_NAME',name))
+            nt.write("{0:8s} {1:8s}\n".format('PARENT',pname))
+            nt.write("{0:8s} {1:8s}\n".format('CREATED',ntv2created))
+            nt.write("{0:8s} {1:8s}\n".format('UPDATED',ntv2created))
+            nt.write("{0:8s} {1:15.6f}\n".format('S_LAT',lat0))
+            nt.write("{0:8s} {1:15.6f}\n".format('N_LAT',lat1))
+            nt.write("{0:8s} {1:15.6f}\n".format('E_LONG',-lon1))
+            nt.write("{0:8s} {1:15.6f}\n".format('W_LONG',-lon0))
+            nt.write("{0:8s} {1:15.6f}\n".format('LAT_INC',latinc))
+            nt.write("{0:8s} {1:15.6f}\n".format('LONG_INC',loninc))
+            nt.write("{0:8s} {1:7d}\n".format('GS_COUNT',npt))
 
             nb.write(struct.pack(sformat,'SUB_NAME',name))
             nb.write(struct.pack(sformat,'PARENT  ',pname))
@@ -415,20 +462,20 @@ def main():
                 for line in lgf:
                     if ',' not in line:
                         break
-                    dln,dlt=[float(f)*3600 for f in line.split(',')][2:4]
-                    points.append([dln,dlt])
+                    lon,lat,de,dn=[float(f) for f in line.split(',')][0:4]
+                    dln,dlt=calcDlonDlat(lon,lat,de,dn)
+                    points.append([dln*3600,dlt*3600])
 
             if len(points) != npt:
                 raise RuntimeError('Number of points {3} in grid {0} does not match grid spec ({1},{2})'
                         .format(gridfile,nlon+1,nlat+1,len(points)))
 
-
             for ilat in range(nlat+1):
-                ilatn=ilat*nlon
+                ilatn=ilat*(nlon+1)
                 for ilon in reversed(range(nlon+1)):
                     dln,dlt = points[ilatn+ilon]
-                    nt.write("{0:10.6f}{1:10.6f}{2:10.6f}{3:10.6f}\n".format(dlt,-dln,-1.0,-1.0))
-                    nb.write(struct.pack(gsformat,dlt,-dln,-1.0,-1.0))
+                    nt.write("{0:10.6f} {1:9.6f} {2:9.6f} {3:9.6f}\n".format(dlt,-dln,-1.0,-1.0))
+                    nb.write(struct.pack(gsformat,dlt,-dln,0.0,0.0))
                         
         nt.write("{0:8s}\n".format('END'))
         nb.write(struct.pack(sformat,'END     ','\0\0\0\0\0\0\0\0'))

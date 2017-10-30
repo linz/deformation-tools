@@ -888,6 +888,7 @@ void grid::alignto( grid &g )
     int colmax=m_ncol-1;
     int rowmin=0;
     int rowmax=m_nrow-1;
+    double tolerance=0.000001;
 
     point corner;
     point gcorner;
@@ -895,17 +896,17 @@ void grid::alignto( grid &g )
 
     nodexy(node(0,0),corner);
     g.gridcoords(corner,gcorner);
-    g.nodexy(point(floor(gcorner.x+0.0001),floor(gcorner.y+0.0001)),corner);
+    g.nodexy(point(floor(gcorner.x+tolerance),floor(gcorner.y+tolerance)),corner);
     gridcoords(corner,ncorner);
-    if(ncorner.x < -0.00001) colmin=int(floor(ncorner.x+0.0001));
-    if(ncorner.y < -0.00001) rowmin=int(floor(ncorner.y+0.0001));
+    if(ncorner.x < -tolerance) colmin=int(floor(ncorner.x+tolerance));
+    if(ncorner.y < -tolerance) rowmin=int(floor(ncorner.y+tolerance));
 
     nodexy(node(rowmax,colmax),corner);
     g.gridcoords(corner,gcorner);
-    g.nodexy(point(ceil(gcorner.x-0.0001),ceil(gcorner.y-0.0001)),corner);
+    g.nodexy(point(ceil(gcorner.x-tolerance),ceil(gcorner.y-tolerance)),corner);
     gridcoords(corner,ncorner);
-    if(colmax < ncorner.x-0.00001) colmax=int(ceil(ncorner.x-0.0001));
-    if(rowmax < ncorner.y-0.00001) rowmax=int(ceil(ncorner.y-0.0001));
+    if(colmax < ncorner.x-tolerance) colmax=int(ceil(ncorner.x-tolerance));
+    if(rowmax < ncorner.y-tolerance) rowmax=int(ceil(ncorner.y-tolerance));
 
     resize(rowmin,colmin,rowmax,colmax);
 }

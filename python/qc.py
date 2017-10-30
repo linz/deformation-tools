@@ -21,15 +21,15 @@ from random import uniform, seed
 from subprocess import call
 from datetime import datetime, timedelta
 from collections import namedtuple
-from subprocess import call
+from subprocess import call, check_output
 from ellipsoid import grs80
 from distutils.spawn import find_executable as which
 import euler
 
-calc_okada_image=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),'okada','calc_okada')
+tooldir=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+calc_okada_image=os.path.join(tooldir,'okada','calc_okada')
 if not os.path.exists(calc_okada_image):
     raise RuntimeError('Cannot find calc_okada program at '+calc_okada_image)
-
 
 ntestpergrid=20
 tmpfiles=[]
@@ -130,27 +130,43 @@ def points_file( pts, format="{0} {1} {2}", header=None ):
             pf.write('\n')
     return pfn
 
-def read_denu( tmpfile, cols=(2,5),header=False,expected=None,delim=None,fillfrom=None,factor=1.0):
+def read_denu( filename=None,source=None,cols=(2,5),header=False,expected=None,delim=None,fillfrom=None,factor=1.0,relative=None):
     denu=[]
     ncol=cols[1]
     hline=''
     dline=''
     ndata=cols[1]-cols[0]
-    with open(tmpfile) as pf:
-        if header:
-            hline=pf.readline()
-        for l in pf:
-            if not dline:
-                dline=l
-            parts=l.strip().split(delim)
-            if len(parts) >= ncol:
-                if fillfrom is not None:
-                    id=int(parts[0])
-                    while fillfrom < id:
-                        denu.append([0.0]*ndata)
-                        fillfrom += 1
-                    fillfrom=id+1
-                denu.append([float(x)*factor for x in parts[cols[0]:cols[1]]])
+    if filename:
+        source=open(filename).readlines()
+    start=1 if header else 0
+    hline=source[0].strip() if source and header else ''
+    if relative is not None:
+        expected=len(relative)
+
+    for ipt,l in enumerate(source[start:]):
+        if not dline:
+            dline=l
+        parts=l.strip().split(delim)
+        if len(parts) >= ncol:
+            if fillfrom is not None:
+                id=int(parts[0])
+                while fillfrom < id:
+                    denu.append([0.0]*ndata)
+                    fillfrom += 1
+                fillfrom=id+1
+            ldata=[float(x)*factor for x in parts[cols[0]:cols[1]]]
+            if relative is not None:
+                if ipt >= len(relative):
+                    raise RuntimeError('Too many points in output data')
+                relpt=relative[ipt]
+                dedln,dndlt=grs80.metres_per_degree(relpt[0],relpt[1])
+                ldata[0]=(ldata[0]-relpt[0])*dedln
+                ldata[1]=(ldata[1]-relpt[1])*dndlt
+                if len(ldata) > 2:
+                    ldata[2]=ldata[2]-relpt[2]
+            while len(ldata) < 3:
+                ldata.append(0.0)
+            denu.append(ldata)
     if expected is not None and len(denu) != expected:
         if fillfrom is not None and len(denu) < expected:
             denu.extend([[0.0]*ndata]*(expected-len(denu)))
@@ -469,14 +485,11 @@ class QcLog( object ):
         haveheader=False
         if csvsummary:
             csvf=self.qcfilename(csvsummary+'.csv')
-            if not append:
-                try:
-                    os.path.remove(csvf)
-                except:
-                    pass
+            if not append and os.path.exists(csvf):
+                os.remove(csvf)
             elif os.path.exists(csvf):
                 haveheader=True
-            csvw=csv.writer(open(csvf,'ab' if append else 'wb'))
+            csvw=csv.writer(open(csvf,'ab'))
             header=['date','date0','comparison','ntest']
             header.extend('tol_{0:.3f}'.format(t) for t in tolerances)
             if not haveheader:
@@ -492,11 +505,8 @@ class QcLog( object ):
         haveheader=False
         if csvfile:
             csvf=self.qcfilename(csvfile+'.csv')
-            if not append:
-                try:
-                    os.path.remove(csvf)
-                except:
-                    pass
+            if os.path.exists(csvf) and not append:
+                os.remove(csvf)
             elif os.path.exists(csvf):
                 haveheader=True
         date=date or ''
@@ -504,7 +514,7 @@ class QcLog( object ):
         if (nbad or listall) and csvf:
             if listall:
                 badrows=range(ntest)
-            csvw=csv.writer(open(csvf,'ab' if append else 'wb'))
+            csvw=csv.writer(open(csvf,'ab'))
             header=['id','date','date0','comparison','lon','lat','diff','dh','dv','de','dn','du','de0','dn0','du0','de1','dn1','du1']
             if not haveheader:
                 csvw.writerow(header)
@@ -536,6 +546,7 @@ parser.add_argument('--patch-dir','-p',default='reverse_patch',help='Directory t
 parser.add_argument('--linzdef-file','-d',help='Binary LINZDEF deformation file (SNAP/Landonline)')
 parser.add_argument('--binshift-file',help='Binary reverse patch shift model file (Landonline)')
 parser.add_argument('--binshift-component',default='HV',help='Components of shift to test (H, V, or HV)')
+parser.add_argument('--ntv2-file',help='NTv2 reverse patch file')
 parser.add_argument('--model-dir','-m',default='published',help='Directory from which to read the deformation model')
 parser.add_argument('--fault-model-dir','-f',default='model',help='Directory from which to read fault models')
 parser.add_argument('--land-area','-l',help='WKT file from which to load land areas - used to restrict test points')
@@ -550,7 +561,8 @@ parser.add_argument('--test-csvmodel',action='store_true',help='Test published m
 parser.add_argument('--test-binmodel-gns',action='store_true',help='Compare binary file with GNS source as well as with CSV model')
 parser.add_argument('--test-velocities',action='store_true',help='Test secular velocity model')
 parser.add_argument('--use-ndm-velocities',action='store_true',help='Use velocity model from NDM for patch/dislocation testing')
-parser.add_argument('--test-linzdef',action='store_true',help='Test SNAP/Landonline binary model dislocations')
+parser.add_argument('--test-linzdef',action='store_true',help='Test SNAP/Landonline binary model reverse patch')
+parser.add_argument('--test-ntv2',action='store_true',help='Test NTv2 format reverse patch')
 parser.add_argument('--from-date',help="Start date in format YYYY-MM- D")
 parser.add_argument('--to-date',help="End date in format YYYY-MM-DD")
 parser.add_argument('--verbose',action='store_true',help="More verbose output")
@@ -573,6 +585,8 @@ test_binmodel=lnzdef is not None
 test_binmodel_gns=args.test_binmodel_gns and test_binmodel
 test_binshift=binshift is not None
 binshift_components=args.binshift_component.upper()
+test_ntv2=args.test_ntv2 and args.ntv2_file is not None
+ntv2_file=args.ntv2_file
 
 include_areas=[]
 if args.land_area is not None:
@@ -834,6 +848,58 @@ if test_binshift:
     print "Testing shift model components {0}".format(binshift_components)
     qclog.compare("Testing shift model components {0}".format(binshift_components),points,
                   (('bin','Calculated from Landonline binary shift file',bshift),
+                  ('pub','Calculated from published model',cshift)),
+                  csvfile=csvf,
+                  tolerance=tolerances,
+                 )
+
+if test_ntv2:
+    ntv2_cvt=os.path.join(tooldir,'ntv2','ntv2_cvt')
+    cs2cs=which('cs2cs')
+    if not os.path.exists(ntv2_cvt):
+        raise RuntimeError('Cannot find ESRI ntv2_cvt at {0}'.format(ntv2_cvt))
+    if not cs2cs:
+        raise RuntimeError('Cannot find PROJ4 cs2cs')
+    # cs2cs likes an absolute path
+    gsb=os.path.abspath(ntv2_file)
+    if not os.path.exists(gsb):
+        raise RuntimeError('NTv2 file {0} does not exists'.format(gsb))
+    pfile=points_file(points,format='{1} {2}')
+    outfile=tempfilename()
+
+    # Run ESRI ntv2_cfg
+    command=[ntv2_cvt,'-r','-p',pfile,gsb]
+    ntv2_out=check_output(command)
+    eshift=read_denu(source=ntv2_out.split('\n'),
+                     cols=(0,2),header=False,
+                     relative=points)
+    # Run cs2cs
+    command=[cs2cs,'-f','%.10f',
+            '+proj=longlat', '+ellps=GRS80', '+nadgrids='+gsb,
+            '+to',
+            '+proj=longlat', '+ellps=GRS80', '+towgs84=0,0,0,0,0,0,0',
+            pfile]
+    cs2cs_out=check_output(command)
+    pshift=read_denu(source=cs2cs_out.split('\n'),
+                     cols=(0,2),header=False,
+                     relative=points)
+
+    # Run calcdef
+    command=cdfm+('-p',cdin,outfile)
+    call(command)
+    cshift=read_denu(outfile,cols=(4,7),header=True,expected=len(points),delim=',')
+    os.remove(outfile)
+    os.remove(pfile)
+
+    eshift[:,2:]=0.0
+    pshift[:,2:]=0.0
+    cshift[:,2:]=0.0
+    csvf='ntv2'
+
+    print "Testing NTv2 reverse patch"
+    qclog.compare("Testing NTv2 reverse patch",points,
+                  (('esr','Calculated from NTv2 with ESRI ntv2_cvt',eshift),
+                  ('prj','Calculated from NTv2 with PROJ cs2cs',pshift),
                   ('pub','Calculated from published model',cshift)),
                   csvfile=csvf,
                   tolerance=tolerances,
