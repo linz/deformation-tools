@@ -722,7 +722,6 @@ static void run_evaluate( grid &g, commandlist &commands )
         infile = next_command(commands,"Input file for evaluate");
         if( infile == "with_ids" ){ 
             haveids=true; 
-            infile = next_command(commands,"Input file for evaluate");
             }
         else if( infile == "csv" ){ 
             csv=true; 
@@ -789,6 +788,7 @@ static void run_evaluate( grid &g, commandlist &commands )
     string input;
     string id;
     vector<double> v;
+    if( haveids ) (*fout) << "id" << delim;
     (*fout) << "lon" << delim << "lat";
     for( int i = 0; i < g.nvalue(); i++ )
     {
