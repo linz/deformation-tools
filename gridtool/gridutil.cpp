@@ -15,7 +15,7 @@ using namespace std;
 #include "grid.hpp"
 #include "gridutil.hpp"
 
-void mark_xy_file( grid &g, const char *xyfile, grid::markaction action )
+void mark_xy_file( grid &g, const char *xyfile, grid::markaction action, double tolerance )
 {
     ifstream f(xyfile);
     if( ! f )
@@ -31,7 +31,7 @@ void mark_xy_file( grid &g, const char *xyfile, grid::markaction action )
         double x, y;
         if( s >> x >> y )
         {
-            if( ! g.markNearest(grid::point(x,y), action) )
+            if( ! g.markNearest(grid::point(x,y), action, tolerance) && tolerance == 0.0 )
             {
                 cout << "Invalid point in " << xyfile << ": " << x << " " << y << endl;
             }

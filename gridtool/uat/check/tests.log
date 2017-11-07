@@ -87,13 +87,13 @@ test 11 - add
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
-Adding grid values from grid test3.grid
+Adding values from test3.grid
 Writing grid to file out/test1_add.grid
 test 12 - subtract
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
-Subtracting grid values from grid test3.grid
+Subtracting values from test3.grid
 Writing grid to file out/test1_subtract.grid
 test 13 - resize 1
 Reading file from test1.grid
@@ -169,24 +169,30 @@ Grid has 8 rows and 7 columns
 Each point has 2 data values
 Zeroing grid at 6 points
 Writing grid to file out/test5_where4.grid
-test 19d - add on selection
+test 19c - add on selection
 Reading file from test6.grid
 Grid has 8 rows and 7 columns
 Each point has 1 data values
-Adding 10 at  selected grid values
+Adding 10 at 28 selected points
 Writing grid to file out/test6_where5.grid
 test 19d - reverse selection
 Reading file from test6.grid
 Grid has 8 rows and 7 columns
 Each point has 1 data values
-Adding 10 at  selected grid values
+Adding 10 at 28 selected points
 Writing grid to file out/test6_where6.grid
 test 19e - fill selection
 Reading file from test6.grid
 Grid has 8 rows and 7 columns
 Each point has 1 data values
-Adding 10 at  selected grid values
+Adding 10 at 35 selected points
 Writing grid to file out/test6_where7.grid
+test 19f - selection where marked
+Reading file from test6.grid
+Grid has 8 rows and 7 columns
+Each point has 1 data values
+Adding 10 at 35 selected points
+Writing grid to file out/test6_where8.grid
 test 20 - linzgrid with file based headers
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
@@ -255,25 +261,25 @@ test 28 - add with selection
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
-Adding selected grid values from grid test3.grid
+Adding values from test3.grid at  16 selected points
 Writing grid to file out/test28_add.grid
 test 28a - add with on_grid selection
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
-Adding selected grid values from grid add1.grid
+Adding values from add1.grid at  32 selected points
 Writing grid to file out/test28a_add.grid
 test 28b - add with on_grid selection
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
-Adding selected grid values from grid test3.grid
+Adding values from test3.grid at  32 selected points
 Writing grid to file out/test28b_add.grid
 test 29 - replace
 Reading file from test1.grid
 Grid has 8 rows and 7 columns
 Each point has 2 data values
-Replacing grid values from grid test3.grid
+Replacing values from test3.grid
 Writing grid to file out/test29_replace.grid
 test 30 - expand
 Reading file from test1.grid

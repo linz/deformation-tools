@@ -51,12 +51,14 @@ echo "test 19a - selection with magnitude where criteria" | tee -a out/tests.log
 ../gridtool read test5.grid zero where "v1|v2" "<" 5 write out/test5_where3.grid >> out/tests.log
 echo "test 19b - selection with magnitude where criteria" | tee -a out/tests.log
 ../gridtool read test5.grid zero where "|v1|" "<" 5 write out/test5_where4.grid >> out/tests.log
-echo "test 19d - add on selection" | tee -a out/tests.log
+echo "test 19c - add on selection" | tee -a out/tests.log
 ../gridtool read test6.grid add value 10.0 where "v" ">" 0.5 write out/test6_where5.grid >> out/tests.log
 echo "test 19d - reverse selection" | tee -a out/tests.log
 ../gridtool read test6.grid add value 10.0 where "v" ">" 0.5 reversed write out/test6_where6.grid >> out/tests.log
 echo "test 19e - fill selection" | tee -a out/tests.log
 ../gridtool read test6.grid add value 10.0 where "v" ">" 0.5 filled write out/test6_where7.grid >> out/tests.log
+echo "test 19f - selection where marked" | tee -a out/tests.log
+../gridtool read test6.grid mark where "v" ">" 0.5 filled end add value 10.0 where marked write out/test6_where8.grid >> out/tests.log
 echo "test 20 - linzgrid with file based headers" | tee -a out/tests.log
 ../gridtool read test1.grid write_linzgrid NZGD2000 file header.txt out/test1_linzgrid.txt >> out/tests.log
 echo "test 21 - linzgrid with inline headers" | tee -a out/tests.log

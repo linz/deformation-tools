@@ -249,75 +249,91 @@ static void run_create_grid( grid &g, commandlist &commands )
 static void mark_grid( grid &g, commandlist &commands, string markcommand, grid *refgrid=0 )
 {
     grid::markaction action = grid::on;
-    g.clearMarked();
-
+    bool marked=true;
+    if( ! next_command_is(commands,"marked")) 
+    {
+        g.clearMarked();
+        marked=false;
+    }
 
     while( true )
     {
-        string command = next_command( commands, string("Selection action for ") + markcommand);
-        if( command == "nearest_to" )
+        if( marked )
         {
-            string filename = next_command( commands, string("Points file for ") + markcommand);
-            mark_xy_file( g, filename.c_str(), action );
+            marked=false;
         }
-        else if( command == "on_grid" )
+        else
         {
-            grid *rgrid;
-            grid ongrid;
-            if( refgrid && next_command_is(commands,refgrid->filename()))
+            string command = next_command( commands, string("Selection action for ") + markcommand);
+            if( command == "nearest_to" )
             {
-                rgrid=refgrid;
-            }
-            else
-            {
-                string filename = run_read_grid( ongrid, commands, markcommand+" on_grid" );
-                rgrid=&ongrid;
-            }
-            grid::point xy;
-            for( int row = 0; row < rgrid->nrow(); row++ ) 
-                for( int col = 0; col < rgrid->ncol(); col++ )
+                string filename = next_command( commands, string("Points file for ") + markcommand);
+                double tolerance=-1.0;
+                if( next_command_is(commands,"within") ) 
                 {
-                    rgrid->nodexy(row,col,xy.x,xy.y);
-                    g.markNearest(xy,action,0.0001);
+                    next_command_value(commands,tolerance,"nearest to .. within");
                 }
-        }
-        else if( command == "inside" )
-        {
-            string filename = next_command( commands, string("Inside wkt_file file for ") + markcommand);
-            mark_wkt_file( g, false, filename.c_str(), action );
-        }
-        else if( command == "outside" )
-        {
-            string filename = next_command( commands, string("Outside wkt_file file for ") + markcommand);
-            mark_wkt_file( g, true, filename.c_str(), action );
-        }
-        else if( command == "edge" )
-        {
-            int nedge = 1;
-            next_command_value(commands,nedge,string("Width of edge for ")+markcommand);
-            g.markEdge(nedge,false,action);
-        }
-        else if( command == "inside_edge" )
-        {
-            int nedge = 1;
-            next_command_value(commands,nedge,string("Width of inside_edge for ")+markcommand);
-            g.markEdge(nedge,true,action);
-        }
-        else if( command == "expand" && action == grid::on )
-        {
-            double distance = 0.0;
-            next_command_value(commands,distance,string("Distance for expand for ")+markcommand);
-            expand_marked(g,distance,true);
-        }
-        else 
-        {
-           string field = command;
-           if( field == "where" ) field = next_command( commands, string("Field name for ")+markcommand);
-           vector<string> fields=split(field,'|');
-           string op = next_command( commands, string("Operation type for ")+markcommand);
-           double value;
-           next_command_value(commands,value,string("Field value for ")+markcommand);
-           g.markWhere(fields,op,value,action);
+                mark_xy_file( g, filename.c_str(), action, tolerance );
+            }
+            else if( command == "on_grid" )
+            {
+                grid *rgrid;
+                grid ongrid;
+                if( refgrid && next_command_is(commands,refgrid->filename()))
+                {
+                    rgrid=refgrid;
+                }
+                else
+                {
+                    string filename = run_read_grid( ongrid, commands, markcommand+" on_grid" );
+                    rgrid=&ongrid;
+                }
+                grid::point xy;
+                for( int row = 0; row < rgrid->nrow(); row++ ) 
+                    for( int col = 0; col < rgrid->ncol(); col++ )
+                    {
+                        rgrid->nodexy(row,col,xy.x,xy.y);
+                        g.markNearest(xy,action,0.0001);
+                    }
+            }
+            else if( command == "inside" )
+            {
+                string filename = next_command( commands, string("Inside wkt_file file for ") + markcommand);
+                mark_wkt_file( g, false, filename.c_str(), action );
+            }
+            else if( command == "outside" )
+            {
+                string filename = next_command( commands, string("Outside wkt_file file for ") + markcommand);
+                mark_wkt_file( g, true, filename.c_str(), action );
+            }
+            else if( command == "edge" )
+            {
+                int nedge = 1;
+                next_command_value(commands,nedge,string("Width of edge for ")+markcommand);
+                g.markEdge(nedge,false,action);
+            }
+            else if( command == "inside_edge" )
+            {
+                int nedge = 1;
+                next_command_value(commands,nedge,string("Width of inside_edge for ")+markcommand);
+                g.markEdge(nedge,true,action);
+            }
+            else if( command == "expand" && action == grid::on )
+            {
+                double distance = 0.0;
+                next_command_value(commands,distance,string("Distance for expand for ")+markcommand);
+                expand_marked(g,distance,true);
+            }
+            else 
+            {
+               string field = command;
+               if( field == "where" ) field = next_command( commands, string("Field name for ")+markcommand);
+               vector<string> fields=split(field,'|');
+               string op = next_command( commands, string("Operation type for ")+markcommand);
+               double value;
+               next_command_value(commands,value,string("Field value for ")+markcommand);
+               g.markWhere(fields,op,value,action);
+            }
         }
         bool needmore=false;
         while( 1 )
@@ -332,6 +348,10 @@ static void mark_grid( grid &g, commandlist &commands, string markcommand, grid 
             {
                 action = grid::on;
                 needmore=true;
+                break;
+            }
+            else if( next_command_is(commands,"end") )
+            {
                 break;
             }
             else if( next_command_is(commands,"reversed") )
@@ -556,8 +576,9 @@ static void run_addgrid( grid &g, commandlist &commands, string &command )
             mark_grid(g,commands,command);
             marked=true;
         }
-        cout << action << " " << value << " at " << (marked ? " selected" : "all")
-            << " grid values" << endl;
+        cout << action << " " << value << " at ";
+        if( marked ) cout << g.markCount() << " selected";
+        cout << " points" << endl;
         if( command == "subtract" ) { value=-value; }
         else if( command == "replace" ) { g.multiplyBy(0.0,marked); }
         g.add(value,marked);
@@ -580,8 +601,9 @@ static void run_addgrid( grid &g, commandlist &commands, string &command )
         string action = 
             command == "add" ? "Adding" : 
             command == "subtract" ? "Subtracting" : "Replacing";
-        cout << action << (marked ? " selected" : "")
-            << " grid values from grid " << filename << endl;
+        cout << action << " values from " << filename;
+        if( marked ) cout << " at  " << g.markCount() << " selected points";
+        cout << endl;
         double factor0 = command == "replace" ? 0 : 1;
         double factor1 = command == "subtract" ? -1 : 1;
         g.add(gadd,factor0,factor1,marked);
@@ -920,6 +942,7 @@ static void run_commands( commandlist &commands )
             else if( op == "expandto" ) run_expandtogrid( g, commands );
             else if( op == "trimto" ) run_trimto( g, commands );
             else if( op == "multiply" ) run_multiply( g, commands );
+            else if( op == "mark" ) mark_grid( g, commands, "mark" );
             else if( op == "evaluate" ) run_evaluate( g, commands );
             else if( op == "resize" ) run_resize( g, commands );
             else if( op == "set_value" ) run_setvalue( g, commands );
