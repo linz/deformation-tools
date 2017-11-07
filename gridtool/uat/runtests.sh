@@ -3,6 +3,10 @@
 rm out/*
 echo "test 1 - read, stats" | tee -a out/tests.log
 ../gridtool read test1.grid  stats >> out/tests.log
+echo "test 1a - write" | tee -a out/tests.log
+../gridtool read test1.grid write csv out/test1_write.csv >> out/tests.log
+echo "test 1b - append" | tee -a out/tests.log
+../gridtool read test1.grid write csv ndp 3 columns v1 out/test1b_write.csv append csv ndp 3 columns v1 out/test1b_write.csv test >> out/tests.log
 echo "test 2 - zero" | tee -a out/tests.log
 ../gridtool test1.grid zero nearest_to test1_3rows.xy out/test1_zero.grid >> out/tests.log
 echo "test 3 - smooth linear 1" | tee -a out/tests.log

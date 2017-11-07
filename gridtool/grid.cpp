@@ -307,12 +307,21 @@ string grid::format_number(double value, int ndp )
     return fnum;
 }
 
-bool grid::writefile( const char *filename, const char *delim, const char *crlf, std::vector<int> *colids , bool markedonly, int valuendp )
+bool grid::writefile( const char *filename, const char *delim, const char *crlf, std::vector<int> *colids , bool markedonly, int valuendp, bool append )
 {
     if( ! delim ) delim = "\t";
     if( ! crlf ) crlf = "\n";
 
-    ofstream f(filename, std::ios_base::out | std::ios_base::binary );
+    if( append )
+    {
+        ifstream testf(filename);
+        append=testf.good();
+    }
+
+    ios_base::openmode mode = ofstream::out | ofstream::binary;
+    if( append ) mode |= ofstream::app;
+
+    ofstream f(filename, mode );
     m_filename=std::string(filename);
     int crdprec = 12;
     int dataprec = valuendp > 0 ? valuendp : m_dataprec > 0 ? m_dataprec : crdprec;
@@ -342,7 +351,7 @@ bool grid::writefile( const char *filename, const char *delim, const char *crlf,
         throw runtime_error(string("Invalid grid filename specified ") + filename );
     }
 
-    if( m_header != "" ) 
+    if( m_header != "" && ! append ) 
     {
         f << m_lon << delim << m_lat;
         for( int iv = 0; iv < nvalues; iv++ )

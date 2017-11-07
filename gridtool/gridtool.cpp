@@ -376,7 +376,7 @@ static void mark_grid( grid &g, commandlist &commands, string markcommand, grid 
     mark_grid( g, commands, markcommand, &refgrid );
 }
 
-static void run_write_grid( grid &g, commandlist &commands )
+static void run_write_grid( grid &g, commandlist &commands, bool append=false )
 {
     bool csv = false;
     const char *crlf="\n";
@@ -417,7 +417,7 @@ static void run_write_grid( grid &g, commandlist &commands )
     vector<int> colids;
     grid_columns( g, columns, colids );
     cout << "Writing grid" << (marked ? " data" : "") << " to file " << filename << endl;
-    g.writefile(filename.c_str(),csv ? "," : "\t",crlf,&colids,marked,ndp);
+    g.writefile(filename.c_str(),csv ? "," : "\t",crlf,&colids,marked,ndp,append);
 }
 
 static void run_precision( grid &g, commandlist &commands )
@@ -930,6 +930,7 @@ static void run_commands( commandlist &commands )
             if( op == "zero" ) run_zero_grid(g,commands);
             else if( op == "smooth" ) run_smoothgrid(g,commands);
             else if( op == "precision" ) run_precision(g, commands );
+            else if( op == "append" ) run_write_grid(g,commands,true);
             else if( op == "write" ) run_write_grid(g,commands);
             else if( op == "write_linzgrid" ) run_write_linzgrid(g,commands);
             else if( op == "read" ) run_read_grid(g,commands);

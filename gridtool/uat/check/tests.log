@@ -18,6 +18,19 @@ Column v2:
   Maximum: 6.94815
   Mean: 3.57407
   Median: 3.57407
+test 1a - write
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Writing grid to file out/test1_write.csv
+test 1b - append
+Reading file from test1.grid
+Grid has 8 rows and 7 columns
+Each point has 2 data values
+Writing grid to file out/test1b_write.csv
+Writing grid to file out/test1b_write.csv
+Error processing grid:
+Invalid grid operation test
 test 2 - zero
 Reading file from test1.grid
 Grid has 8 rows and 7 columns

@@ -25,12 +25,13 @@ create extents wkt wktfile xspacing yspacing columns xxxx
    xxx is a list of column names in the new grid, separated by +
 
 write [csv] [columns xx] [ndp #] [dos] grid_file [where selection]
+append [csv] [columns xx] [ndp #] [dos] grid_file [where selection]
    Writes the current grid to a file.  The columns value can be a list of
    column names separated by '+', or none to output only the grid coordinates,
    or '*' to output all columns. The ndp value can optionally specify the
    number of decimal places for output values (through trailing 0's are
    always removed). If dos is specified then the grid file has MSDOS
-   line endings (CR+LF), otherwise unix line endings (LF)
+   line endings (CR+LF), otherwise unix line endings (LF).  
    
 write_linzgrid crdsys header1 header2 header3 [resolution xx] [columns xx] filename
    Writes the current grid to a LINZ ASCII grid format file in filename.
