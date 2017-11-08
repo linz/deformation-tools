@@ -857,14 +857,14 @@ void grid::add( double value, bool markedonly )
         }
 }
 
-void grid::add( grid &g, double factor0, double factor1, bool markedonly )
+void grid::add( grid &g, double factor0, double factor1, bool markedonly, bool missing_col_ok )
 {
     int nv = nvalue();
     std::vector<int> colids;
     for( int i=0; i<m_nvalue; i++ )
     {
         int iv=g.columnid(fieldName(i));
-        if( iv < 0 )
+        if( iv < 0 && ! missing_col_ok)
         {
             throw runtime_error("Incompatible grid values in grid::add");
         }
@@ -883,7 +883,9 @@ void grid::add( grid &g, double factor0, double factor1, bool markedonly )
                 vector<double>::pointer tv = values(row,col);
                 for( int iv = 0; iv < nv; iv++ )
                 {
-                    tv[iv] = factor0 * tv[iv] + factor1 * gv[colids[iv]];
+                    int cid=colids[iv];
+                    tv[iv] *= factor0;
+                    if( cid >= 0)  tv[iv] += factor1 * gv[cid];
                 }
             }
         }

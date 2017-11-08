@@ -98,7 +98,7 @@ public:
     void reverseMarked();
     void processMarked( void(*func)(grid &g, node &n, void *data), void *data = 0);
     bool valueAt( point &xy, std::vector<double> &values );
-    void add( grid &g, double factor0=1.0, double factor1=1.0, bool markedonly=false );
+    void add( grid &g, double factor0=1.0, double factor1=1.0, bool markedonly=false, bool missing_col_ok=false );
     void add( double value, bool markedonly=false );
     void alignto( grid &g );
     void expandto( grid &g );

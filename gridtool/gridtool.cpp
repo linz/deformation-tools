@@ -561,7 +561,6 @@ static void run_setvalue( grid &g, commandlist &commands )
 static void run_addgrid( grid &g, commandlist &commands, string &command )
 {
     double addvalue;
-    bool skip=next_command_is(commands,"nothing");
     string action = 
         command == "add" ? "Adding" : 
         command == "subtract" ? "Subtracting" : "Replacing";
@@ -587,6 +586,8 @@ static void run_addgrid( grid &g, commandlist &commands, string &command )
     {
         grid gadd;
         string filename = "nothing";
+        bool missingok=next_command_is(commands,"matching_from");
+        bool skip=next_command_is(commands,"nothing");
         if( ! skip )
         {
             filename = run_read_grid( gadd, commands, command );
@@ -606,7 +607,7 @@ static void run_addgrid( grid &g, commandlist &commands, string &command )
         cout << endl;
         double factor0 = command == "replace" ? 0 : 1;
         double factor1 = command == "subtract" ? -1 : 1;
-        g.add(gadd,factor0,factor1,marked);
+        g.add(gadd,factor0,factor1,marked,missingok);
     }
 }
 

@@ -75,13 +75,15 @@ set_value [tolerance t] x y v1 .. vn
    tolerance of x, y.  v1..vn are the values, which must match the
    number of data values at each node of the grid.
 
-add [csv] [maxcols n] grid_file [where selection]
-subtract [csv] [maxcols n] grid_file [where selection]
-replace [csv] [maxcols n] grid_file [where selection]
+add [matching_from] [csv] [maxcols n] grid_file [where selection]
+subtract [matching_from] [csv] [maxcols n] grid_file [where selection]
+replace [matching_from] [csv] [maxcols n] grid_file [where selection]
    Add, subtract, or replace with the values extrapolated from grid_file 
    to the values at each node of the loaded grid.  Has no effect outside the
    extents of the second grid file.  Note that the special filename "nothing"
-   means do nothing.
+   means do nothing. If "matching_from" is specified then matched columns
+   will be operated on and there will be no error for unmatched columns
+   in the grid.
 
 multiply factor
    Multiply all values in the grid by the factor
