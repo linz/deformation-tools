@@ -7,23 +7,27 @@
 # new model, but is sufficient for current requirements.  Long term propose to migrate SNAP and 
 # Landonline to use the new format.
 
+from collections import namedtuple
+from datetime import datetime
+from os.path import isdir
+from os.path import join as joinpath
+from subprocess import call
+import argparse
 import os
 import os.path
-from os.path import join as joinpath
-from os.path import isdir
-from collections import namedtuple
+import re
 import sys
-import argparse
-from datetime import datetime
-from subprocess import call
 from distutils.spawn import find_executable as which
 
 argparser=argparse.ArgumentParser('Build a LINZDEF deformation file from a published deformation model')
 argparser.add_argument('model_dir',help='Base directory of model, containing model and tools directories')
 argparser.add_argument('target_dir',help='Target directory in which to build model')
 argparser.add_argument('linzdef_file',help='Name of final model')
+argparser.add_argument('-a','--all-versions',action='store_true',help='Create binary format containing all versions of the deformation model')
 
 args = argparser.parse_args()
+allversions=args.all_versions
+version3=allversions
 
 md=args.model_dir
 if not isdir(md) or not isdir(joinpath(md,'model')):
@@ -56,29 +60,50 @@ if not makescript:
     raise RuntimeError('Cannot find linzdef perl script {0}'.format(makescriptname))
 makescript=os.path.realpath(makescript)
 
+versionl='LINZDEF3L' if version3 else 'LINZDEF2L'
+versionb='LINZDEF3B' if version3 else 'LINZDEF2B'
+
 header= '''
 DEFORMATION_MODEL NZGD2000 deformation model
-FORMAT LINZDEF2B
-VERSION_NUMBER {version}
-VERSION_DATE  {versiondate}
+FORMAT {formatversion}
+COORDSYS NZGD2000
 START_DATE 1-Jan-1850
 END_DATE 1-Jan-2200
-COORDSYS NZGD2000
+'''.format(formatversion=versionb)
+
+versiondef='''
+VERSION_NUMBER {version}
+VERSION_DATE  {versiondate}
 DESCRIPTION
 {description}
 END_DESCRIPTION
-'''.format(
-    version=m.version(),
-    versiondate=m.versionInfo(m.version()).release_date.strftime('%d-%b-%Y'),
-    description=m.description(submodels=False)
-    )
+'''
+
+clean_description=lambda d: re.sub(r'[\r\n]+','\n',d.strip())
 
 # print header
 deffile.write(header)
+dmversion=m.version()
+if allversions:
+    for v in m.versions():
+        m.setVersion(v)
+        deffile.write("\n")
+        deffile.write(versiondef.format(
+            version=v,
+            versiondate=m.versionInfo(v).release_date.strftime('%d-%b-%Y'),
+            description=clean_description(m.description(submodels=False))
+            ))
+    m.setVersion(dmversion)
+else:
+    deffile.write(versiondef.format(
+        version=dmversion,
+        versiondate=m.versionInfo(dmversion).release_date.strftime('%d-%b-%Y'),
+        description=clean_description(m.description(submodels=False))
+        ))
 deffile.write("\n")
 
 TimeStep=namedtuple('TimeStep','mtype t0 f0 t1 f1')
-DefSeq=namedtuple('DefSeq','component dimension zerobeyond steps grids')
+DefSeq=namedtuple('DefSeq','component dimension versionstart versionend zerobeyond steps grids')
 
 DefComp=namedtuple('DefComp','date factor before after')
 
@@ -102,7 +127,7 @@ class TimeEvent:
 
 sequences=[]
 
-for c in m.components():
+for c in m.components(allversions=allversions):
     print "Adding component:",c.name
     component=c.submodel
     # print component
@@ -116,6 +141,8 @@ for c in m.components():
     grids=[]
     dimension=0
     zerobeyond='yes'
+    versionstart=c.versionAdded if allversions else '0'
+    versionend=c.versionRevoked if allversions else '0'
     for m in c.spatialModel.models():
         if m.spatial_model != 'llgrid':
             raise RuntimeError('Cannot handle spatial model type '+spatial_model)
@@ -135,13 +162,15 @@ for c in m.components():
     for s in sequences:
         if (s.component == component and
             s.zerobeyond == zerobeyond and
+            s.versionstart == versionstart and
+            s.versionend == versionend and
             s.grids == grids ):
             s.steps.append(step)
             found=True
             break
 
     if not found:
-        sequences.append(DefSeq(component,dimension,zerobeyond,[step],grids))
+        sequences.append(DefSeq(component,dimension,versionstart,versionend,zerobeyond,[step],grids))
 
 # print sequences
 
@@ -158,6 +187,22 @@ DESCRIPTION
 END_DESCRIPTION
 '''
 
+seqdef3='''
+
+DEFORMATION_SEQUENCE {name}
+DIMENSION {dimension}
+START_DATE 1-Jan-1850
+END_DATE 1-Jan-2100
+ZERO_BEYOND_RANGE {zerobeyondrange}
+NESTED_SEQUENCE yes
+VERSION_START {versionstart}
+VERSION_END {versionend}
+DESCRIPTION
+{description}
+END_DESCRIPTION
+'''
+
+
 griddef= '''
 
 DEFORMATION_COMPONENT {gridfile}
@@ -168,6 +213,9 @@ DESCRIPTION
 {description}
 END_DESCRIPTION
 '''
+
+if allversions:
+    seqdef=seqdef3
 
 SeqComp=namedtuple('SeqComp','time factor before after nested')
 small=0.00001
@@ -240,6 +288,8 @@ for sequence in sequences:
             name=sequence.component+sseqname,
             dimension=sequence.dimension,
             zerobeyondrange=sequence.zerobeyond,
+            versionstart=sequence.versionstart,
+            versionend=sequence.versionend,
             description=sequence.component
         ))
 
@@ -270,6 +320,6 @@ deffile.close()
 
 print "Building binary deformation files"
 os.chdir(bd)
-call([makescript,'-f','LINZDEF2B',defname+'.def',defname+'b.bin'])
-call([makescript,'-f','LINZDEF2L',defname+'.def',defname+'l.bin'])
+call([makescript,'-f',versionb,defname+'.def',defname+'b.bin'])
+call([makescript,'-f',versionl,defname+'.def',defname+'l.bin'])
 

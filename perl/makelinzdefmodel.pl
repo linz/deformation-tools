@@ -54,25 +54,43 @@ my $endianness = {
      { sig => "LINZ deformation model v1.0B\r\n\x1A",
        gridparam => '-f GRID2B',
        trigparam => '-f TRIG2B',
-       bigendian => 1
+       bigendian => 1,
+       multiversion => 0,
        },
    LINZDEF1L =>
      { sig => "LINZ deformation model v1.0L\r\n\x1A",
        gridparam => '-f GRID2L',
        trigparam => '-f TRIG2L',
-       bigendian => 0
+       bigendian => 0,
+       multiversion => 0,
        },
    LINZDEF2B =>
      { sig => "LINZ deformation model v2.0B\r\n\x1A",
        gridparam => '-f GRID2B',
        trigparam => '-f TRIG2B',
-       bigendian => 1
+       bigendian => 1,
+       multiversion => 0,
        },
    LINZDEF2L =>
      { sig => "LINZ deformation model v2.0L\r\n\x1A",
        gridparam => '-f GRID2L',
        trigparam => '-f TRIG2L',
-       bigendian => 0
+       bigendian => 0,
+       multiversion => 0,
+       },
+   LINZDEF3B =>
+     { sig => "LINZ deformation model v3.0B\r\n\x1A",
+       gridparam => '-f GRID2B',
+       trigparam => '-f TRIG2B',
+       bigendian => 1,
+       multiversion => 1,
+       },
+   LINZDEF3L =>
+     { sig => "LINZ deformation model v3.0L\r\n\x1A",
+       gridparam => '-f GRID2L',
+       trigparam => '-f TRIG2L',
+       bigendian => 0,
+       multiversion => 1,
        },
    };
 
@@ -81,13 +99,26 @@ my $ntmpfile = 1000;
 
 
 my %model_param = qw/
-    FORMAT         (LINZDEF1B|LINZDEF1L|LINZDEF2B|LINZDEF2L)
+    FORMAT         (LINZDEF[123][B])
     VERSION_NUMBER \d+(\.\d+)?
     VERSION_DATE   date
     START_DATE     date
     END_DATE       date
     COORDSYS       \w+
     GEOGRAPHICAL   (yes|no)?
+    DESCRIPTION    .*
+    /;
+
+my %model_param3 = qw/
+    FORMAT         (LINZDEF[123][B])
+    START_DATE     date
+    END_DATE       date
+    COORDSYS       \w+
+    GEOGRAPHICAL   (yes|no)?
+    /;
+
+my %version_param3 = qw/
+    VERSION_DATE   date
     DESCRIPTION    .*
     /;
 
@@ -109,6 +140,17 @@ my %seq_param2 = qw/
     DESCRIPTION        .*
     /;
 
+my %seq_param3 = qw/
+    DIMENSION          [123]
+    START_DATE         date
+    END_DATE           date
+    ZERO_BEYOND_RANGE  (yes|no)?
+    NESTED_SEQUENCE    (yes|no)?
+    VERSION_START      (20\d\d[01]\d[0123]\d)
+    VERSION_END        (20\d\d[01]\d[0123]\d|0|99999999)
+    DESCRIPTION        .*
+    /;
+
 my %comp_param1 = qw/
     MODEL_TYPE         (trig|grid)
     REF_DATE           date
@@ -124,23 +166,40 @@ my %comp_param2 = qw/
     DESCRIPTION        .*
     /;
 
+my $format_version={
+    LINZDEF1L=>'1',
+    LINZDEF1B=>'1',
+    LINZDEF2L=>'2',
+    LINZDEF2B=>'2',
+    LINZDEF3L=>'3',
+    LINZDEF3B=>'3',
+    };
+
+my $version_parameters={
+    1=>{model=>\%model_param,version=>undef, sequence=>\%seq_param1,component=>\%comp_param1},
+    2=>{model=>\%model_param,version=>undef,sequence=>\%seq_param2,component=>\%comp_param2},
+    3=>{model=>\%model_param3,version=>\%version_param3,sequence=>\%seq_param3,component=>\%comp_param2},
+    };
+    
+
+
 my $def_model;
 
 eval {
    my $model = &LoadDefinition( $ARGV[0] );
-   &CheckSyntax($model);
    my $format = uc($forceformat || $model->{FORMAT});
    $model->{FORMAT} = $format;
    my $endian = $endianness->{$format};
    die "Invalid model format $format specified\n" if ! $endian;
+   &CheckSyntax($model);
    &BuildAllComponents($model,$endian);
-   if( $model->{version} eq '1' )
+   if( $model->{format_version} eq '1' )
    {
       &WriteModelBinaryV1($ARGV[1],$model,$endian);
    }
    else
    {
-      &WriteModelBinaryV2($ARGV[1],$model,$endian);
+      &WriteModelBinaryV23($ARGV[1],$model,$endian);
    }
     
 };
@@ -163,25 +222,31 @@ sub LoadDefinition {
    my $curcomp;
    my $curobj;
    my $objname;
+   my $seq_param=undef;
+   my $comp_param=undef;
+   my $ver_param=undef;
    
    while(<DEF>) {
       next if /^\s*($|\#)/;   # Skip blank lines, comments....
       chomp;
       my ($rectype, $value ) = split(' ',$_,2);
       $rectype = uc($rectype);
-      my $seq_param=undef;
-      my $comp_param=undef;
       
-      if( $rectype =~ /^(DEFORMATION_(MODEL|SEQUENCE|COMPONENT))$/ ) {
+      if( $rectype =~ /^(DEFORMATION_(MODEL|SEQUENCE|COMPONENT)|VERSION_NUMBER)$/ ) {
          if( $rectype eq 'DEFORMATION_MODEL' ) {
             die "Only one DEFORMATION_MODEL can be defined\n" if $curmod;
             $curmod = { type=>$rectype, name=>$value, params=>\%model_param,
                         sequences=>[] };
             $curobj = $curmod;
             }
+         elsif( defined $ver_param && $rectype eq 'VERSION_NUMBER' ) {
+            die "Must define DEFORMATION MODEL before $rectype\n" if ! $curmod;
+            die "Invalid version number $value\n" if $value !~ /^20\d\d[01]\d[0123]\d$/;
+            $curobj = { version=>$value, params=>$ver_param, model=>$curmod };
+            push(@{$curmod->{versions}},$curobj);
+            }
          elsif( $rectype eq 'DEFORMATION_SEQUENCE' ) {
             die "Must define DEFORMATION_MODEL before $rectype\n" if ! $curmod;
-            $seq_param=$curmod->{FORMAT} =~ /2/ ? \%seq_param2 : \%seq_param1;
             $curseq = { type=>$rectype, name=>$value, params=>$seq_param,
                         components=>[], model=>$curmod };
             push(@{$curmod->{sequences}}, $curseq );
@@ -189,7 +254,6 @@ sub LoadDefinition {
             }
          else {
             die "Must define DEFORMATION_SEQUENCE before $rectype\n" if ! $curseq;
-            $comp_param=$curmod->{FORMAT} =~ /2/ ? \%comp_param2 : \%comp_param1;
             $curcomp = { type=>$rectype, source=>$value, params=>$comp_param,
                         components=>[], sequence=>$curseq };
             push(@{$curseq->{components}}, $curcomp );
@@ -214,6 +278,20 @@ sub LoadDefinition {
                }
              }
           $curobj->{$rectype} = $value;
+          if( $rectype eq 'FORMAT' )
+          {
+              my $version=$format_version->{$value};
+              my $version_params=$version_parameters->{$version};
+              $curmod->{params}=$version_params->{model};
+              $ver_param=$version_params->{version};
+              if( $ver_param )
+              {
+                  $curmod->{versions}=[];
+              }
+              $seq_param=$version_params->{sequence};
+              $comp_param=$version_params->{component};
+              $curmod->{format_version}=$version;
+          }
           }
       }
    close(DEF);
@@ -387,6 +465,16 @@ sub CheckSyntax {
    my ($model) = @_;
    
    my $nerror = &CheckObject( $model );
+
+   if( exists $model->{versions} ) {
+       my $nversions = scalar(@{$model->{sequences}});
+       if( $nversions < 1 )
+       {
+           print "Deformation model has no version number\n";
+           $nerror++;
+       }
+       $model->{nversions} = $nversions;
+   }
  
    my $nsequences = scalar(@{$model->{sequences}});
    if( $nsequences < 1 ) {
@@ -513,8 +601,9 @@ sub WriteModelBinaryV1 {
   close(OUT);
   }
 
-sub WriteModelBinaryV2 {
+sub WriteModelBinaryV23 {
    my($binfile,$model,$endian) = @_;
+   my $version=$model->{format_version}; 
    my $pack = new Packer( $endian->{bigendian} );
 
    open(OUT,">$binfile") || die "Cannot create output file $binfile\n";
@@ -548,14 +637,30 @@ sub WriteModelBinaryV2 {
    
    my $loc = tell(OUT);
 
-   print OUT $pack->string( @{$model}{qw/name VERSION_NUMBER COORDSYS DESCRIPTION/});
-   print OUT &PackDate($pack,$model->{VERSION_DATE});
-   print OUT &PackDate($pack,$model->{START_DATE});
-   print OUT &PackDate($pack,$model->{END_DATE});
-   print OUT $pack->double( @{$model->{range}} );
-   print OUT $pack->short( lc($model->{GEOGRAPHICAL}) eq 'no' ? 0 : 1 );
-   print OUT $pack->short( $model->{nsequences} );
+   if( $version >= 3  )
+   {
+       print OUT $pack->string( @{$model}{qw/name COORDSYS/});
+       print OUT &PackDate($pack,$model->{START_DATE});
+       print OUT &PackDate($pack,$model->{END_DATE});
+       print OUT $pack->double( @{$model->{range}} );
+       print OUT $pack->short( lc($model->{GEOGRAPHICAL}) eq 'no' ? 0 : 1 );
+       print OUT $pack->short( $model->{nversions} );
+       foreach my $v (@{$model->{versions}})
+       {
+          print OUT $pack->string( @{$v}{qw/version VERSION_DATE DESCRIPTION/});
+       }
+   }
+   else
+   {
+       print OUT $pack->string( @{$model}{qw/name VERSION_NUMBER COORDSYS DESCRIPTION/});
+       print OUT &PackDate($pack,$model->{VERSION_DATE});
+       print OUT &PackDate($pack,$model->{START_DATE});
+       print OUT &PackDate($pack,$model->{END_DATE});
+       print OUT $pack->double( @{$model->{range}} );
+       print OUT $pack->short( lc($model->{GEOGRAPHICAL}) eq 'no' ? 0 : 1 );
+   }
                           
+   print OUT $pack->short( $model->{nsequences} );
    foreach my $s (@{$model->{sequences}}) {
      print "Building sequence ",$s->{name},"\n";
      print OUT $pack->string( @{$s}{qw/name DESCRIPTION/});
@@ -566,6 +671,13 @@ sub WriteModelBinaryV2 {
      print OUT $pack->short( $s->{DIMENSION} );
      print OUT $pack->short( lc($s->{ZERO_BEYOND_RANGE}) eq 'no' ? 0 : 1 );
      print OUT $pack->short( lc($s->{NESTED_SEQUENCE}) eq 'no' ? 0 : 1 );
+     if( $version >= 3 )
+     {
+        print OUT $pack->string( $s->{VERSION_START} );
+        my $vend=$s->{VERSION_END};
+        if( $vend eq '0' ){ $vend='99999999' }
+        print OUT $pack->string( $vend );
+     }
      print OUT $pack->short( $s->{ncomponents} );
 
      foreach my $c (@{$s->{components}}) {
@@ -656,6 +768,10 @@ __END__
 # nested, in which case only the first component matching the spatial location
 # of the evaluation point is used.  Otherwise all components are calculated and
 # summed to get the total deformation.
+#
+# A version 3 deformation model is similar to a version 2 model except that 
+# it can hold multiple versions of the deformation model.  The header section
+# may repeat VERSION_NUMBER, VERSION_DATE, DESCRIPTION multiple times.
 
 # Each component in the sequence can be either a triangulated model, or 
 # a grid model.  The source file referenced can be a pre-built binary file,
@@ -668,15 +784,19 @@ __END__
 
 
 DEFORMATION_MODEL NZGD2000 deformation model
-# Format is LINZDEF2L or LINZDEF2B, depending upon endian-ness.  Can be
-# over-ridden by command line parameter to script.
+# Format is LINZDEFve, where v is the format version  2, or 3 
+# and e is the endian-ness, either L or B.
+# Endian-ness can be over-ridden by command line parameter to script.
+#
 FORMAT LINZDEF2B
-VERSION_NUMBER 1.0
-VERSION_DATE  12-Mar-2004
 # Calculation will fail for values outside range start date to end date
 START_DATE 1-Jan-1850
 END_DATE 1-Jan-2100
 COORDSYS NZGD2000
+
+# Version info - may be repeated for multiple version in version 3 format.
+VERSION_NUMBER 20171201
+VERSION_DATE  12-Mar-2004
 DESCRIPTION
 This is the description of the model
 This is a first try
@@ -688,7 +808,9 @@ DIMENSION 2
 START_DATE 1-Jan-1850
 END_DATE 1-Jan-2100
 ZERO_BEYOND_RANGE no
-NESTED_SEQUENCE no
+NESTED_SEQUENCE no      (format version 2 or greater)
+VERSION_START 20171201  (format version 3 or greater)
+VERSION_END 0           (format version 3 or greater)
 DESCRIPTION
 The IGNS velocity model.  Based upon data from 1992 to 1997
 Report number 12345
