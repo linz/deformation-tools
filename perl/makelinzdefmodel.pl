@@ -99,7 +99,7 @@ my $ntmpfile = 1000;
 
 
 my %model_param = qw/
-    FORMAT         (LINZDEF[123][B])
+    FORMAT         (LINZDEF[123][BL])
     VERSION_NUMBER \d+(\.\d+)?
     VERSION_DATE   date
     START_DATE     date
@@ -110,7 +110,7 @@ my %model_param = qw/
     /;
 
 my %model_param3 = qw/
-    FORMAT         (LINZDEF[123][B])
+    FORMAT         (LINZDEF[123][BL])
     START_DATE     date
     END_DATE       date
     COORDSYS       \w+
@@ -411,7 +411,7 @@ sub CheckObject {
    my $datere='(?:[0-2]?[1-9]|10|20|30|31)\-
        (?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\-
        [12]\d\d\d
-       (?:\s+(?:[0-1]\d|2[0-3])\:[0-5]\d\:[0-5]\d)?';
+       (?:(?:\s+|T)(?:[0-1]\d|2[0-3])\:[0-5]\d\:[0-5]\d)?';
    $datere=~s/\s//g;
    my $floatre='\-?\d+(?:\.\d+)?';
 
@@ -467,7 +467,7 @@ sub CheckSyntax {
    my $nerror = &CheckObject( $model );
 
    if( exists $model->{versions} ) {
-       my $nversions = scalar(@{$model->{sequences}});
+       my $nversions = scalar(@{$model->{versions}});
        if( $nversions < 1 )
        {
            print "Deformation model has no version number\n";
@@ -647,7 +647,9 @@ sub WriteModelBinaryV23 {
        print OUT $pack->short( $model->{nversions} );
        foreach my $v (@{$model->{versions}})
        {
-          print OUT $pack->string( @{$v}{qw/version VERSION_DATE DESCRIPTION/});
+          print OUT $pack->string( $v->{version} );
+          print OUT &PackDate($pack,$v->{VERSION_DATE} );
+          print OUT $pack->string( $v->{DESCRIPTION} );
        }
    }
    else
