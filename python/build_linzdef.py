@@ -72,12 +72,12 @@ END_DATE 1-Jan-2200
 '''.format(formatversion=versionb)
 
 versiondef='''
-VERSION_NUMBER {version}
+%vn% {version}
 VERSION_DATE  {versiondate}
 DESCRIPTION
 {description}
 END_DESCRIPTION
-'''
+'''.replace('%vn%','VERSION' if version3 else 'VERSION_NUMBER')
 
 clean_description=lambda d: re.sub(r'[\r\n]+','\n',d.strip())
 
