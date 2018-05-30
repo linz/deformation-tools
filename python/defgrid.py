@@ -1,4 +1,6 @@
+import os.path
 import numpy as np
+import numpy.linalg as la
 import matplotlib.mlab as ml
 import matplotlib.pyplot as plt
 import math
@@ -463,12 +465,65 @@ class DeformationGrid( Grid ):
 
     def grid_definition( self ):
         return "grid:"+":".join([str(x) for x in self.grid_params()])
+
+    def grid_component_csv( self, date='2000-01-01',reverse=False,version='20000101',description=None ):
+        params=self.grid_params()
+        datacols=self.columns[2:]
+        ncols=len(datacols)
+        deftype='horizontal' if ncols == 2 else 'vertical' if ncols == 1 else '3d'
+        vecmax=np.max(la.norm(self.array[:,:,2:],axis=2))
+        filename=os.path.basename(self.source)
         
+        return ",".join((str(x) for x in (
+            version,
+            0,
+            'Y' if reverse else 'N',
+            0,
+            0,
+            params[0],
+            params[2],
+            params[1],
+            params[3],
+            'Y',
+            0 if reverse else date,
+            date if reverse else 0,
+            'Y',
+            params[4]+1,
+            params[5]+1,
+            deftype,
+            'none',
+            "{0:.4f}".format(vecmax),
+            'llgrid',
+            'step',
+            date,
+            -1.0 if reverse else 0.0,
+            date,
+            0.0 if reverse else 1.0,
+            0.0,
+            filename,
+            '"'+(description or ('Grid '+filename))+'"'
+            )))
 
 if __name__=="__main__":
     import sys
-    for file in sys.argv[1:]:
+    import argparse
+    parser=argparse.ArgumentParser(description='Analyse grid deformation files')
+    parser.add_argument('grid_csv_file',nargs='*',help='Grid CSV file')
+    parser.add_argument('-c','--component-csv',action='store_true',help='Output as component.csv row')
+    parser.add_argument('-d','--deformation-date',help='Date of deformation event: YYYY-MM-DD')
+    parser.add_argument('-e','--event-description',help='Description of event/grid component')
+    parser.add_argument('-v','--model-version',help='Version of deformation model for component.csv')
+    args=parser.parse_args()
+
+    for file in args.grid_csv_file:
         g=DeformationGrid(file)
-        print file,g.grid_definition()
+        if args.component_csv:
+            print g.grid_component_csv(
+                date=args.deformation_date,
+                version=args.model_version,
+                description=args.event_description
+            )
+        else:
+            print file,g.grid_definition()
 
     
