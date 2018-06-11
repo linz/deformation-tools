@@ -30,7 +30,7 @@ def stats( arr, noprint=False, percentiles=None):
     '''
     Print summary statistics for supplied values
     '''
-    percentiles = percentiles or (1,2.5,5.10,25,50,75,90,95,97.5,99 )
+    percentiles = [] if percentiles == 'none' else percentiles or [1,2.5,5.10,25,50,75,90,95,97.5,99]
     results = [
         ('Mean',np.mean(arr)),
         ('Std.dev',np.std(arr)),
@@ -271,8 +271,6 @@ class DeformationGrid( Grid ):
         self.dlt=(g[-1,0,1]-g[0,0,1])/(g.shape[0]-1)
         self.extents=np.array([g[0,0,0:2],g[-1,-1,0:2]])
 
-
-
     def bilinear( self, x, y ):
         '''
         Evaluate the grid at a set of x y values where x,y can each be
@@ -384,6 +382,56 @@ class DeformationGrid( Grid ):
         columns=self.columns[:ncol]
         columns.extend("ds dil rot shear err".split())
         return Grid(result,columns=columns)
+
+    def calcTilt( self ):
+        '''
+        Calculate tilt
+           lon
+           lat
+           ..
+           ..
+           ..
+           maxtilt
+
+
+        Calculation is done at the centre of each grid cell based on 
+        the height change calculated at the midpoints of each side.  
+        '''
+        if 'du' not in self.columns:
+            raise RuntimeError('Need du to calculate tilts')
+
+        from ellipsoid import grs80
+        ducol=self.columns.index('du')
+        g=self.array
+        lats=g[:,0,1]
+        midlats=(lats[:-1]+lats[1:])/2.0
+        de,dn=grs80.metres_per_degree(0,midlats)
+        de *= self.dln
+        dn *= self.dlt
+        de=de.reshape((de.size,1))
+        dn=dn.reshape((dn.size,1))
+        du=g[:,:,ducol]
+        # Values at middle of E/W sides of each grid cell, then take difference
+        # and divide by width of cell
+        dudx=(du[:-1,:]+du[1:,:])/2
+        dudx=dudx[:,1:]-dudx[:,:-1]
+        dudx /= de
+        # Same for latitude (N/S sides of each grid cell)
+        dudy=(du[:,:-1]+du[:,1:])/2
+        dudy=dudy[1:,:]-dudy[:-1,:]
+        dudy /= dn
+        maxtilt=np.sqrt(dudx*dudx+dudy*dudy) 
+        aztilt=np.degrees(np.arctan2(dudy,dudx))
+        shape=(maxtilt.shape[0],maxtilt.shape[1],1)
+        maxtilt=maxtilt.reshape(shape)*1000000.0
+        aztilt=aztilt.reshape(shape)
+        ncol=ducol+1
+        midlnlt=(g[1:,1:,:ncol]+g[1:,:-1,:ncol]+g[:-1,1:,:ncol]+g[:-1,:-1,:ncol])/4
+        result=np.concatenate((midlnlt,maxtilt,aztilt),axis=2)
+        columns=self.columns[:ncol]
+        columns.extend("maxtilt aztilt".split())
+        return Grid(result,columns=columns)
+
 
     def calcResolution( self, tolerance, maxsize=100000.0,precision=0.0001,margin=1,horizontal=False, vertical=False ):
         '''
@@ -513,6 +561,9 @@ if __name__=="__main__":
     parser.add_argument('-d','--deformation-date',help='Date of deformation event: YYYY-MM-DD')
     parser.add_argument('-e','--event-description',help='Description of event/grid component')
     parser.add_argument('-v','--model-version',help='Version of deformation model for component.csv')
+    parser.add_argument('-s','--strain-grid-csv',help='Calculate strain components and write to csv')
+    parser.add_argument('-t','--tilt-grid-csv',help='Calculate tilt and write to csv')
+    parser.add_argument('-q','--quiet',action='store_true',help='Less output')
     args=parser.parse_args()
 
     for file in args.grid_csv_file:
@@ -525,5 +576,21 @@ if __name__=="__main__":
             )
         else:
             print file,g.grid_definition()
-
-    
+        if args.strain_grid_csv:
+            sg=args.strain_grid_csv
+            fn=os.path.splitext(os.path.basename(file))[0]
+            sg=sg.replace('{filename}',fn)
+            print "Calculating strains for {0}".format(fn)
+            strains=g.strainComponents()
+            if sg != 'none':
+                strains.writecsv(sg)
+            strains.colstats('err',percentiles='none' if args.quiet else None)
+        if args.tilt_grid_csv:
+            sg=args.tilt_grid_csv
+            fn=os.path.splitext(os.path.basename(file))[0]
+            sg=sg.replace('{filename}',fn)
+            print "Calculating tilts for {0}".format(fn)
+            tilts=g.calcTilt()
+            if sg != 'none':
+                tilts.writecsv(sg)
+            tilts.colstats('maxtilt',percentiles='none' if args.quiet else None)
