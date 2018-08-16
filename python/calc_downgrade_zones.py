@@ -49,7 +49,7 @@ def exteriors( shape ):
         exteriors.append(Polygon(p.exterior))
     return exteriors
 
-def bufferPoly( pgn, buffer, simplify ):
+def bufferPoly( pgn, buffer, simplify=0.0 ):
     if buffer <=0 and simplify <= 0:
         return pgn
     c=pgn.centroid
@@ -69,17 +69,25 @@ def gridPolys( gridfile, column, tolerance, buffer=0.0, simplify=0.0 ):
     pgns=[bufferPoly(p,buffer,simplify) for p in pgns]
     return pgns
 
-def wktPolys( wktfile, buffer=0.0, simplify=0.0 ):
+def wktPolys( wktfile, buffer=0.0, simplify=0.0, wktonly=False ):
+    pgnwkt=[]
     with open( wktfile ) as wktf:
-        csvf=csv.DictReader(wktf)
-        geoms=[]
-        for r in csvf:
-            wkts=r["WKT"]
-            geom=wkt.loads(wkts)
-            geom=bufferPoly(geom,buffer,simplify)
-            geom=exteriors(geom)
-            geoms.extend(geom)
-        return compilePolys(geoms)
+        if wktonly:
+            pgnwkt=wktf.readlines()
+        else:
+            csvf=csv.DictReader(wktf)
+            for r in csvf:
+                wkts=r["WKT"]
+                pgnwkt.append(wkts)
+    geoms=[]
+    for wkts in pgnwkt:
+        geom=wkt.loads(wkts)
+        if not geom:
+            continue
+        geom=bufferPoly(geom,buffer,simplify)
+        geom=exteriors(geom)
+        geoms.extend(geom)
+    return compilePolys(geoms)
 
 def faultPolys( wktfile, buffer, minwidth=None ):
     crdre=r'(?:\-?\d+(?:\.\d+)?\s+\-?\d+(?:\.\d+)\s+\-?\d+(?:\.\d+))'
@@ -168,9 +176,11 @@ def compilePolys( geoms, keep_holes=False ):
         if not failed:
             break
 
-    result=ext(union)
-    for p in failed:
-        result.extend(ext(p))
+    result=[]
+    if union != None:
+        result=ext(union)
+        for p in failed:
+            result.extend(ext(p))
     return result
 
 def main():
@@ -246,8 +256,8 @@ def main():
                             minwidth=value
                         else:
                             raise RuntimeError("Invalid item "+item)
-                    if parts[1] == "wkt":
-                        geoms=wktPolys(wktfile,buffer,simplify)
+                    if parts[1] == "wkt" or parts[1] == "wktonly":
+                        geoms=wktPolys(wktfile,buffer,simplify,parts[1] == "wktonly")
                     else:
                         geoms=faultPolys(wktfile,buffer,minwidth)
                 else:
@@ -271,7 +281,12 @@ def main():
             if len(polys) > 1:
                 polys=compilePolys(zones[z])
             if args.multipolygon:
-                polys=[MultiPolygon(polys)]
+                mp=MultiPolygon(polys)
+                if not mp.is_valid:
+                    mp=bufferPoly(mp,0.0)
+                if not mp.is_valid:
+                    mp=bufferPoly(mp,1.0)
+                polys=[mp]
             for p in polys:
                 if not p.is_valid:
                     print "Skipping invalid zone {0} poly".format(zone_code)

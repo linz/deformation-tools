@@ -78,6 +78,9 @@ set_value [tolerance t] x y v1 .. vn
 add [matching_from] [csv] [maxcols n] grid_file [where selection]
 subtract [matching_from] [csv] [maxcols n] grid_file [where selection]
 replace [matching_from] [csv] [maxcols n] grid_file [where selection]
+add value v [where selection]
+subtract value v [where selection]
+replace value v [where selection]
    Add, subtract, or replace with the values extrapolated from grid_file 
    to the values at each node of the loaded grid.  Has no effect outside the
    extents of the second grid file.  Note that the special filename "nothing"
@@ -122,7 +125,7 @@ colstats
 
 A selection of grid points is defined by a series of commands joined by "plus".
 or "minus".  Selections preceded with "plus" are added, those preceded with "minus" 
-are removed.  The reversed and filled options are not preceded by plus or minuse.
+are removed.  The reversed and filled options are not preceded by plus or minus.
 Selection commands are one of:
 
 marked: As the first command of a selection uses previous selection 
