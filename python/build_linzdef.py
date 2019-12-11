@@ -141,8 +141,10 @@ for c in m.components(allversions=allversions):
     grids=[]
     dimension=0
     zerobeyond='yes'
-    versionstart=c.versionAdded if allversions else '0'
-    versionend=c.versionRevoked if allversions else '0'
+    if c.versionRevoked != '0' and not allversions:
+        continue    
+    versionstart=c.versionAdded
+    versionend=c.versionRevoked
     for m in c.spatialModel.models():
         if m.spatial_model != 'llgrid':
             raise RuntimeError('Cannot handle spatial model type '+spatial_model)
