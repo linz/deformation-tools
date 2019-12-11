@@ -33,6 +33,9 @@ gridfields=[
     {'none':[],'horizontal':['horizontal_uncertainty'],'vertical_uncertainty':['vertical'],'3d':['horizontal_uncertainty','vertical_uncertainty']},
 ]
 
+model_uncertainty=[0.1,0.1]
+component_uncertainty=[0.01,0.01]
+
 md=args.model_dir
 if not isdir(md):
     raise RuntimeError("Invalid model directory: "+md)
@@ -285,6 +288,7 @@ for sequence in sequences:
             ('description',sequence.description),
             ('fields',fields),
             ('extent',sequence.extent.spec()),
+            ('default_uncertainty',component_uncertainty),
             ('grid_file',gridspec),
             ('time_function',functime[0])
         ])))
@@ -323,15 +327,17 @@ for v in versions:
         ])),
         ('source',m.metadata('source_url')),
         ('metadata_file',mdspec),
-        ('interpolation_coordsys', 'EPSG:4167'),
+        ('interpolation_crs', 'EPSG:4167'),
         ('reference_epoch','2000-00-00T00:00:00'),
         ('extent', vextent.spec()),
+        ('default_uncertainty',model_uncertainty),
         ('components', vcomps)
     ])
     modeljson=json.dumps(modelspec,indent=2)
     mergefunc=lambda m: m.group(1)+re.sub(r'\s+','',m.group(2))
     modeljson=re.sub(r'(\"extent\"\:\s)((?:[^\]]*\]){3})',mergefunc,modeljson)
     modeljson=re.sub(r'(\"fields\"\:\s)([^\]]*\])',mergefunc,modeljson)
+    modeljson=re.sub(r'(\"default_uncertainty\"\:\s)([^\]]*\])',mergefunc,modeljson)
     modeljson=re.sub(r'(\{)(\s*\"epoch\"[^\}]+\"scale_factor\"[^\}]+)',mergefunc,modeljson)
     deffile=basename+'-'+v+'.json'
     with open(os.path.join(bd,deffile),'w') as dfh:
