@@ -33,7 +33,6 @@ gridfields=[
     {'none':[],'horizontal':['horizontal_uncertainty'],'vertical_uncertainty':['vertical'],'3d':['horizontal_uncertainty','vertical_uncertainty']},
 ]
 
-model_uncertainty=[0.1,0.1]
 component_uncertainty=[0.01,0.01]
 
 md=args.model_dir
@@ -56,6 +55,7 @@ TimeStep=namedtuple('TimeStep','mtype t0 f0 t1 f1')
 DefSeq=namedtuple('DefSeq','component description gridtype versionstart versionend zerobeyond steps grids extent')
 DefComp=namedtuple('DefComp','date factor before after')
 
+timeformat='%Y-%m-%dT00:00:00Z'
 refdate=Time.Time(datetime(2000,1,1))
 class TimeEvent:
     def __init__(self,time,f0,time1,f1):
@@ -95,7 +95,7 @@ class Extent:
             self._maxlat=other._maxlat  
 
     def spec( self ):
-        return [[self._minlon,self._maxlon],[self._minlat,self._maxlat]]
+        return [self._minlon,self._minlat,self._maxlon,self._maxlat]
 
 sequences=[]
 
@@ -187,7 +187,7 @@ for sequence in sequences:
     subsequences = []
     events = []
     timefuncs=[]
-    timeformat='%Y-%m-%dT00:00:00'
+
     
     for s in sequence.steps:
         if s.mtype == 'velocity':
@@ -276,6 +276,8 @@ for sequence in sequences:
         md5=hashlib.md5()
         md5.update(gfdata)
         gridspec=OrderedDict([
+            ('attributes',fields),
+            ('type','GeoTIFF'),
             ('filename', gridname),
             ('md5_checksum', md5.hexdigest())
         ])
@@ -286,24 +288,44 @@ for sequence in sequences:
     for nfunc,functime in enumerate(timefuncs):
         components.append((sequence,functime[1],OrderedDict([
             ('description',sequence.description),
-            ('fields',fields),
-            ('extent',sequence.extent.spec()),
+            ('bbox',sequence.extent.spec()),
             ('default_uncertainty',component_uncertainty),
-            ('grid_file',gridspec),
+            ('spatial_model',gridspec),
             ('time_function',functime[0])
         ])))
 
 basename=defname+'-defmod'
-mdfile=os.path.join(md,'model','metadata.xml')
-mdname=basename+'-metadata.xml'
-with open(mdfile,'rb') as mdf:
-    metadata=mdf.read()
-with open(os.path.join(bd,mdname),'wb') as mdf:
-    mdf.write(metadata)
-md5=hashlib.md5()
-md5.update(metadata)
-mdspec=OrderedDict([('filename',mdname),('md5_checksum',md5.hexdigest())])
+# mdfile=os.path.join(md,'model','metadata.xml')
+# mdname=basename+'-metadata.xml'
+# with open(mdfile,'rb') as mdf:
+#     metadata=mdf.read()
+# with open(os.path.join(bd,mdname),'wb') as mdf:
+#     mdf.write(metadata)
+# md5=hashlib.md5()
+# md5.update(metadata)
+# mdspec=OrderedDict([('filename',mdname),('md5_checksum',md5.hexdigest())])
 
+# Links to information about the deformation model. 
+
+about=OrderedDict([
+    ("href","https://www.linz.govt.nz/nzgd2000"),
+    ("rel","about"),
+    ("type","text/html"),
+    ("title","About the NZGD2000 deformation model")
+])
+source=OrderedDict([
+    ("href","https://www.geodesy.linz.govt.nz/download/nzgd2000_deformation_model"),
+    ("rel","source"),
+    ("type","application/zip"),
+    ("title","Authoritative source of the NZGD2000 deformation model")
+])
+metadatafunc=lambda v: OrderedDict([
+    ("href","https://www.geodesy.linz.govt.nz/download/nzgd2000/metadata/nzgd2000_deformation_{version}_metadata.xml"
+        .replace('{version}',v)),
+    ("rel","metadata"),
+    ("type","application/xml"),
+    ("title"," ISO 19115 XML encoded metadata regarding the deformation model")
+])
 versions=[v for v in m.versions()] if allversions else [m.currentVersion()]
 for v in versions:
     vseq=[c for c in components if c[0].versionstart <= v and (c[0].versionend=='0' or c[0].versionend > v)]
@@ -323,14 +345,12 @@ for v in versions:
             ('name',m.metadata('authority')),
             ('url',m.metadata('authority_website')),
             ('address',m.metadata('authority_address')),
-            ('contact',m.metadata('authority_email'))
+            ('email',m.metadata('authority_email'))
         ])),
-        ('source',m.metadata('source_url')),
-        ('metadata_file',mdspec),
-        ('interpolation_crs', 'EPSG:4167'),
-        ('reference_epoch','2000-00-00T00:00:00'),
-        ('extent', vextent.spec()),
-        ('default_uncertainty',model_uncertainty),
+        ('links',[about,source,metadatafunc(v)]),
+        ('model_crs', 'EPSG:4167'),
+        ('reference_epoch',refdate.strftime(timeformat)),
+        ('bbox', vextent.spec()),
         ('components', vcomps)
     ])
     modeljson=json.dumps(modelspec,indent=2)
