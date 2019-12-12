@@ -355,8 +355,8 @@ for v in versions:
     ])
     modeljson=json.dumps(modelspec,indent=2)
     mergefunc=lambda m: m.group(1)+re.sub(r'\s+','',m.group(2))
-    modeljson=re.sub(r'(\"extent\"\:\s)((?:[^\]]*\]){3})',mergefunc,modeljson)
-    modeljson=re.sub(r'(\"fields\"\:\s)([^\]]*\])',mergefunc,modeljson)
+    modeljson=re.sub(r'(\"bbox\"\:\s)([^\]]*\])',mergefunc,modeljson)
+    modeljson=re.sub(r'(\"attributes\"\:\s)([^\]]*\])',mergefunc,modeljson)
     modeljson=re.sub(r'(\"default_uncertainty\"\:\s)([^\]]*\])',mergefunc,modeljson)
     modeljson=re.sub(r'(\{)(\s*\"epoch\"[^\}]+\"scale_factor\"[^\}]+)',mergefunc,modeljson)
     deffile=basename+'-'+v+'.json'
