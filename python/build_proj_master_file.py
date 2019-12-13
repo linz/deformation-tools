@@ -28,11 +28,6 @@ argparser.add_argument('-a','--all-versions',action='store_true',help='Create ma
 args = argparser.parse_args()
 allversions=args.all_versions
 
-gridfields=[
-    {'none':[],'horizontal':['horizontal'],'vertical':['vertical'],'3d':['horizontal','vertical']},
-    {'none':[],'horizontal':['horizontal_uncertainty'],'vertical_uncertainty':['vertical'],'3d':['horizontal_uncertainty','vertical_uncertainty']},
-]
-
 component_uncertainty=[0.01,0.01]
 
 md=args.model_dir
@@ -245,10 +240,6 @@ for sequence in sequences:
 
     # Now construct the sequences in the definition file...
 
-    fields=[]
-    for f,t in zip(gridfields,sequence.gridtype.split(':')):
-        fields.extend(f[t])
-
     gridspec=None
     gkey=':'.join(sorted(sequence.grids))
     if gkey in grids:
@@ -268,7 +259,7 @@ for sequence in sequences:
                 break
         gridfile=os.path.join(bd,gridname)
         with open(gridfile,'w') as gf:
-            gf.write("Grid type: {0}\n".format(','.join(fields)))
+            gf.write("Grid type: {0}\n".format(sequence.gridtype))
             gf.write("Source files:\n")
             for g in sequence.grids:
                 gf.write("    {0}\n".format(g))
@@ -276,8 +267,8 @@ for sequence in sequences:
         md5=hashlib.md5()
         md5.update(gfdata)
         gridspec=OrderedDict([
-            ('attributes',fields),
             ('type','GeoTIFF'),
+            ('interpolation_method','bilinear'),
             ('filename', gridname),
             ('md5_checksum', md5.hexdigest())
         ])
@@ -285,11 +276,19 @@ for sequence in sequences:
 
     # Add a component for each time function (should only be one, but could be multiple velocities in theory)
 
+    disptype,unctype=sequence.gridtype.split(':')
+
     for nfunc,functime in enumerate(timefuncs):
         components.append((sequence,functime[1],OrderedDict([
             ('description',sequence.description),
-            ('bbox',sequence.extent.spec()),
-            ('default_uncertainty',component_uncertainty),
+            ('displacement_type',disptype),
+            ('uncertainty_type',unctype),
+            ('horizontal_uncertainty',component_uncertainty[0]),
+            ('vertical_uncertainty',component_uncertainty[1]),
+            ('extent',OrderedDict([
+                ('type','bbox'),
+                ('parameters',[{"bbox": sequence.extent.spec()}])
+            ])),
             ('spatial_model',gridspec),
             ('time_function',functime[0])
         ])))
@@ -337,6 +336,8 @@ for v in versions:
     for s in vseq[1:]:
         vextent.unionWith(s[0].extent)
     modelspec=OrderedDict([
+        ('file_type','deformation_model_master_file'),
+        ('format_version','1.0'),
         ('name',m.metadata('model_name')),
         ('version',v),
         ('publication_date',m.versionInfo(v).release_date.strftime(timeformat)),
@@ -348,9 +349,25 @@ for v in versions:
             ('email',m.metadata('authority_email'))
         ])),
         ('links',[about,source,metadatafunc(v)]),
-        ('model_crs', 'EPSG:4167'),
+        ('source_crs', 'EPSG:7907'),
+        ('target_crs', 'EPSG:4959'),
+        ('definition_crs', 'EPSG:7907'),
         ('reference_epoch',refdate.strftime(timeformat)),
-        ('bbox', vextent.spec()),
+        ('horizontal_offset_unit','meters'),
+        ('vertical_offset_unit','meters'),
+        ('horizontal_uncertainty_type','circular 95% confidence limit'),
+        ('horizontal_uncertainty_unit','meters'),
+        ('vertical_uncertainty_type','95% confidence limit'),
+        ('vertical_uncertainty_unit','meters'),
+        ('horizontal_offset_method','addition'),
+        ('extent',OrderedDict([
+            ('type','bbox'),
+            ('parameters',[{"bbox":vextent.spec()}])
+        ])),
+        ('time_extent',OrderedDict([
+            ('first',datetime(1900,1,1).strftime(timeformat)),
+            ('last',datetime(2050,1,1).strftime(timeformat))
+        ])),
         ('components', vcomps)
     ])
     modeljson=json.dumps(modelspec,indent=2)
