@@ -349,9 +349,9 @@ for v in versions:
             ('email',m.metadata('authority_email'))
         ])),
         ('links',[about,source,metadatafunc(v)]),
-        ('source_crs', 'EPSG:7907'),
-        ('target_crs', 'EPSG:4959'),
-        ('definition_crs', 'EPSG:7907'),
+        ('source_crs', 'EPSG:4959'),
+        ('target_crs', 'EPSG:7907'),
+        ('definition_crs', 'EPSG:4959'),
         ('reference_epoch',refdate.strftime(timeformat)),
         ('horizontal_offset_unit','meters'),
         ('vertical_offset_unit','meters'),
