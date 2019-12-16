@@ -353,6 +353,8 @@ for v in versions:
         ('target_crs', 'EPSG:7907'),
         ('definition_crs', 'EPSG:4959'),
         ('reference_epoch',refdate.strftime(timeformat)),
+        # This is an arbitrary reference epoch, but more realistic than 2000-01-01!
+        ('uncertainty_reference_epoch',datetime(2018,12,1).strftime(timeformat)),
         ('horizontal_offset_unit','meters'),
         ('vertical_offset_unit','meters'),
         ('horizontal_uncertainty_type','circular 95% confidence limit'),
