@@ -355,12 +355,12 @@ for v in versions:
         ('reference_epoch',refdate.strftime(timeformat)),
         # This is an arbitrary reference epoch, but more realistic than 2000-01-01!
         ('uncertainty_reference_epoch',datetime(2018,12,1).strftime(timeformat)),
-        ('horizontal_offset_unit','meters'),
-        ('vertical_offset_unit','meters'),
+        ('horizontal_offset_unit','metre'),
+        ('vertical_offset_unit','metre'),
         ('horizontal_uncertainty_type','circular 95% confidence limit'),
-        ('horizontal_uncertainty_unit','meters'),
+        ('horizontal_uncertainty_unit','metre'),
         ('vertical_uncertainty_type','95% confidence limit'),
-        ('vertical_uncertainty_unit','meters'),
+        ('vertical_uncertainty_unit','metre'),
         ('horizontal_offset_method','addition'),
         ('extent',OrderedDict([
             ('type','bbox'),
