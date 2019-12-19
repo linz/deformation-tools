@@ -122,7 +122,13 @@ for c in m.components(allversions=allversions):
         #print '    ',sm.model().gridFile()
         #print '    ',sm.columns
         gridtype=sm.displacement_type+':'+sm.error_type
-        grids.append(sm.model().gridFile())
+        model=sm.model()
+        grids.append(OrderedDict([
+            ('filename',model._gridfile),
+            ('fields',model._fields),
+            ('nlon',model._nlon),
+            ('nlat',model._nlat)        
+        ]))
         if not sm.spatial_complete:
             zerobeyond='no'
         mextent=Extent(sm.min_lon,sm.max_lon,sm.min_lat,sm.max_lat)
@@ -240,12 +246,13 @@ for sequence in sequences:
 
     # Now construct the sequences in the definition file...
 
+    gridfiles=[]
     gridspec=None
-    gkey=':'.join(sorted(sequence.grids))
+    gkey=':'.join(sorted([g['filename'] for g in sequence.grids]))
     if gkey in grids:
         gridspec=grids[gkey]
     else:
-        gname=sequence.grids[0]
+        gname=sequence.grids[0]['filename']
         gname=os.path.dirname(gname)
         gname=os.path.basename(gname)
         gname=gname.replace('patch_','')
@@ -257,15 +264,14 @@ for sequence in sequences:
             gridname=gname+'-grid{0:02d}'.format(ngname)+'.tif'
             if gridname not in grids:
                 break
-        gridfile=os.path.join(bd,gridname)
-        with open(gridfile,'w') as gf:
-            gf.write("Grid type: {0}\n".format(sequence.gridtype))
-            gf.write("Source files:\n")
-            for g in sequence.grids:
-                gf.write("    {0}\n".format(g))
-        gfdata=open(gridfile).read()
+        subgrids=[g for g in sequence.grids]
+        gridspec=OrderedDict([
+            ('name',gridname),
+            ('gridtype',sequence.gridtype),
+            ('subgrids',subgrids)
+            ])
         md5=hashlib.md5()
-        md5.update(gfdata)
+        md5.update('undefined')
         gridspec=OrderedDict([
             ('type','GeoTIFF'),
             ('interpolation_method','bilinear'),
@@ -318,6 +324,12 @@ source=OrderedDict([
     ("type","application/zip"),
     ("title","Authoritative source of the NZGD2000 deformation model")
 ])
+license=OrderedDict([
+    ("href","https://creativecommons.org/licenses/by/4.0/"),
+    ("rel","license"),
+    ("type","text/html"),
+    ("title","Creative Commons Attribution 4.0 International license")
+])
 metadatafunc=lambda v: OrderedDict([
     ("href","https://www.geodesy.linz.govt.nz/download/nzgd2000/metadata/nzgd2000_deformation_{version}_metadata.xml"
         .replace('{version}',v)),
@@ -341,6 +353,7 @@ for v in versions:
         ('name',m.metadata('model_name')),
         ('version',v),
         ('publication_date',m.versionInfo(v).release_date.strftime(timeformat)),
+        ('license','Create Commons Attribution 4.0 International'),
         ('description',m.metadata('description').replace("\r","")),
         ('authority',OrderedDict([
             ('name',m.metadata('authority')),
@@ -348,7 +361,7 @@ for v in versions:
             ('address',m.metadata('authority_address')),
             ('email',m.metadata('authority_email'))
         ])),
-        ('links',[about,source,metadatafunc(v)]),
+        ('links',[about,source,license,metadatafunc(v)]),
         ('source_crs', 'EPSG:4959'),
         ('target_crs', 'EPSG:7907'),
         ('definition_crs', 'EPSG:4959'),
@@ -381,4 +394,6 @@ for v in versions:
     deffile=basename+'-'+v+'.json'
     with open(os.path.join(bd,deffile),'w') as dfh:
         dfh.write(modeljson)
+    with open(os.path.join(bd,deffile+'.grids'),'w') as dfh:
+        dfh.write(json.dumps(grids,indent=2))
     print("Created proj deformation master file {0}".format(deffile))
