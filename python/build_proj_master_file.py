@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 # Script to create the master file GeoTIFF file creation scripts to encode 
 # the LINZ Deformation model
@@ -18,40 +18,25 @@ import re
 import json
 import sys
 from LINZ.DeformationModel import Model, Time
+import deformation_csv_to_gtiff
 
-argparser=argparse.ArgumentParser('Build a LINZDEF deformation file from a published deformation model')
-argparser.add_argument('model_dir',help='Base directory of model, containing model and tools directories')
-argparser.add_argument('target_dir',help='Target directory in which to build model')
-argparser.add_argument('def_model_base',help='Base name of final model')
-argparser.add_argument('-a','--all-versions',action='store_true',help='Create master files for all versions of model')
+# Arguments used by the program
 
-args = argparser.parse_args()
-allversions=args.all_versions
+parser=argparse.ArgumentParser('Build a LINZDEF deformation file from a published deformation model')
+parser.add_argument('model_dir',help='Base directory of model, containing model and tools directories')
+parser.add_argument('target_dir',help='Target directory in which to build model')
+parser.add_argument('model_name',help='Base name of final model')
+parser.add_argument('-s','--source-crs',default='EPSG:4959',help="Source/interpolation CRS for the model")
+parser.add_argument('-t','--target-crs',default='EPSG:7907',help="Target CRS for the model")
+parser.add_argument('-l','--license',default='Create Commons Attribution 4.0 International',help='License under which model is published')
+parser.add_argument('-r','--reference-date',default='2001-01-01',help="Reference date for model")
+parser.add_argument('-u','--default-uncertainty',type=float,default=0.01,help="Default uncertainty for model")
+parser.add_argument("-c","--compact-metadata",action="store_true",help="Reduce size of metadata in GeoTIFF directory")
+parser.add_argument("--uint16-encoding",action="store_true",help="Use uint16 storage with linear scaling/offseting")
+parser.add_argument('-a','--all-versions',action='store_true',help='Create master files for all versions of model')
 
-component_uncertainty=[0.01,0.01]
+# Classes used to compile model
 
-md=args.model_dir
-if not isdir(md):
-    raise RuntimeError("Invalid model directory: "+md)
-
-bd=args.target_dir
-if not isdir(bd):
-    if os.path.exists(bd):
-        raise RuntimeError("Invalid target build directory: "+bd)
-    else:
-        os.makedirs(bd)
-defname=args.def_model_base
-
-m=Model.Model(joinpath(md,'model'))
-
-clean_description=lambda d: re.sub(r'[\r\n]+','\n',d.strip())
-
-TimeStep=namedtuple('TimeStep','mtype t0 f0 t1 f1')
-DefSeq=namedtuple('DefSeq','component description gridtype versionstart versionend zerobeyond steps grids extent')
-DefComp=namedtuple('DefComp','date factor before after')
-
-timeformat='%Y-%m-%dT00:00:00Z'
-refdate=Time.Time(datetime(2000,1,1))
 class TimeEvent:
     def __init__(self,time,f0,time1,f1):
         self.time0=time
@@ -63,8 +48,8 @@ class TimeEvent:
     def __str__(self):
         return 'Time:{0} f0:{1} {2} f1:{3}'.format(self.time0,self.f0,self.time1,self.f1)
 
-    def __cmp__( self, other ):
-        return cmp( (self.time0,self.time1), (other.time0,other.time1) )
+    def __lt__( self, other ):
+        return (self.time0,self.time1) <(other.time0,other.time1)
 
     def __repr__(self):
         return str(self)
@@ -92,6 +77,44 @@ class Extent:
     def spec( self ):
         return [self._minlon,self._minlat,self._maxlon,self._maxlat]
 
+TimeStep=namedtuple('TimeStep','mtype t0 f0 t1 f1')
+DefSeq=namedtuple('DefSeq','component description gridtype versionstart versionend zerobeyond steps grids extent')
+DefComp=namedtuple('DefComp','date factor before after')
+
+clean_description=lambda d: re.sub(r'[\r\n]+','\n',d.strip())
+
+timeformat='%Y-%m-%dT00:00:00Z'
+
+#==============================================
+
+args = parser.parse_args()
+allversions=args.all_versions
+source_crs=args.source_crs
+target_crs=args.target_crs
+component_uncertainty=[args.default_uncertainty,args.default_uncertainty]
+licensetype=args.license
+refdate=Time.Time(datetime.strptime(args.reference_date,"%Y-%m-%d"))
+
+md=args.model_dir
+if not isdir(md):
+    raise RuntimeError("Invalid model directory: "+md)
+
+bd=args.target_dir
+if not isdir(bd):
+    if os.path.exists(bd):
+        raise RuntimeError("Invalid target build directory: "+bd)
+    else:
+        os.makedirs(bd)
+
+defname=args.model_name
+
+m=Model.Model(joinpath(md,'model'))
+authority=m.metadata('authority')
+
+# Compile the sequences (components) used in the model.  These are compiled from
+# the current model components, but assembling all the grids which comprise nested
+# grid models.
+
 sequences=[]
 
 for c in m.components(allversions=allversions):
@@ -105,7 +128,7 @@ for c in m.components(allversions=allversions):
     # print type(c.timeComponent.model())
     # print mtype,tm.factor0,tm.factor1,tm.time0,tm.time1
 
-    grids=[]
+    grids=None
     gridtype='none'
     zerobeyond='yes'
     if c.versionRevoked != '0' and not allversions:
@@ -123,15 +146,25 @@ for c in m.components(allversions=allversions):
         #print '    ',sm.columns
         gridtype=sm.displacement_type+':'+sm.error_type
         model=sm.model()
-        grids.append(OrderedDict([
-            ('filename',model._gridfile),
-            ('fields',model._fields),
-            ('nlon',model._nlon),
-            ('nlat',model._nlat)        
+        smextent=[sm.min_lon,sm.max_lon,sm.min_lat,sm.max_lat]
+        copyright=("{0} ({1}): Released under {2}".format(authority,versionstart[:4],licensetype))
+        if grids is None:
+            grids=OrderedDict([
+                ('crs',source_crs),
+                ('type',gridtype),
+                ('copyright',copyright),
+                ('description',sm.description),
+                ('version',versionstart),
+                ('grids',[])
+            ])
+        grids['grids'].append(OrderedDict([
+            ('filename',sm.file1),
+            ('extent',smextent),
+            ('size',[sm.npoints1,sm.npoints2])        
         ]))
         if not sm.spatial_complete:
             zerobeyond='no'
-        mextent=Extent(sm.min_lon,sm.max_lon,sm.min_lat,sm.max_lat)
+        mextent=Extent(*smextent)
         if extent is None:
             extent=mextent
         else:
@@ -246,13 +279,13 @@ for sequence in sequences:
 
     # Now construct the sequences in the definition file...
 
-    gridfiles=[]
+    gridfiles={}
     gridspec=None
-    gkey=':'.join(sorted([g['filename'] for g in sequence.grids]))
-    if gkey in grids:
-        gridspec=grids[gkey]
+    gkey=':'.join(sorted([g['filename'] for g in sequence.grids['grids']]))
+    if gkey in gridfiles:
+        gridspec=gridfiles[gkey]
     else:
-        gname=sequence.grids[0]['filename']
+        gname=sequence.grids['grids'][0]['filename']
         gname=os.path.dirname(gname)
         gname=os.path.basename(gname)
         gname=gname.replace('patch_','')
@@ -264,21 +297,34 @@ for sequence in sequences:
             gridname=gname+'-grid{0:02d}'.format(ngname)+'.tif'
             if gridname not in grids:
                 break
+        gtiff = os.path.join(bd, gridname )
+        gtiffj = gtiff+'.json'
+        with open(gtiffj,'w') as gridf:
+            gridf.write(json.dumps(sequence.grids, indent=2))
+        deformation_csv_to_gtiff.build_deformation_gtiff(gtiffj, gtiff, args)
+        os.unlink(gtiffj)
+        if not os.path.exists(gtiff):
+            raise RuntimeError("Failed to create GeoTIFF {0}".format(gtiff))
         subgrids=[g for g in sequence.grids]
         gridspec=OrderedDict([
             ('name',gridname),
             ('gridtype',sequence.gridtype),
             ('subgrids',subgrids)
             ])
-        md5=hashlib.md5()
-        md5.update('undefined')
+        md5 = hashlib.md5()
+        with open(gtiff, 'rb') as gf:
+            while True:
+                buffer = gf.read(2048)
+                if len(buffer) == 0:
+                    break
+                md5.update(buffer)
         gridspec=OrderedDict([
             ('type','GeoTIFF'),
             ('interpolation_method','bilinear'),
             ('filename', gridname),
             ('md5_checksum', md5.hexdigest())
         ])
-        grids[gridname]=gridspec
+        gridfiles[gkey]=gridspec
 
     # Add a component for each time function (should only be one, but could be multiple velocities in theory)
 
@@ -353,7 +399,7 @@ for v in versions:
         ('name',m.metadata('model_name')),
         ('version',v),
         ('publication_date',m.versionInfo(v).release_date.strftime(timeformat)),
-        ('license','Create Commons Attribution 4.0 International'),
+        ('license',licensetype),
         ('description',m.metadata('description').replace("\r","")),
         ('authority',OrderedDict([
             ('name',m.metadata('authority')),
@@ -362,9 +408,9 @@ for v in versions:
             ('email',m.metadata('authority_email'))
         ])),
         ('links',[about,source,license,metadatafunc(v)]),
-        ('source_crs', 'EPSG:4959'),
-        ('target_crs', 'EPSG:7907'),
-        ('definition_crs', 'EPSG:4959'),
+        ('source_crs', source_crs),
+        ('target_crs', target_crs),
+        ('definition_crs', source_crs),
         ('reference_epoch',refdate.strftime(timeformat)),
         # This is an arbitrary reference epoch, but more realistic than 2000-01-01!
         ('uncertainty_reference_epoch',datetime(2018,12,1).strftime(timeformat)),
@@ -394,6 +440,4 @@ for v in versions:
     deffile=basename+'-'+v+'.json'
     with open(os.path.join(bd,deffile),'w') as dfh:
         dfh.write(modeljson)
-    with open(os.path.join(bd,deffile+'.grids'),'w') as dfh:
-        dfh.write(json.dumps(grids,indent=2))
     print("Created proj deformation master file {0}".format(deffile))
