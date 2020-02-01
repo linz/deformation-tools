@@ -57,6 +57,7 @@ This is formatted as a JSON file with structure:
     }
 """
 
+from distutils.version import LooseVersion
 from osgeo import gdal
 from osgeo import osr
 from cloud_optimize_gtiff import generate_optimized_file
@@ -68,6 +69,11 @@ import math
 import os
 import struct
 import numpy as np
+
+gdal_min_version='3.0.0'
+
+if LooseVersion(gdal.__version__) < LooseVersion(gdal_min_version):
+    raise RuntimeError('This program requires GDAL version {0}'.format(gdal_min_version))
 
 def get_args(args=None):
     parser = argparse.ArgumentParser(description="Convert JSON csv file list to GeoTIFF nested grid.")
