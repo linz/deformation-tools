@@ -34,6 +34,7 @@ parser.add_argument('-u','--default-uncertainty',type=float,default=0.01,help="D
 parser.add_argument("-c","--compact-metadata",action="store_true",help="Reduce size of metadata in GeoTIFF directory")
 parser.add_argument("--uint16-encoding",action="store_true",help="Use uint16 storage with linear scaling/offseting")
 parser.add_argument('-a','--all-versions',action='store_true',help='Create master files for all versions of model')
+parser.add_argument('-k','--keep-gtiff-definition-files',action='store_true',help='Keep JSON definitions used to build GeoTIFF files')
 
 # Classes used to compile model
 
@@ -55,7 +56,7 @@ class TimeEvent:
         return str(self)
 
 class Extent:
-    def __init__(self,minlon,maxlon,minlat,maxlat):
+    def __init__(self,minlon,minlat,maxlon,maxlat):
         self._minlon=minlon
         self._maxlon=maxlon
         self._minlat=minlat
@@ -146,7 +147,7 @@ for c in m.components(allversions=allversions):
         #print '    ',sm.columns
         gridtype=sm.displacement_type+':'+sm.error_type
         model=sm.model()
-        smextent=[sm.min_lon,sm.max_lon,sm.min_lat,sm.max_lat]
+        smextent=[sm.min_lon,sm.min_lat,sm.max_lon,sm.max_lat]
         copyright=("{0} ({1}): Released under {2}".format(authority,versionstart[:4],licensetype))
         if grids is None:
             grids=OrderedDict([
@@ -302,7 +303,8 @@ for sequence in sequences:
         with open(gtiffj,'w') as gridf:
             gridf.write(json.dumps(sequence.grids, indent=2))
         deformation_csv_to_gtiff.build_deformation_gtiff(gtiffj, gtiff, args)
-        os.unlink(gtiffj)
+        if not args.keep_gtiff_definition_files:
+            os.unlink(gtiffj)
         if not os.path.exists(gtiff):
             raise RuntimeError("Failed to create GeoTIFF {0}".format(gtiff))
         subgrids=[g for g in sequence.grids]
@@ -344,17 +346,6 @@ for sequence in sequences:
             ('spatial_model',gridspec),
             ('time_function',functime[0])
         ])))
-
-basename=defname+'-defmod'
-# mdfile=os.path.join(md,'model','metadata.xml')
-# mdname=basename+'-metadata.xml'
-# with open(mdfile,'rb') as mdf:
-#     metadata=mdf.read()
-# with open(os.path.join(bd,mdname),'wb') as mdf:
-#     mdf.write(metadata)
-# md5=hashlib.md5()
-# md5.update(metadata)
-# mdspec=OrderedDict([('filename',mdname),('md5_checksum',md5.hexdigest())])
 
 # Links to information about the deformation model. 
 
@@ -437,7 +428,7 @@ for v in versions:
     modeljson=re.sub(r'(\"attributes\"\:\s)([^\]]*\])',mergefunc,modeljson)
     modeljson=re.sub(r'(\"default_uncertainty\"\:\s)([^\]]*\])',mergefunc,modeljson)
     modeljson=re.sub(r'(\{)(\s*\"epoch\"[^\}]+\"scale_factor\"[^\}]+)',mergefunc,modeljson)
-    deffile=basename+'-'+v+'.json'
+    deffile=defname+'-'+v+'.json'
     with open(os.path.join(bd,deffile),'w') as dfh:
         dfh.write(modeljson)
     print("Created proj deformation master file {0}".format(deffile))
