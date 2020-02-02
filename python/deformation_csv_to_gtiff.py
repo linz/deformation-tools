@@ -227,7 +227,7 @@ def create_unoptimized_file(sourcefilename, tmpfilename, args):
                 bdata = (bdata - bmin) / scale
                 tmp_ds.GetRasterBand(i+1).SetOffset(min)
                 tmp_ds.GetRasterBand(i+1).SetScale(scale)           
-            tmp_ds.GetRasterBand(i+1).WriteArray(data)
+            tmp_ds.GetRasterBand(i+1).WriteArray(bdata)
 
         options = [
             "PHOTOMETRIC=MINISBLACK",
