@@ -35,6 +35,7 @@ parser.add_argument("-c","--compact-metadata",action="store_true",help="Reduce s
 parser.add_argument("--uint16-encoding",action="store_true",help="Use uint16 storage with linear scaling/offseting")
 parser.add_argument('-a','--all-versions',action='store_true',help='Create master files for all versions of model')
 parser.add_argument('-k','--keep-gtiff-definition-files',action='store_true',help='Keep JSON definitions used to build GeoTIFF files')
+parser.add_argument('-v','--verbose',action='store_true',help='More diagnostic output')
 
 # Classes used to compile model
 
@@ -89,7 +90,8 @@ timeformat='%Y-%m-%dT00:00:00Z'
 #==============================================
 
 args = parser.parse_args()
-allversions=args.all_versions
+allversions = args.all_versions
+verbose=args.verbose
 source_crs=args.source_crs
 target_crs=args.target_crs
 component_uncertainty=[args.default_uncertainty,args.default_uncertainty]
@@ -207,7 +209,7 @@ for sequence in sequences:
 seqcomps={c:'' for c in seqcomps if seqcomps[c] > 1}
 
 components=[]
-grids={}
+gridnames = set()
 
 for sequence in sequences:
     compname=sequence.component
@@ -284,7 +286,9 @@ for sequence in sequences:
     gridspec=None
     gkey=':'.join(sorted([g['filename'] for g in sequence.grids['grids']]))
     if gkey in gridfiles:
-        gridspec=gridfiles[gkey]
+        gridspec = gridfiles[gkey]
+        if verbose:
+            print("Using existing grid {0}".format(gridspec))
     else:
         gname=sequence.grids['grids'][0]['filename']
         gname=os.path.dirname(gname)
@@ -296,8 +300,11 @@ for sequence in sequences:
         while True:
             ngname += 1
             gridname=gname+'-grid{0:02d}'.format(ngname)+'.tif'
-            if gridname not in grids:
+            if gridname not in gridnames:
                 break
+        gridnames.add(gridname)
+        if verbose:
+            print("Building grid {0}".format(gridname))
         gtiff = os.path.join(bd, gridname )
         gtiffj = gtiff+'.json'
         with open(gtiffj,'w') as gridf:
