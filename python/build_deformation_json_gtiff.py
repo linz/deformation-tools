@@ -28,7 +28,7 @@ parser.add_argument('target_dir',help='Target directory in which to build model'
 parser.add_argument('model_name',help='Base name of final model')
 parser.add_argument('-s','--source-crs',default='EPSG:4959',help="Source/interpolation CRS for the model")
 parser.add_argument('-t','--target-crs',default='EPSG:7907',help="Target CRS for the model")
-parser.add_argument('-l','--license',default='Create Commons Attribution 4.0 International',help='License under which model is published')
+parser.add_argument('-l','--license',default='Creative Commons Attribution 4.0 International',help='License under which model is published')
 parser.add_argument('-r','--reference-date',default='2001-01-01',help="Reference date for model")
 parser.add_argument('-u','--default-uncertainty',type=float,default=0.01,help="Default uncertainty for model")
 parser.add_argument("-c","--compact-metadata",action="store_true",help="Reduce size of metadata in GeoTIFF directory")
@@ -318,6 +318,7 @@ for sequence in sequences:
         gridspec=OrderedDict([
             ('name',gridname),
             ('gridtype',sequence.gridtype),
+            ('interpolation_method','bilinear'),
             ('subgrids',subgrids)
             ])
         md5 = hashlib.md5()
