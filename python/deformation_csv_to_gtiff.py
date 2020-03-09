@@ -87,7 +87,9 @@ def get_args(args=None):
     parser.add_argument("-m", "--model-dir", help="Base directory of deformation model")
     parser.add_argument("-c", "--compact-metadata", action="store_true", help="Reduce size of metadata in GeoTIFF directory")
     parser.add_argument(
-        "-s", "--split-child-grids", action="store_true", help="Split child grids that overlap multiple parents"
+        "-s", "--split-child-grids", action="store_true", help="Split child grids that overlap multiple parents")
+    parser.add_argument(
+        "-i", "--individual-grids", action="store_true", help="Write separate grid files for each child (for testing)"
     )
     parser.add_argument(
         "--uint16-encoding",
@@ -244,6 +246,7 @@ def create_unoptimized_file(sourcefilename, tmpfilename, args):
         subgrid.sourcefile = filename
 
         parent = None
+        split=False
         for testgrid in reversed(splitgrids):
             if subgrid.isSubgridOf(testgrid):
                 parent = testgrid
@@ -252,9 +255,12 @@ def create_unoptimized_file(sourcefilename, tmpfilename, args):
                 if args.split_child_grids:
                     splits = subgrid.splitOn(testgrid)
                     subgrids[0:0] = splits
-                    continue
+                    split=True
+                    break
                 else:
                     raise RuntimeError("Invalid overlap of grids {0} and {1}".format(subgrid.name, testgrid.name))
+        if split:
+            continue
         if parent is not None:
             parent.addChild(subgrid)
         name = subgrid.name
@@ -270,6 +276,7 @@ def create_unoptimized_file(sourcefilename, tmpfilename, args):
 
     srcfile = None
     srcdata = None
+    gridno = 0
 
     for idx_ifd, subgrid in enumerate(subgrids):
 
@@ -280,14 +287,15 @@ def create_unoptimized_file(sourcefilename, tmpfilename, args):
             srcfile = csvfile
             srcdata = np.genfromtxt(csvfile, names=True, delimiter=",", usecols=usecols)
             # Shape is (nrows=nlat values,ncols = n lon values)
-            srcdata = srcdata.reshape((subgrid.sourcenx, subgrid.sourceny))
+            srcdata = srcdata.reshape((subgrid.sourceny, subgrid.sourcenx)).T
+        print(subgrid.offsetx,subgrid.nx,subgrid.offsety,subgrid.ny)
         data = srcdata[subgrid.offsetx : subgrid.offsetx + subgrid.nx, subgrid.offsety : subgrid.offsety + subgrid.ny]
 
         tmp_ds = gdal.GetDriverByName("GTiff").Create(
             "/vsimem/tmp", subgrid.nx, subgrid.ny, nbands, gdal.GDT_Float32 if not args.uint16_encoding else gdal.GDT_UInt16
         )
 
-        if idx_ifd == 0:
+        if idx_ifd == 0 or args.individual_grids:
             description = gridspec["description"]
             copyright = gridspec["copyright"]
             version = gridspec["version"]
@@ -297,7 +305,7 @@ def create_unoptimized_file(sourcefilename, tmpfilename, args):
             tmp_ds.SetMetadataItem("TIFFTAG_DATETIME", griddate)
             tmp_ds.SetMetadataItem("recommended_interpolation_method", interpolation_method)
 
-        if idx_ifd == 0 or not args.compact_metadata:
+        if idx_ifd == 0 or not args.compact_metadata or args.individual_grids:
             tmp_ds.SetMetadataItem("TYPE", "DEFORMATION_MODEL")
             tmp_ds.SetMetadataItem("DISPLACEMENT_TYPE", displacement_type)
             tmp_ds.SetMetadataItem("UNCERTAINTY_TYPE", error_type)
@@ -322,6 +330,7 @@ def create_unoptimized_file(sourcefilename, tmpfilename, args):
 
         for i, field in enumerate(csv_fields):
             bdata = data[field].copy()
+            print(bdata.shape,(subgrid.ny,subgrid.nx))
             assert bdata.shape == (subgrid.nx, subgrid.ny)
             # Might be useful to reconsider how to handle scaling if we
             # decide to employ it. eg to try 1.0e-6, 1.0e-5 ... to better
@@ -348,10 +357,16 @@ def create_unoptimized_file(sourcefilename, tmpfilename, args):
             options.append("TILED=YES")
         else:
             options.append("BLOCKYSIZE=" + str(tmp_ds.RasterYSize))
-        if gdal.VSIStatL(tmpfilename) is not None:
+
+        filename=tmpfilename
+        if args.individual_grids:
+            name,ext=os.path.splitext(filename)
+            filename=name+'{0:02d}'.format(gridno)+ext
+            gridno += 1
+        if gdal.VSIStatL(filename) is not None and not args.individual_grids:
             options.append("APPEND_SUBDATASET=YES")
 
-        assert gdal.GetDriverByName("GTiff").CreateCopy(tmpfilename, tmp_ds, options=options)
+        assert gdal.GetDriverByName("GTiff").CreateCopy(filename, tmp_ds, options=options)
 
 
 # def check(sourcefilename, destfilename, args):
@@ -404,12 +419,16 @@ def create_unoptimized_file(sourcefilename, tmpfilename, args):
 
 
 def build_deformation_gtiff(source, target, args):
-    tmpfilename = target + ".tmp"
-    gdal.Unlink(tmpfilename)
+    
+    tmpfilename=target
+    if not args.individual_grids:
+        tmpfilename = target + ".tmp"
+        gdal.Unlink(tmpfilename)
     create_unoptimized_file(source, tmpfilename, args)
-    generate_optimized_file(tmpfilename, target)
-    # check(source, target, args)
-    gdal.Unlink(tmpfilename)
+    if not args.individual_grids:
+        generate_optimized_file(tmpfilename, target)
+        # check(source, target, args)
+        gdal.Unlink(tmpfilename)
 
 
 if __name__ == "__main__":
