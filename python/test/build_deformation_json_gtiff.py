@@ -34,6 +34,7 @@ parser.add_argument(
 parser.add_argument("-r", "--reference-date", default="2001-01-01", help="Reference date for model")
 parser.add_argument("-u", "--default-uncertainty", type=float, default=0.01, help="Default uncertainty for model")
 parser.add_argument("-c", "--compact-metadata", action="store_true", help="Reduce size of metadata in GeoTIFF directory")
+parser.add_argument("-n", "--no-optimize", action="store_true", help="Don't optimized GeoTIFF for cloud")
 parser.add_argument("--uint16-encoding", action="store_true", help="Use uint16 storage with linear scaling/offseting")
 parser.add_argument("--split-child-grids", action="store_true", help="Split child grids that overlap multiple parents")
 parser.add_argument(
@@ -326,14 +327,16 @@ for sequence in sequences:
 
     # Now construct the sequences in the definition file...
 
-    gridfiles = {}
-    gridspec = None
+    filespecs = {}
+    gridspecs = None
+
     gkey = ":".join(sorted([g["filename"] for g in sequence.grids["grids"]]))
-    if gkey in gridfiles:
-        gridspec = gridfiles[gkey]
+    if gkey in filespecs:
+        gridspecs = filespecs[gkey]
         if verbose:
             print("Using existing grid {0}".format(gridspec))
     else:
+        gridspecs = []
         gname = sequence.grids["grids"][0]["filename"]
         gname = os.path.dirname(gname)
         gname = os.path.basename(gname)
@@ -349,59 +352,60 @@ for sequence in sequences:
         gridnames.add(gridname)
         if verbose:
             print("Building grid {0}".format(gridname))
-        gtiff = os.path.join(bd, gridname)
-        gtiffj = gtiff + ".json"
+        gtiffj = os.path.join(bd, gridname) + ".json"
         with open(gtiffj, "w") as gridf:
             gridf.write(json.dumps(sequence.grids, indent=2))
-        deformation_csv_to_gtiff.build_deformation_gtiff(gtiffj, gtiff, args)
+        gridfiles = deformation_csv_to_gtiff.build_deformation_gtiff(gtiffj, gridname, args, basedir=bd)
         if not args.keep_gtiff_definition_files:
             os.unlink(gtiffj)
-        if not os.path.exists(gtiff):
-            raise RuntimeError("Failed to create GeoTIFF {0}".format(gtiff))
-        subgrids = [g for g in sequence.grids]
-        gridspec = OrderedDict(
-            [("name", gridname), ("gridtype", sequence.gridtype), ("interpolation_method", "bilinear"), ("subgrids", subgrids)]
-        )
-        md5 = hashlib.md5()
-        with open(gtiff, "rb") as gf:
-            while True:
-                buffer = gf.read(2048)
-                if len(buffer) == 0:
-                    break
-                md5.update(buffer)
-        gridspec = OrderedDict(
-            [
-                ("type", "GeoTIFF"),
-                ("interpolation_method", "bilinear"),
-                ("filename", gridname),
-                ("md5_checksum", md5.hexdigest()),
-            ]
-        )
-        gridfiles[gkey] = gridspec
+
+        for gridfile in gridfiles:
+            gtiff = os.path.join(bd, gridfile)
+            if not os.path.exists(gtiff):
+                raise RuntimeError("Failed to create GeoTIFF {0}".format(gtiff))
+            md5 = hashlib.md5()
+            with open(gtiff, "rb") as gf:
+                while True:
+                    buffer = gf.read(2048)
+                    if len(buffer) == 0:
+                        break
+                    md5.update(buffer)
+            gridspecs.append(
+                OrderedDict(
+                    [
+                        ("type", "GeoTIFF"),
+                        ("interpolation_method", "bilinear"),
+                        ("filename", gridfile),
+                        ("md5_checksum", md5.hexdigest()),
+                    ]
+                )
+            )
+        filespecs[gkey] = gridspecs
 
     # Add a component for each time function (should only be one, but could be multiple velocities in theory)
 
     disptype, unctype = sequence.gridtype.split(":")
 
     for nfunc, functime in enumerate(timefuncs):
-        components.append(
-            (
-                sequence,
-                functime[1],
-                OrderedDict(
-                    [
-                        ("description", sequence.description),
-                        ("displacement_type", disptype),
-                        ("uncertainty_type", unctype),
-                        ("horizontal_uncertainty", component_uncertainty[0]),
-                        ("vertical_uncertainty", component_uncertainty[1]),
-                        ("extent", OrderedDict([("type", "bbox"), ("parameters", {"bbox": sequence.extent.spec()})])),
-                        ("spatial_model", gridspec),
-                        ("time_function", functime[0]),
-                    ]
-                ),
+        for gridspec in gridspecs:
+            components.append(
+                (
+                    sequence,
+                    functime[1],
+                    OrderedDict(
+                        [
+                            ("description", sequence.description),
+                            ("displacement_type", disptype),
+                            ("uncertainty_type", unctype),
+                            ("horizontal_uncertainty", component_uncertainty[0]),
+                            ("vertical_uncertainty", component_uncertainty[1]),
+                            ("extent", OrderedDict([("type", "bbox"), ("parameters", {"bbox": sequence.extent.spec()})])),
+                            ("spatial_model", gridspec),
+                            ("time_function", functime[0]),
+                        ]
+                    ),
+                )
             )
-        )
 
 # Links to information about the deformation model.
 

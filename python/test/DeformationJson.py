@@ -3,16 +3,17 @@
 # DeformationModelJson: Script to load and calculate a deformation model formatted
 # with a JSON master file and GeoTIFF grid files.
 
-from datetime import datetime
+import hashlib
+import json
+import math
+import numpy as np
 import os
 import os.path
-import json
 import re
-import math
-import hashlib
-import numpy as np
-from DictObject import DictObject, Field, FormatError
+import sys
+from datetime import datetime
 from DeformationGrid import DeformationGridGeoTIFF
+from DictObject import DictObject, Field, FormatError
 
 DisplacementFields = {
     "none": [],
@@ -61,7 +62,8 @@ class TimeFunction:
     @staticmethod
     def factory(value, context=None):
         funcdef = DictObject([Field("type", TimeFunction.types), Field("parameters", dict)], value, context=context)
-        return TimeFunction.types[funcdef.types](funcdef.parameters, context=context)
+        result = funcdef.type(funcdef.parameters, context=context)
+        return result
 
     @staticmethod
     def parseTime(value):
@@ -83,16 +85,57 @@ class TimeFunction:
         raise RuntimeError("TimeFunction.valueAt must be overridden")
 
 
+class ConstantFunction(TimeFunction):
+    def __init__(self, value, context=None):
+        pass
+
+    def valueAt(self, epoch):
+        return 1.0
+
+
+TimeFunction.types["constant"] = ConstantFunction
+
+
 class VelocityFunction(DictObject, TimeFunction):
 
-    TimeFunction.type["velocity"] = VelocityFunction
     fields = [Field("reference_epoch", TimeFunction.decimalYear)]
 
     def __init__(self, value, context=None):
-        DictObject.init(self, self.fields, value, context=context)
+        DictObject.__init__(self, self.fields, value, context=context)
 
     def valueAt(self, epoch):
         return epoch - self.reference_epoch
+
+
+TimeFunction.types["velocity"] = VelocityFunction
+
+
+class StepFunction(DictObject):
+
+    fields = [Field("step_epoch", TimeFunction.decimalYear)]
+
+    def __init__(self, value, context=None):
+        DictObject.__init__(self, self.fields, value, context=context)
+
+    def valueAt(self, epoch):
+        return 1.0 if epoch >= self.step_epoch else 0.0
+
+
+TimeFunction.types["step"] = StepFunction
+
+
+class ReverseStepFunction(DictObject):
+
+    fields = [Field("step_epoch", TimeFunction.decimalYear)]
+
+    def __init__(self, value, context=None):
+        DictObject.__init__(self, self.fields, value, context=context)
+
+    def valueAt(self, epoch):
+        return -1.0 if epoch < self.step_epoch else 0.0
+
+
+TimeFunction.types["reverse_step"] = ReverseStepFunction
 
 
 class PiecewiseFunctionPoint(DictObject):
@@ -105,16 +148,11 @@ class PiecewiseFunctionPoint(DictObject):
 
 class PiecewiseFunction(DictObject):
 
-    TimeFunction.types["piecewise"] = PiecewiseFunction
-
     ZERO = 0
     CONSTANT = 1
     LINEAR = 2
-    Extrapolation = {
-        "zero": PiecewiseFunction.ZERO,
-        "constant": PiecewiseFunction.CONSTANT,
-        "linear": PiecewiseFunction.LINEAR,
-    }
+
+    Extrapolation = {"zero": ZERO, "constant": CONSTANT, "linear": LINEAR}
 
     fields = [
         Field("model", [PiecewiseFunctionPoint]),
@@ -161,38 +199,10 @@ class PiecewiseFunction(DictObject):
         raise RuntimeError("Failed to find epoch {0} in piecewise time function".format(epoch))
 
 
-class StepFunction(DictObject, PiecewiseFunction):
-
-    TimeFunction.types["step"] = StepFunction
-
-    fields = [Field("step_epoch", TimeFunction.decimalYear)]
-
-    def __init__(self, value, context=None):
-        DictObject.__init__(self, self.fields, value, context=context)
-        PiecewiseFunction.__init__(
-            self,
-            {"before_first": "zero", "after_last": "constant", "model": [{"epoch": self.step_epoch, "scale_factor": 1.0}]},
-        )
-
-
-class ReverseStepFunction(DictObject, PiecewiseFunction):
-
-    TimeFunction.types["reverse_step"] = ReverseStepFunction
-
-    fields = [Field("step_epoch", TimeFunction.decimalYear)]
-
-    def __init__(self, value, context=None):
-        DictObject.__init__(self, self.fields, value, context=context)
-        PiecewiseFunction.__init__(
-            self,
-            {"before_first": "constant", "after_last": "zero", "model": [{"epoch": self.step_epoch, "scale_factor": 1.0}]},
-            context=context,
-        )
+TimeFunction.types["piecewise"] = PiecewiseFunction
 
 
 class ExponentialFunction(DictObject, TimeFunction):
-
-    TimeFunction.types["exponential"] = ExponentialFunction
 
     fields = [
         Field("reference_epoch", TimeFunction.decimalYear),
@@ -203,20 +213,21 @@ class ExponentialFunction(DictObject, TimeFunction):
         Field("final_scale_factor", float),
     ]
 
+    def __init__(self, value, context=None):
+        DictObject.__init__(self, self.fields, value, context=context)
 
-def __init__(self, value, context=None):
-    DictObject.__init__(self, self.fields, value, context=context)
+    def valueAt(self, epoch):
+        if self.end_epoch is not None and epoch > self.end_epoch:
+            epoch = self.end_epoch
+        if epoch < self.start_epoch:
+            return self.before_scale_factor
+        return self.initial_scale_factor + (
+            (self.final_scale_factor - self.initial_scale_factor)
+            * (1.0 - math.exp((self.ref_epoch - epoch) / self.relaxation_constant))
+        )
 
 
-def valueAt(self, epoch):
-    if self.end_epoch is not None and epoch > self.end_epoch:
-        epoch = self.end_epoch
-    if epoch < self.start_epoch:
-        return self.before_scale_factor
-    return self.initial_scale_factor + (
-        (self.final_scale_factor - self.initial_scale_factor)
-        * (1.0 - math.exp((self.ref_epoch - epoch) / self.relaxation_constant))
-    )
+TimeFunction.types["exponential"] = ExponentialFunction
 
 
 class TimeExtent(DictObject):
@@ -234,30 +245,34 @@ class Extent:
     def __init__(self, value, context=None):
         if "type" not in value or value["type"] != "bbox":
             raise ValueError("Invalid extent type {0} - must be bbox".format(value.get(type, "undefined")))
-        if type(value.get("parameters")) != dict or "bbox" not in type(value["parameters"]):
+        if type(value.get("parameters")) != dict or "bbox" not in value["parameters"]:
             raise ValueError("Invalid extent - requires bbox parameter")
         try:
             extents = value["parameters"]["bbox"]
             xmin, ymin, xmax, ymax = (float(x) for x in extents)
             if xmax < xmin or ymax < ymin:
                 raise ValueError("Error in bounding box - max value less than min value")
+            self.xmin = xmin
+            self.xmax = xmax
+            self.ymin = ymin
+            self.ymax = ymax
         except:
             raise ValueError("Invalid bounding box - must be [xmin,ymin,xmax,ymax]")
 
     def contains(self, x, y):
-        if x < xmin or x >= xmax:
+        if x < self.xmin or x >= self.xmax:
             return False
-        if y < ymin or y >= ymax:
+        if y < self.ymin or y >= self.ymax:
             return False
 
 
 class SourceFile:
     def __init__(self, filename, md5=None, context=None):
         self.filename = filename
-        basedir = context.basedir if context is not None else ""
-        filepath = os.path.join(basedir, filename)
-        if not os.path.isfile(filepath):
-            raise ValueError("File {0} is missing".format(filepath))
+        self.basedir = context.basedir if context is not None else ""
+        self.filepath = os.path.join(self.basedir, self.filename)
+        if not os.path.isfile(self.filepath):
+            raise ValueError("File {0} is missing".format(self.filepath))
         if context is not None and context.check and md5 is not None:
             if self.calcMd5() != md5:
                 raise ValueError("File {0} md5 checksum is not correct")
@@ -275,27 +290,22 @@ class SourceFile:
 
 class SpatialModel(DictObject):
 
-    displacementTypes = {t: t for t in DisplacementFields}
-    uncertaintyTypes = {t: t for t in UncertaintyFields}
-
     fields = [
-        Field("type", str, re="^GeoTIFF$"),
-        Field("interpolation_method", str, "^(bilinear|geocentric_bilinear)$"),
+        Field("type", str, regex="^GeoTIFF$"),
+        Field("interpolation_method", str, regex="^(bilinear|geocentric_bilinear)$"),
         Field("filename", str),
         Field("md5_checksum", str),
     ]
 
     def __init__(self, value, context=None):
         DictObject.__init__(self, self.fields, value, context=context)
-        self.displacement_type = None
-        self.uncertainty_type = None
         sourcefile = SourceFile(self.filename, self.md5_checksum, context)
         self.grid = DeformationGridGeoTIFF(sourcefile.filepath)
 
     def check(self, displacement_type, uncertainty_type, context):
         self.grid.load()
-        grid_disptype = self.grid.displacement_type()
-        grid_unctype = self.grid.uncertainty_type()
+        grid_disptype = self.grid.displacement_type().lower()
+        grid_unctype = self.grid.uncertainty_type().lower()
 
         if grid_disptype != displacement_type:
             raise ValueError("Grid displacement type {0} doesn't match expected {1}".format(grid_disptype, displacement_type))
@@ -304,6 +314,9 @@ class SpatialModel(DictObject):
 
 
 class Component(DictObject):
+
+    displacementTypes = {t: t for t in DisplacementFields}
+    uncertaintyTypes = {t: t for t in UncertaintyFields}
 
     fields = [
         Field("description", str),
@@ -319,7 +332,7 @@ class Component(DictObject):
     def __init__(self, value, context=None):
         DictObject.__init__(self, self.fields, value, context=context)
         if context is not None and context.check:
-            self.spatial_model.check(self.displacment_type, self.uncertainty_type, context)
+            self.spatial_model.check(self.displacement_type, self.uncertainty_type, context)
         self.epoch = None
         self.tfunc = None
 
@@ -364,8 +377,8 @@ class Authority(DictObject):
 class Link(DictObject):
 
     fields = [
+        Field("href", str, regex=r"^https?\:\/\/"),
         Field("rel", str, regex=r"^(about|source|metadata|license)$"),
-        Field("url", str, regex=r"^https?\:\/\/"),
         Field("type", str, regex=r"^(text\/html|application\/zip|application\/xml)$"),
         Field("title", str),
     ]
@@ -413,6 +426,9 @@ class DeformationModel(DictObject):
     def __init__(self, value, context=None):
         DictObject.__init__(self, self.fields, value, context=context)
 
+    def valueAt(self, lon, lat, epoch):
+        return np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+
 
 def main():
     import argparse
@@ -425,8 +441,8 @@ def main():
     parser.add_argument("-i", "--point-file", help="Name of CSV file - columns id,lon,lat,epoch")
     parser.add_argument("-o", "--output-file", help="Name of CSV output file")
     parser.add_argument("-c", "--check", action="store_true", help="Check the deformation model")
-    args = parser.parse_args(argv)
-    model = DeformationModel.LoadJson(args.json_file)
+    args = parser.parse_args()
+    model = DeformationModel.LoadJson(args.json_file, check=args.check)
     if args.point:
         lon = float(args.point[0])
         lat = float(args.point[1])
@@ -456,7 +472,7 @@ def main():
                 result = model.valueAt(lon, lat, epoch)
                 output = [id, str(lon), str(lat), epochstr] + [str(r) for r in result]
                 csvo.writerow(output)
-            except Exeption as ex:
+            except Exception as ex:
                 print("Error in row {0}: {1}".format(nrow, ex))
 
 

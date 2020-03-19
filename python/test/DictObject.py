@@ -1,4 +1,5 @@
 import re
+import inspect
 
 
 class FormatError(RuntimeError):
@@ -11,7 +12,7 @@ class Field:
         self.type = ftype
         self.default = default
         self.optional = optional
-        if ftype != str and re != None:
+        if ftype != str and regex != None:
             raise FormatError("Cannot define regular expression constraint for non string field {0}".format(name))
         if type(regex) == str:
             regex = re.compile(regex)
@@ -24,11 +25,13 @@ class Field:
             raise FormatError("Field {0} test function is not callable".format(name))
 
     def _getValueForType(self, name, ftype, source, context):
-        if callable(ftype):
+        if type(source) == ftype:
+            value = source
+        elif callable(ftype):
             try:
-                try:
+                if "context" in inspect.signature(ftype).parameters:
                     value = ftype(source, context=context)
-                except TypeError:
+                else:
                     value = ftype(source)
             except Exception as ex:
                 raise ValueError("Cannot evaluate {0}: {1}".format(name, ex))
