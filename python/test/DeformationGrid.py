@@ -26,13 +26,15 @@ BilinearGeocentricMethod = "geocentric_bilinear"
 BilinearGeocentricTypes = ["HORIZONTAL", "3D"]
 
 
+class RangeError(ValueError):
+    pass
+
+
+class GridError(ValueError):
+    pass
+
+
 class DeformationGrid(ABC):
-    class Error(ValueError):
-        pass
-
-    class RangeError(ValueError):
-        pass
-
     class Extent:
         def __init__(self, minlon, minlat, maxlon, maxlat):
             self.minlon = minlon
@@ -95,13 +97,13 @@ class DeformationGrid(ABC):
 
         def addChildSubgrid(self, grid):
             if not self.extent.containsExtent(grid.extent):
-                raise DeformationGrid.Error("Grid {0} is not contained in grid {1}".format(grid.id, self.id))
+                raise GridError("Grid {0} is not contained in grid {1}".format(grid.id, self.id))
             for c in self.children:
                 if c.extent.containsExtent(grid.extent):
                     c.addChildSubgrid(grid)
                     return
                 if c.extent.overlaps(grid.extent):
-                    raise DeformationGrid.Error("Grid {0} overlaps grid {1}".format(grid.id, self.id))
+                    raise GridError("Grid {0} overlaps grid {1}".format(grid.id, self.id))
 
         def interpolationFactors(self, lon, lat):
             fcol = (lon - self.extent.minlon) / self.lonsize
@@ -241,7 +243,7 @@ class DeformationGrid(ABC):
     def calcValue(self, lon, lat):
         subgrid = self.selectSubgrid(lon, lat)
         if subgrid is None:
-            raise self.RangeError()
+            raise RangeError()
         return subgrid.calcValue(lon, lat)
 
     def interpolation_method(self):
@@ -309,7 +311,7 @@ class DeformationGridGeoTIFF(DeformationGrid):
             return value
 
     def raiseError(self, error):
-        raise self.Error(error)
+        raise GridError(error)
 
     def _getMetadata(self, ds, item, default=None):
         value = ds.GetMetadataItem(item)
@@ -391,7 +393,7 @@ class DeformationGridGeoTIFF(DeformationGrid):
 
                 subgrid = self.SubGrid(subds[0], ds, scaling, subinterp, subdisptype, subunctype, is_degrees)
                 self.addSubgrid(subgrid)
-            except self.Error as ex:
+            except GridError as ex:
                 self.raiseError("Error loading grid {0}: {1}".format(subds[0], str(ex)))
             except Exception as ex:
                 self.raiseError("Error loading grid {0}: {1}".format(subds[0], str(ex)))
