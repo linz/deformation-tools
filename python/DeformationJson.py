@@ -507,7 +507,7 @@ class DeformationModel(DictObject):
         if context.check:
             if self.definition_crs != self.source_crs:
                 raise ValueError(
-                    "Source CRS ({0}) and definition CRS ({0}) must be the same:".format(self.source_crs, self.definition_crs)
+                    "Source CRS ({0}) and definition CRS ({1}) must be the same:".format(self.source_crs, self.definition_crs)
                 )
         self.isgeographic = None
         self.ellipsoid_a = None

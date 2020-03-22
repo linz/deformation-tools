@@ -26,13 +26,15 @@ BilinearGeocentricMethod = "geocentric_bilinear"
 BilinearGeocentricTypes = ["HORIZONTAL", "3D"]
 
 
+class RangeError(ValueError):
+    pass
+
+
+class GridError(ValueError):
+    pass
+
+
 class DeformationGrid(ABC):
-    class Error(ValueError):
-        pass
-
-    class RangeError(ValueError):
-        pass
-
     class Extent:
         def __init__(self, minlon, minlat, maxlon, maxlat):
             self.minlon = minlon
@@ -65,7 +67,7 @@ class DeformationGrid(ABC):
             self.nrow = nrow
 
     class SubGrid(ABC):
-        def __init__(self, id, size, extent, method=BilinearMethod):
+        def __init__(self, id, size, extent, method, displacement_type, uncertainty_type, is_degrees):
             self.id = id
             self.size = size
             assert size.ncol > 1 and size.nrow > 1, "Number of rows and columns must be greater than 1"
@@ -79,22 +81,29 @@ class DeformationGrid(ABC):
                 self.calcValue = self.calcValueBilinear
             elif method == BilinearGeocentricMethod:
                 self.calcValue = self.calcValueGeocentricBilinear
+                if is_degrees:
+                    raise RuntimeError(
+                        "Cannot use {0} interpolation method with degrees units".format(BilinearGeocentricMethod)
+                    )
             else:
                 raise ValueError(
                     'Interpolation method must be "{0}" or "{1}"'.format(BilinearMethod, BilinearGeocentricMethod)
                 )
+            self.displacement_type = displacement_type
+            self.uncertainty_type = uncertainty_type
+            self.is_degrees = is_degrees
             self.data = None
             self.enxyz = None
 
         def addChildSubgrid(self, grid):
             if not self.extent.containsExtent(grid.extent):
-                raise DeformationGrid.Error("Grid {0} is not contained in grid {1}".format(grid.id, self.id))
+                raise GridError("Grid {0} is not contained in grid {1}".format(grid.id, self.id))
             for c in self.children:
                 if c.extent.containsExtent(grid.extent):
                     c.addChildSubgrid(grid)
                     return
                 if c.extent.overlaps(grid.extent):
-                    raise DeformationGrid.Error("Grid {0} overlaps grid {1}".format(grid.id, self.id))
+                    raise GridError("Grid {0} overlaps grid {1}".format(grid.id, self.id))
 
         def interpolationFactors(self, lon, lat):
             fcol = (lon - self.extent.minlon) / self.lonsize
@@ -144,7 +153,7 @@ class DeformationGrid(ABC):
             envecs[3, 1, 1] = -nvec[row + 1, 1]
             # envecs is now east and north vectors at each node, array (4,2,3)
             # Multiply by factors to get relative weighting
-            envecs = envecs * factors.reshape(4, 1, 1)
+            envecs = envecs * factors.reshape((4, 1, 1))
             # Then multiply envec at each node by corresponding displacement value and
             # sum on 0/1 axes to compute xyz displacement at calculation point
             dispvec = np.sum(nodevalues[:, :2].reshape(4, 2, 1) * envecs, axis=(0, 1))
@@ -166,6 +175,7 @@ class DeformationGrid(ABC):
                 value = np.sum(nodevalues * factors.reshape(4, 1), axis=0)
                 value[:2] = result
                 result = value
+            #!!!NOTE Need to handle is_degrees here
             return result
 
         @abstractmethod
@@ -187,9 +197,30 @@ class DeformationGrid(ABC):
             self.loaded = True
 
     def addSubgrid(self, subgrid):
+        if subgrid.displacement_type not in BilinearGeocentricTypes and subgrid.method == BilinearGeocentricMethod:
+            subgrid.method = BilinearMethod
+        if subgrid.method == BilinearGeocentricMethod and subgrid.is_degrees:
+            raise RuntimeError("Cannot use {0} interpolation method with degrees units".format(BilinearGeocentricMethod))
+
         if self.basegrid is None:
             self.basegrid = subgrid
         else:
+            if subgrid.method != self.basegrid.method:
+                raise RuntimeError(
+                    "Interpolation method {1} not consistent with {2}".format(subgrid.method, self.basegrid.method)
+                )
+            if subgrid.displacement_type != self.basegrid.displacement_type:
+                raise RuntimeError(
+                    "Displacement type {1} not consistent with {2}".format(
+                        subgrid.displacement_type, self.basegrid.displacement_type
+                    )
+                )
+            if subgrid.uncertainty_type != self.basegrid.uncertainty_type:
+                raise RuntimeError(
+                    "Uncertainty type {1} not consistent with {2}".format(
+                        subgrid.uncertainty_type, self.basegrid.uncertainty_type
+                    )
+                )
             self.basegrid.addChildSubgrid(subgrid)
 
     def selectSubgrid(self, lon, lat):
@@ -212,13 +243,25 @@ class DeformationGrid(ABC):
     def calcValue(self, lon, lat):
         subgrid = self.selectSubgrid(lon, lat)
         if subgrid is None:
-            raise self.RangeError()
+            raise RangeError()
         return subgrid.calcValue(lon, lat)
+
+    def interpolation_method(self):
+        self.load()
+        return self.basegrid.method
+
+    def displacement_type(self):
+        self.load()
+        return self.basegrid.displacement_type
+
+    def uncertainty_type(self):
+        self.load()
+        return self.basegrid.uncertainty_type
 
 
 class DeformationGridGeoTIFF(DeformationGrid):
     class SubGrid(DeformationGrid.SubGrid):
-        def __init__(self, id, dataset, scaling, method):
+        def __init__(self, id, dataset, scaling, method, disptype, unctype, is_degrees):
             size = DeformationGrid.Size(dataset.RasterXSize, dataset.RasterYSize)
             (lon0, dlondcol, dlondrow, lat0, dlatdcol, dlatdrow) = dataset.GetGeoTransform()
             self.transpose = False
@@ -240,7 +283,7 @@ class DeformationGridGeoTIFF(DeformationGrid):
             self.gridname = dataset.GetMetadataItem("grid_name")
             self.parentgrid = dataset.GetMetadataItem("arent_grid_name")
             self.nchildren = int(dataset.GetMetadataItem("number_of_nested_grids") or "0")
-            DeformationGrid.SubGrid.__init__(self, id, size, extent, method)
+            DeformationGrid.SubGrid.__init__(self, id, size, extent, method, disptype, unctype, is_degrees)
 
         def _loadData(self):
             ds = gdal.Open(self.id)
@@ -264,11 +307,11 @@ class DeformationGridGeoTIFF(DeformationGrid):
                 self._loadData()
             value = self.data[col, row]
             if self.scaling is not None:
-                value = value * scaling[:, 0] + scaling[:, 1]
+                value = value * self.scaling[:, 0] + self.scaling[:, 1]
             return value
 
     def raiseError(self, error):
-        raise self.Error(error)
+        raise GridError(error)
 
     def _getMetadata(self, ds, item, default=None):
         value = ds.GetMetadataItem(item)
@@ -288,7 +331,7 @@ class DeformationGridGeoTIFF(DeformationGrid):
         gridtype = ""
         disptype = ""
         unctype = ""
-        useDegrees = None
+        is_degrees = None
         interpolation_method = BilinearMethod
         first = True
         for subds in subdatasets:
@@ -297,32 +340,22 @@ class DeformationGridGeoTIFF(DeformationGrid):
             if subgridtype != "DEFORMATION_MODEL":
                 self.raiseError("{0} TYPE is not DEFORMATION_MODEL".format(subds[0]))
                 continue
-            subdisptype = self._getMetadata(ds, "DISPLACEMENT_TYPE")
-            subunctype = self._getMetadata(ds, "UNCERTAINTY_TYPE")
+            subdisptype = self._getMetadata(ds, "DISPLACEMENT_TYPE", disptype)
+            subunctype = self._getMetadata(ds, "UNCERTAINTY_TYPE", unctype)
             subinterp = self._getMetadata(ds, "recommended_interpolation_method", interpolation_method)
+            if subdisptype not in DisplacementFields:
+                self.raiseError("{0} DISPLACEMENT_TYPE {1} not valid".format(subds[0], disptype))
+            if subunctype not in UncertaintyFields:
+                self.raiseError("{0} UNCERTAINTY_TYPE {1} not valid".format(subds[0], unctype))
             if first:
                 first = False
                 disptype = subdisptype
                 unctype = subunctype
                 interpolation_method = subinterp
-                if disptype not in DisplacementFields:
-                    self.raiseError("{0} DISPLACEMENT_TYPE {1} not valid".format(subds[0], disptype))
-                if unctype not in UncertaintyFields:
-                    self.raiseError("{0} UNCERTAINTY_TYPE {1} not valid".format(subds[0], unctype))
-                fields = DisplacementFields[disptype] + UncertaintyFields[unctype]
-            else:
-                if subdisptype != disptype:
-                    self.raiseError(
-                        "{0} DISPLACEMENT_TYPE {1} not consistent with {2}".format(subds[0], subdisptype, disptype)
-                    )
-                if subunctype != unctype:
-                    self.raiseError("{0} UNCERTAINTY_TYPE {1} not consistent with {2}".format(subds[0], subunctype, unctype))
-                if subinterp != interpolation_method:
-                    self.raiseError(
-                        "{0} recommended_interpolation_method {1} not consistent with {2}".format(
-                            subds[0], subinterp, interpolation_method
-                        )
-                    )
+                fields = DisplacementFields.get(disptype, []) + UncertaintyFields.get(unctype, [])
+
+            if subdisptype not in BilinearGeocentricTypes and subinterp == BilinearGeocentricMethod:
+                subinterp = BilinearMethod
 
             nband = ds.RasterCount
             if nband != len(fields):
@@ -348,25 +381,19 @@ class DeformationGridGeoTIFF(DeformationGrid):
                     self.raiseError("{0} band {1} description {2} should be {3}".format(subds[0], i + 1, banddesc, fields[i]))
                 unit = "metre"
                 if banddesc in DegreeFields:
-                    if useDegrees is None:
-                        useDegrees = bandunit == "degree"
-                    if useDegrees:
+                    if is_degrees is None:
+                        is_degrees = bandunit == "degree"
+                    if is_degrees:
                         unit = "degree"
                 if bandunit != unit:
                     self.raiseError("{0} band {1} unit {2} should be {3}".format(subds[0], i + 1, bandunit, unit))
             if not usescale:
                 scaling = None
             try:
-                method = interpolation_method
-                if disptype not in BilinearGeocentricTypes and method == BilinearGeocentricMethod:
-                    method = BilinearMethod
-                if method == BilinearGeocentricMethod and useDegrees:
-                    raise RuntimeError(
-                        "Cannot use {0} interpolation method with degrees units".format(BilinearGeocentricMethod)
-                    )
-                subgrid = self.SubGrid(subds[0], ds, scaling, method)
+
+                subgrid = self.SubGrid(subds[0], ds, scaling, subinterp, subdisptype, subunctype, is_degrees)
                 self.addSubgrid(subgrid)
-            except self.Error as ex:
+            except GridError as ex:
                 self.raiseError("Error loading grid {0}: {1}".format(subds[0], str(ex)))
             except Exception as ex:
                 self.raiseError("Error loading grid {0}: {1}".format(subds[0], str(ex)))
