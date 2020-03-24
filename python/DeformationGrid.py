@@ -136,8 +136,8 @@ class DeformationGrid(ABC):
                 coslon = np.cos(londiff)
                 sinlon = -np.sin(londiff)
                 # Vectors in terms of X axis through mid longitude of cell col,row
-                # evec0, nvec[row] are vectors at col,row
-                # evec1, nvec[row] are vectors at col+1,row
+                # evec1, nvec[row] are vectors at col,row
+                # evec2, nvec[row] are vectors at col+1,row
                 evec1 = np.array([-sinlon, coslon, 0.0])
                 evec2 = np.array([sinlon, coslon, 0.0])
                 nvec = np.transpose(np.array([-coslon * sinlat, -sinlon * sinlat, coslat]))
@@ -148,15 +148,10 @@ class DeformationGrid(ABC):
             nodevalues = np.array([self.getValue(col, row) for col, row in indices])
             # NOTE: This order must match row,col valuesin in interpolationFactors
             col, row = indices[0]
-            envecs = np.array([[evec1, nvec[row]], [evec1, nvec[row + 1]], [evec2, nvec[row]], [evec1, nvec[row + 1]]])
+            envecs = np.array([[evec1, nvec[row]], [evec1, nvec[row + 1]], [evec2, nvec[row]], [evec2, nvec[row + 1]]])
             envecs[2, 1, 1] = -nvec[row, 1]
             envecs[3, 1, 1] = -nvec[row + 1, 1]
             # envecs is now east and north vectors at each node, array (4,2,3)
-            # Multiply by factors to get relative weighting
-            envecs = envecs * factors.reshape((4, 1, 1))
-            # Then multiply envec at each node by corresponding displacement value and
-            # sum on 0/1 axes to compute xyz displacement at calculation point
-            dispvec = np.sum(nodevalues[:, :2].reshape(4, 2, 1) * envecs, axis=(0, 1))
             # Calculate east and north vectors at calculation point relative to
             # meridian through centre of cell.
             # bottom left lon lat
@@ -169,13 +164,15 @@ class DeformationGrid(ABC):
             sinlat = math.sin(rlat)
             # en vectors at calculation point, array 2,3
             envec = np.array([[-sinlon, coslon, 0.0], [-coslon * sinlat, -sinlon * sinlat, coslat]])
+            # Then multiply envec at each node by corresponding displacement value and
+            # sum on 0/1 axes to compute xyz displacement at calculation point
+            dispvec = np.sum(nodevalues[:, :2].reshape(4, 2, 1) * envecs * factors.reshape(4, 1, 1), axis=(0, 1))
             # dot product to calculate east/north vector at calc point
             result = dispvec.reshape((1, 3)).dot(envec.T).flatten()
             if len(nodevalues) > 2:
-                value = np.sum(nodevalues * factors.reshape(4, 1), axis=0)
-                value[:2] = result
-                result = value
-            #!!!NOTE Need to handle is_degrees here
+                hvalue = np.sum(nodevalues[:, 2:] * factors.reshape(4, 1), axis=0)
+                result = np.hstack([result, hvalue])
+            #!!!NOTE Need to handle is_degrees here - not allowed
             return result
 
         @abstractmethod
