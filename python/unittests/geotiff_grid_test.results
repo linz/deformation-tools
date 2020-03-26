@@ -14,5 +14,13 @@
 "grid_cell_selection_point_3": [0.7999999970197678, -0.36250000074505584, 0.5],
 "grid_cell_selection_point_4": [1.125000014901158, -0.5125000104308142, 0.5],
 "grid_cell_selection_point_5": [1.1999999880790742, -0.562500000000002, 0.5],
-"grid_cell_selection_point_6": [1.3750000000000129, -0.6250000000000027, 0.5]
+"grid_cell_selection_point_6": [1.3750000000000129, -0.6250000000000027, 0.5],
+"points_out_of_range_point_1": "RangeError()",
+"points_out_of_range_point_2": "RangeError()",
+"points_out_of_range_point_3": "RangeError()",
+"points_out_of_range_point_4": "RangeError()",
+"points_out_of_range_point_5": "RangeError()",
+"points_out_of_range_point_6": "RangeError()",
+"points_out_of_range_point_7": "RangeError()",
+"points_out_of_range_point_8": "RangeError()"
 }

@@ -43,6 +43,9 @@ class GeotiffGridTest(fileunittest.TestCase):
     def test003_select_grid_cells(self):
         self.checkGrid("Grid cell selection", "grid3x4.tif", "grid3x4.test003.csv")
 
+    def test_004_range_error(self):
+        self.checkGrid("Points out of range", "grid3x4.tif", "grid3x4.test004.csv")
+
 
 if __name__ == "__main__":
     fileunittest.main()
