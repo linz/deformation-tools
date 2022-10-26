@@ -1101,7 +1101,7 @@ class FaultModel( object ):
         header=None
         if os.path.exists(self._cacheFile()):
             with open(self._cacheFile()) as cf:
-                header=cf.next()
+                header=next(cf)
                 for l in cf:
                     match=keyre.match(l)
                     if match:
@@ -1114,7 +1114,7 @@ class FaultModel( object ):
         header=None
         if os.path.exists(self._cacheFile()):
             with open(self._cacheFile()) as cf:
-                header=cf.next()
+                header=next(cf)
         return header
 
     def _loadGridFromCache( self, spec, gridfile ):
@@ -1168,7 +1168,7 @@ class FaultModel( object ):
 
             header=self._cacheHeader()
             with open(calcfile) as calcf:
-                calcheader=calcf.next()
+                calcheader=next(calcf)
                 mode='w' if calcheader != header else 'a'
                 with open(cachefile,mode) as cf:
                     if mode == 'w':
@@ -1235,7 +1235,7 @@ class FaultModel( object ):
             with open(metafile,'w') as f:
                 f.write(meta)
         else:
-            print "          Reloading existing grid {0} ...".format(gridfile)
+            print("          Reloading existing grid {0} ...".format(gridfile))
         return gridfile
 
 class PatchGridDef:
@@ -1318,7 +1318,7 @@ class PatchGridDef:
         return pgd
 
     def _isFileSource( self ):
-        return isinstance(self.source,basestring)
+        return isinstance(self.source,str)
 
     def setSource( self, source ):
         self.source=source

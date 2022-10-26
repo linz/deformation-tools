@@ -89,7 +89,7 @@ cptfile=args.ctlpt_filename
 if not os.path.isdir(basedir):
     raise RuntimeError('Base directory '+basedir+' is not a directory')
 
-print "Creating control point file as",cptfile
+print("Creating control point file as",cptfile)
 
 gridfile=namedtuple('gridfile','filename parent children')
 gridlevel=lambda x: int(re.search(r'L(\d+)\.csv$',x).group(1))
@@ -190,7 +190,7 @@ with open(cptfile,'w') as cpt:
             latinc=(lat1-lat0)/(nlat-1)
             griddef[f]=[lon0,loninc,lat0,latinc]
 
-print nskip,"duplicated points skipped"
+print(nskip,"duplicated points skipped")
 
 if not args.keep_files:
     for f in working_files:

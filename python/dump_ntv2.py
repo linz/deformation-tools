@@ -26,7 +26,7 @@ ntfile=args.ntv2_filename
 asciifile=args.ascii_filename
 showdata=args.data
 
-print "Dumping NTv2 file",ntfile
+print("Dumping NTv2 file",ntfile)
 
 endian = '>' if bigendian else '<'
 sformat=endian+'8s8s'

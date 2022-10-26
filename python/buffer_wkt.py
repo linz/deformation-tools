@@ -10,7 +10,7 @@ from shapely.ops import transform
 from shapely.geos import ReadingError
 
 if len(sys.argv) != 4:
-    print "Syntax: buffer_wkt lat_lon_wkt_file buffer_distance_m output_wkt_file"
+    print("Syntax: buffer_wkt lat_lon_wkt_file buffer_distance_m output_wkt_file")
     sys.exit()
 
 src_wkt, buffer, output_wkt=sys.argv[1:]

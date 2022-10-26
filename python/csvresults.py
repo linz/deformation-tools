@@ -79,7 +79,7 @@ class CsvResults( object ):
             raise ValueError('CsvResults can only save dict objects')
         data=dict(**data)
         data['_date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        for k in data.keys():
+        for k in list(data.keys()):
             if k not in self._fields:
                 self._fields.append(k)
         self._data[self._datakey(data)]=data

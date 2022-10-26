@@ -30,7 +30,7 @@ def load_land_areas( polygon_file ):
         from shapely import wkt
         from shapely.geometry import shape, MultiPolygon, Polygon
 
-        print "Loading land area definition from",polygon_file
+        print("Loading land area definition from",polygon_file)
         with open(polygon_file) as f:
             pgnwkt=f.read()
             land_areas=wkt.loads(pgnwkt)
@@ -232,5 +232,5 @@ if __name__=='__main__':
                 if f.endswith('.def') and not f.startswith('.'):
                     deffiles.append(os.path.join(dirpath,f))
     for f in deffiles:
-        print "Building shift grids for "+f
+        print("Building shift grids for "+f)
         build_dump(f)

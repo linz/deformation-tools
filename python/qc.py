@@ -300,7 +300,7 @@ def test_times( models, version=None ):
 
 def calc_okada( m, pts ):
     global calc_okada_image
-    print "Calculating fault model file",m
+    print("Calculating fault model file",m)
     tn1=points_file(pts,format="{1} {2}")
     tn2=tempfilename()
     call((calc_okada_image,'-f',m,tn1,tn2))
@@ -472,10 +472,10 @@ class QcLog( object ):
                 self.log.write('    {0} of {1} differences exceed tolerance {2}\n'.format(nfail,ntest,tol))
 
             self.log.write('     Worst difference {0:.4f}\n'.format(np.max(error)))
-            print '**** {0} of {1} differences exceed tolerance {2} (max {3:.4f})'.format(nbad,ntest,tolerance,np.max(error))
+            print('**** {0} of {1} differences exceed tolerance {2} (max {3:.4f})'.format(nbad,ntest,tolerance,np.max(error)))
         else: 
             self.log.write('Maximum of {0} differences is {1:.4f}\n'.format(ntest,np.max(error)))
-            print '** All {1} differences within tolerance {2} (max {3:.4f})'.format(nbad,ntest,tolerance,np.max(error))
+            print('** All {1} differences within tolerance {2} (max {3:.4f})'.format(nbad,ntest,tolerance,np.max(error)))
 
         date=date or ''
         date0=date0 or ''
@@ -513,7 +513,7 @@ class QcLog( object ):
         date0=date0 or ''
         if (nbad or listall) and csvf:
             if listall:
-                badrows=range(ntest)
+                badrows=list(range(ntest))
             csvw=csv.writer(open(csvf,'ab'))
             header=['id','date','date0','comparison','lon','lat','diff','dh','dv','de','dn','du','de0','dn0','du0','de1','dn1','du1']
             if not haveheader:
@@ -668,7 +668,7 @@ if test_patches:
     for pdir in pgroups:
         plist=pgroups[pdir]
         pname=os.path.basename(pdir)
-        print "Testing reverse patch group",pdir
+        print("Testing reverse patch group",pdir)
         pcsv=os.path.basename(pdir)+'_qc'
         skip=None
         # Don't expect parcel patches to match where less than 0.05.
@@ -692,7 +692,7 @@ if test_csvmodel:
     append=False
     for t in times[1:]:
         tstr=t.strftime('%Y-%m-%d')
-        print "Testing calcdeformation.py patches from {0} to {1}".format(t0str,tstr)
+        print("Testing calcdeformation.py patches from {0} to {1}".format(t0str,tstr))
         pfault=calc_total_fault_model( fmodels, points, t=t, t0=t0, qclog=qclog )
         outfile=tempfilename()
         command=cdfm+('-d',tstr,'-b',t0str,'-o','-ndm',cdin,outfile)
@@ -725,7 +725,7 @@ if test_velocities or (test_binmodel and args.use_ndm_velocities):
     os.remove(outfile)
 
 if test_velocities:
-    print "Testing velocity component in CalcDeformation"
+    print("Testing velocity component in CalcDeformation")
     qclog.compare("Testing CalcDeformation.py velocities",points,
                       (('vel','Calculated directly from gns_velocity+euler',velocities),
                        ('pub','Calculated from published model',venu)),
@@ -757,7 +757,7 @@ if test_binmodel:
         csvsum="binmodel_summary"
         year=date_as_year(dt)
         datestr="{0:%Y-%m-%d}".format(dt)
-        print "Testing dislocations at {0} {1:.2f}".format(datestr,year)
+        print("Testing dislocations at {0} {1:.2f}".format(datestr,year))
         # Model dislocations
         mdenu=None
         if test_binmodel_gns:
@@ -845,7 +845,7 @@ if test_binshift:
         cshift[:,2:]=0.0
     csvf='shift'
         
-    print "Testing shift model components {0}".format(binshift_components)
+    print("Testing shift model components {0}".format(binshift_components))
     qclog.compare("Testing shift model components {0}".format(binshift_components),points,
                   (('bin','Calculated from Landonline binary shift file',bshift),
                   ('pub','Calculated from published model',cshift)),
@@ -896,7 +896,7 @@ if test_ntv2:
     cshift[:,2:]=0.0
     csvf='ntv2'
 
-    print "Testing NTv2 reverse patch"
+    print("Testing NTv2 reverse patch")
     qclog.compare("Testing NTv2 reverse patch",points,
                   (('esr','Calculated from NTv2 with ESRI ntv2_cvt',eshift),
                   ('prj','Calculated from NTv2 with PROJ cs2cs',pshift),

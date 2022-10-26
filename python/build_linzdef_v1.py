@@ -86,7 +86,7 @@ class TimeEvent:
 sequences=[]
 
 for c in m.components():
-    print "Adding component:",c.name
+    print("Adding component:",c.name)
     component=c.submodel
     # print component
     tm=c.timeFunction
@@ -155,7 +155,7 @@ small=0.00001
 
 for sequence in sequences:
     compname=sequence.component
-    print "Sequence:",compname
+    print("Sequence:",compname)
     basegrids=[]
     for i,g in enumerate(sequence.grids):
         gfile=joinpath(md,'model',g)
@@ -348,7 +348,7 @@ for sequence in sequences:
 
 deffile.close()
 
-print "Building binary deformation files"
+print("Building binary deformation files")
 os.chdir(bd)
 call(['makelinzdefmodel.pl','-f','LINZDEF1B',defname+'.def',defname+'b.bin'])
 call(['makelinzdefmodel.pl','-f','LINZDEF1L',defname+'.def',defname+'l.bin'])

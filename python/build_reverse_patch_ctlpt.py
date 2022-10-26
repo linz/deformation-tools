@@ -161,14 +161,14 @@ def compileExtents( levels ):
 def printLevels( levels ):
     ''' Print list of grids for debugging purposes '''
     for extents in levels:
-        print '\nCellsize: {0}'.format(extents[0].cellsize)
+        print('\nCellsize: {0}'.format(extents[0].cellsize))
         for e  in extents:
-            print "   {0} {1} {2}".format(e.id,e.compid,e.gridspec())
+            print("   {0} {1} {2}".format(e.id,e.compid,e.gridspec()))
             if e.parent is not None:
-                print "      Parent {0}".format(e.parent.id)
+                print("      Parent {0}".format(e.parent.id))
             for gf in e.gridfiles:
                 fn=os.path.basename(gf)
-                print "      {0}".format(fn)
+                print("      {0}".format(fn))
 
 def ctlptGridList( levels ):
     gridlist=[]
@@ -196,11 +196,11 @@ def runCommand( command, verbose=False ):
     try:
         result=subprocess.check_output(command)
         if verbose:
-            print result
+            print(result)
     except Exception as ex:
-        print "Command parameters:"
+        print("Command parameters:")
         for c in command:
-            print "  {0}".format(c)
+            print("  {0}".format(c))
         raise ex
 
 used_ordinates={
@@ -392,7 +392,7 @@ def main():
             if True:
                 efname=os.path.basename(efile)
                 pfname=os.path.basename(pfile) if pfile else ''
-                print "Adding {0}: {1}".format(efname,pfname)
+                print("Adding {0}: {1}".format(efname,pfname))
             command=[gridtool,'read','csv',efile]
             if pfile:
                 command.extend(('subtract','csv',pfile))

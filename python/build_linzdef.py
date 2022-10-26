@@ -128,7 +128,7 @@ class TimeEvent:
 sequences=[]
 
 for c in m.components(allversions=allversions):
-    print "Adding component:",c.name
+    print("Adding component:",c.name)
     component=c.submodel
     # print component
     tm=c.timeFunction
@@ -239,7 +239,7 @@ for sequence in sequences:
         compname=sequence.component + '_c{0}'.format(ncomp)
     seqcomps[compname]=sequence.component
 
-    print "Sequence:",compname
+    print("Sequence:",compname)
 
     subsequences = []
     events=[]
@@ -266,7 +266,7 @@ for sequence in sequences:
                 t[1] += e.f0
             time_model.append([e.time0,e.f0+v0])
             time_model.append([e.time1,e.f1+v0])
-        for i in reversed(range(len(time_model)-1)):
+        for i in reversed(list(range(len(time_model)-1))):
              t0=time_model[i]
              t1=time_model[i+1]
              if abs(t0[0].daysAfter(t1[0])) < 0.001 and abs(t0[1]-t1[1]) < 0.00001:
@@ -302,7 +302,7 @@ for sequence in sequences:
                 sgfbasename=defname+'_'+compname+sseqname+gfname
                 sgfname=sgfbasename+'.gdf'
                 nsgf=0
-                while sgfname in gdf_files.values():
+                while sgfname in list(gdf_files.values()):
                     nsgf += 1
                     sgfname=sgfbasename+'_f{0}'.format(nsgf)+'.gdf'
                 cmd=['gridtool','read','csv',gf]
@@ -320,7 +320,7 @@ for sequence in sequences:
 
 deffile.close()
 
-print "Building binary deformation files"
+print("Building binary deformation files")
 os.chdir(bd)
 call([makescript,'-f',versionb,defname+'.def',defname+'b.bin'])
 call([makescript,'-f',versionl,defname+'.def',defname+'l.bin'])

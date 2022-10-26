@@ -16,7 +16,7 @@ args=parser.parse_args()
 clists=[]
 for infile in (args.infile1, args.infile2):
     if not os.path.exists(infile):
-        print "Input file {0} missing".format(infile)
+        print("Input file {0} missing".format(infile))
     coords=[]
     with open(infile) as ifh:
         for l in ifh:
@@ -40,7 +40,7 @@ with open(args.outfile,'w') as of:
                  .format(c1[0],c1[1],c2[0],c2[1],de,dn))
 
 if args.summary_id:
-    print "{0} {1} test points max diff {2:.3f}m".format(args.summary_id,npt,maxdiff)
+    print("{0} {1} test points max diff {2:.3f}m".format(args.summary_id,npt,maxdiff))
 
 
 

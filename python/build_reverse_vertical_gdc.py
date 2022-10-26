@@ -167,14 +167,14 @@ def compileExtents( levels ):
 def printLevels( levels ):
     ''' Print list of grids for debugging purposes '''
     for extents in levels:
-        print '\nCellsize: {0}'.format(extents[0].cellsize)
+        print('\nCellsize: {0}'.format(extents[0].cellsize))
         for e  in extents:
-            print "   {0} {1} {2}".format(e.id,e.compid,e.gridspec())
+            print("   {0} {1} {2}".format(e.id,e.compid,e.gridspec()))
             if e.parent is not None:
-                print "      Parent {0}".format(e.parent.id)
+                print("      Parent {0}".format(e.parent.id))
             for gf in e.gridfiles:
                 fn=os.path.basename(gf)
-                print "      {0}".format(fn)
+                print("      {0}".format(fn))
 
 def linearGridList( levels ):
     gridlist=[]

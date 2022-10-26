@@ -3,7 +3,7 @@
 # Script to create the master file GeoTIFF file creation scripts to encode 
 # the LINZ Deformation model
 
-from __future__ import print_function
+
 
 from collections import namedtuple, OrderedDict
 from datetime import datetime
@@ -254,7 +254,7 @@ for sequence in sequences:
                 t[1] += e.f0
             time_model.append([e.time0,e.f0+v0])
             time_model.append([e.time1,e.f1+v0])
-        for i in reversed(range(len(time_model)-1)):
+        for i in reversed(list(range(len(time_model)-1))):
              t0=time_model[i]
              t1=time_model[i+1]
              if abs(t0[0].daysAfter(t1[0])) < 0.001 and abs(t0[1]-t1[1]) < 0.00001:

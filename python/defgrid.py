@@ -42,7 +42,7 @@ def stats( arr, noprint=False, percentiles=None):
         results.append(('Percentile {0:.1f}%'.format(p),v))
     if not noprint:
         for p, v in results:
-            print '{0:20s} {1:12f}'.format(p+':',v)
+            print('{0:20s} {1:12f}'.format(p+':',v))
     return results
 
 class Grid( object ):
@@ -64,7 +64,7 @@ class Grid( object ):
             if col < 0:
                 col = self.array.shape[-1]+col
             return col
-        if isinstance(col,basestring) and self.columns:
+        if isinstance(col,str) and self.columns:
             return self.columns.index(col)
 
     def _calcLevels( self, data, levels, percentiles ):
@@ -209,13 +209,13 @@ class Grid( object ):
         to stats function (most useful is percentiles).
         '''
         if self.source:
-            print self.source
+            print(self.source)
         if not cols:
-            cols = range(2,self.array.shape[2])
+            cols = list(range(2,self.array.shape[2]))
         for col in cols:
             index = self.getIndex(col)
             label=self.columns[index] if self.columns else 'Col '+str(index)
-            print "Statistics for "+label 
+            print("Statistics for "+label) 
             stats(self.array[:,:,index],**params)
 
     def writecsv( self, filename, delim=',',format='{0}' ):
@@ -263,7 +263,7 @@ class DeformationGrid( Grid ):
         if columns[:2] != ['lon','lat']:
             raise RuntimeError('DeformationGrid: input file '+filename+' must have first two columns lon, lat')
         g = np.loadtxt(filename,skiprows=1,dtype=float,delimiter=delimiter)
-        rows = ml.find(g[:,0]==g[0,0])
+        rows = np.nonzero(g[:,0]==g[0,0])[0]
         cols = g.shape[1]
         g.shape=(rows.shape[0],rows[1],cols)
         Grid.__init__(self,g,columns=columns,source=filename)
@@ -569,18 +569,18 @@ if __name__=="__main__":
     for file in args.grid_csv_file:
         g=DeformationGrid(file)
         if args.component_csv:
-            print g.grid_component_csv(
+            print(g.grid_component_csv(
                 date=args.deformation_date,
                 version=args.model_version,
                 description=args.event_description
-            )
+            ))
         else:
-            print file,g.grid_definition()
+            print(file,g.grid_definition())
         if args.strain_grid_csv:
             sg=args.strain_grid_csv
             fn=os.path.splitext(os.path.basename(file))[0]
             sg=sg.replace('{filename}',fn)
-            print "Calculating strains for {0}".format(fn)
+            print("Calculating strains for {0}".format(fn))
             strains=g.strainComponents()
             if sg != 'none':
                 strains.writecsv(sg)
@@ -589,7 +589,7 @@ if __name__=="__main__":
             sg=args.tilt_grid_csv
             fn=os.path.splitext(os.path.basename(file))[0]
             sg=sg.replace('{filename}',fn)
-            print "Calculating tilts for {0}".format(fn)
+            print("Calculating tilts for {0}".format(fn))
             tilts=g.calcTilt()
             if sg != 'none':
                 tilts.writecsv(sg)

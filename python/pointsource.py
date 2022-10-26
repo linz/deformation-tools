@@ -24,11 +24,11 @@ def points( source ):
                     lon += dlon
                     yield [lon,lat]
         except:
-            print "Invalid grid definition",source
+            print("Invalid grid definition",source)
     else:
         instream = open(source,"rb")
         csvrdr = csv.reader(instream)
-        headers = reader.next()
+        headers = next(reader)
         try:
             lonncol = headers.index('lon')
             latcol = headers.index('lat')

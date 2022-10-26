@@ -41,7 +41,7 @@ def buffered_polygon( polygon, buffer, simplify=0.0 ):
 def create_land_areas( polygon_shapefile, extents_wktfile, buffer=land_area_buffer, tolerance=land_area_tolerance, min_points=0, verbose=False ):
     areas=[]
     driver=ogr.GetDriverByName('ESRI Shapefile')
-    print("Loading land area definition from "+polygon_shapefile)
+    print(("Loading land area definition from "+polygon_shapefile))
     datasource=driver.Open(polygon_shapefile,0)
     if datasource is None:
         raise RuntimeError('Cannot open land areas file '+polygon_file)
@@ -66,19 +66,19 @@ def create_land_areas( polygon_shapefile, extents_wktfile, buffer=land_area_buff
             areas.extend(p)
             npoints += npoints2
             if verbose:
-                print("Polygon: {0} points reduced to {1} points".format(npoints1,npoints2))
+                print(("Polygon: {0} points reduced to {1} points".format(npoints1,npoints2)))
 
     if verbose:
-        print("Skipped {0} polygons < {1} points".format(nskip,min_points))
+        print(("Skipped {0} polygons < {1} points".format(nskip,min_points)))
     if areas:
         if verbose:
-            print("Forming union of areas - total of {0} points in {1} polygons"
-              .format(npoints,len(areas)))
+            print(("Forming union of areas - total of {0} points in {1} polygons"
+              .format(npoints,len(areas))))
         areas=MultiPolygon(areas)
         areas=areas.buffer(0)
         try:
             if verbose:
-                print("Writing wkt file {0}".format(extents_wktfile))
+                print(("Writing wkt file {0}".format(extents_wktfile)))
             from shapely.wkt import dumps
             with open(extents_wktfile,"w") as laf:
                 laf.write(dumps(areas))
@@ -103,7 +103,7 @@ if __name__=="__main__":
     verbose=args.verbose
 
     if not os.path.exists(sfile):
-        print "NZ polygon shape file "+sfile+" does not exist - aborting!"
+        print("NZ polygon shape file "+sfile+" does not exist - aborting!")
         sys.exit()
 
     if not args.force and os.path.exists(ofile) and os.path.getmtime(ofile) > os.path.getmtime(sfile):
@@ -111,13 +111,13 @@ if __name__=="__main__":
             with open(ofile) as laf:
                 pgnwkt=laf.read()
                 land_areas=wkt.loads(pgnwkt)
-                print( "Using existing wkt land extents in "+ofile)
+                print(( "Using existing wkt land extents in "+ofile))
             sys.exit()
         except Exception as ex:
-            print("Cannot read existing polygon WKT in "+ofile)
+            print(("Cannot read existing polygon WKT in "+ofile))
     if verbose:
         print("Building coastline polygon extents")
-        print("Buffering by {0} degrees".format(args.buffer))
-        print("Simplification tolerance {0} degrees".format(args.tolerance))
+        print(("Buffering by {0} degrees".format(args.buffer)))
+        print(("Simplification tolerance {0} degrees".format(args.tolerance)))
     create_land_areas(sfile,ofile,buffer=args.buffer,tolerance=args.tolerance,
                       min_points=args.min_points,verbose=verbose)

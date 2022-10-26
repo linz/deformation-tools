@@ -95,7 +95,7 @@ created=args.created
 if not os.path.isdir(basedir):
     raise RuntimeError('Base directory '+basedir+' is not a directory')
 
-print "Creating NTv2 files as",ntfile
+print("Creating NTv2 files as",ntfile)
 
 gridfile=namedtuple('gridfile','filename parent children')
 gridlevel=lambda x: int(re.search(r'L(\d+)\.csv$',x).group(1))
@@ -152,7 +152,7 @@ for f in filenames:
 # a point, so this should just pick the most detailed grid.
 
 if args.ogr2ogr_bug_workaround:
-    print "Applying ogr2ogr bug (proj issue #177) bug fix"
+    print("Applying ogr2ogr bug (proj issue #177) bug fix")
     filenames.reverse()
     parent=dict()
 
@@ -244,7 +244,7 @@ with open(ntfile+'.asc','w') as nt,open(ntfile+'.gsb','wb') as nb:
 
             for ilat in range(nlat):
                 ilatn=ilat*nlon
-                for ilon in reversed(range(nlon)):
+                for ilon in reversed(list(range(nlon))):
                     dln,dlt = points[ilatn+ilon]
                     nt.write("{0:10.6f}{1:10.6f}{2:10.6f}{3:10.6f}\n".format(dlt,-dln,-1.0,-1.0))
                     nb.write(struct.pack(gsformat,dlt,-dln,-1.0,-1.0))

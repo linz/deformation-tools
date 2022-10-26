@@ -34,7 +34,7 @@ class _template( object ):
         v=self._definition
         for k in args:
             r=args[k]
-            v=v.replace('{'+k+'}',unicode(r))
+            v=v.replace('{'+k+'}',str(r))
         return v
 
 patch_header=_template('''

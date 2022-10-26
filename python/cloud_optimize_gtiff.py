@@ -331,9 +331,9 @@ def generate_optimized_file(srcfilename, destfilename):
         if ifd.planarconfig_contig:
             list_bands = (0,)
         elif first_band_to_put_at_end:
-            list_bands = range(first_band_to_put_at_end - 1)
+            list_bands = list(range(first_band_to_put_at_end - 1))
         else:
-            list_bands = range(ifd.nbands)
+            list_bands = list(range(ifd.nbands))
 
         for i in range(ifd.num_striles_per_band):
             for iband in list_bands:

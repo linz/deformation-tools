@@ -95,14 +95,14 @@ def faultPolys( wktfile, buffer, minwidth=None ):
     minwidth=buffer/10
     geoms=[]
     with open(wktfile) as wktf:
-        header=wktf.next()
+        header=next(wktf)
         for segdef in wktf:
             segdef=segdef.strip()
             if segdef == '':
                 continue
             match=rectre.search(segdef)
             if not match:
-                print "Invalid fault segment: {0}".format(segdef)
+                print("Invalid fault segment: {0}".format(segdef))
                 continue
             crddef=match.group(1)
             crds=[]
@@ -289,7 +289,7 @@ def main():
                 polys=[mp]
             for p in polys:
                 if not p.is_valid:
-                    print "Skipping invalid zone {0} poly".format(zone_code)
+                    print("Skipping invalid zone {0} poly".format(zone_code))
                     continue
                 pwkt=p.wkt
                 pwkt=re.sub(r'(\.\d{{{0}}})\d+'.format(ndp),r'\1',pwkt)

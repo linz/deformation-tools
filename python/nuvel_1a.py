@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
     plate = args.plate.upper()
     if not plate in nuvel_1a:
-        print 'Plate '+plate+' not valid - must be one of '+platelist
+        print('Plate '+plate+' not valid - must be one of '+platelist)
         sys.exit()
 
     rotation = euler.euler_rotation( ellipsoid.grs80, *euler_rate(plate) )

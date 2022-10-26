@@ -159,14 +159,14 @@ def compileExtents( levels ):
 def printLevels( levels ):
     ''' Print list of grids for debugging purposes '''
     for extents in levels:
-        print '\nCellsize: {0}'.format(extents[0].cellsize)
+        print('\nCellsize: {0}'.format(extents[0].cellsize))
         for e  in extents:
-            print "   {0} {1} {2}".format(e.id,e.compid,e.gridspec())
+            print("   {0} {1} {2}".format(e.id,e.compid,e.gridspec()))
             if e.parent is not None:
-                print "      Parent {0}".format(e.parent.id)
+                print("      Parent {0}".format(e.parent.id))
             for gf in e.gridfiles:
                 fn=os.path.basename(gf)
-                print "      {0}".format(fn)
+                print("      {0}".format(fn))
 
 def ntv2GridList( levels ):
     gridlist=[]
@@ -375,7 +375,7 @@ def main():
         g.id=i+1
 
     if args.ogr2ogr_bug_workaround:
-        print "Applying ogr2ogr bug (proj issue #177) bug fix"
+        print("Applying ogr2ogr bug (proj issue #177) bug fix")
         gridlist.reverse()
 
     endian = '>' if args.big_endian else '<'
@@ -472,7 +472,7 @@ def main():
 
             for ilat in range(nlat+1):
                 ilatn=ilat*(nlon+1)
-                for ilon in reversed(range(nlon+1)):
+                for ilon in reversed(list(range(nlon+1))):
                     dln,dlt = points[ilatn+ilon]
                     nt.write("{0:10.6f} {1:9.6f} {2:9.6f} {3:9.6f}\n".format(dlt,-dln,-1.0,-1.0))
                     nb.write(struct.pack(gsformat,dlt,-dln,0.0,0.0))
